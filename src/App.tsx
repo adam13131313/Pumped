@@ -7,6 +7,7 @@ import { AppShell } from "@/components/AppShell";
 import Dashboard from "@/pages/Dashboard";
 import MyActions from "@/pages/MyActions";
 import WaitingFor from "@/pages/WaitingFor";
+import SOPPage from "@/pages/SOPPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -22,6 +23,7 @@ const App = () => (
             <Route path="/" element={<Dashboard />} />
             <Route path="/actions" element={<MyActions />} />
             <Route path="/waiting" element={<WaitingFor />} />
+            <Route path="/sop" element={<SOPPage />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AppShell>

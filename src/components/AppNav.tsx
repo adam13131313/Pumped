@@ -4,9 +4,9 @@ import { LayoutDashboard, CheckSquare, Clock, BookOpen, FolderKanban, LucideIcon
 
 const links: { to: string; label: string; icon: LucideIcon }[] = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/projects", label: "Projects", icon: FolderKanban },
   { to: "/actions", label: "My Actions", icon: CheckSquare },
   { to: "/waiting", label: "Waiting For", icon: Clock },
+  { to: "/projects", label: "Projects", icon: FolderKanban },
   { to: "/sop", label: "SOP", icon: BookOpen },
 ];
 

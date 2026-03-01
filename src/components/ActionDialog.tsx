@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Action, Priority, TaskStatus } from "@/lib/types";
+import { useAppStore } from "@/lib/store";
 
 interface ActionDialogProps {
   open: boolean;
@@ -23,9 +24,27 @@ export function ActionDialog({ open, onOpenChange, action, onSave, onDelete, onD
   const isEdit = !!action;
   const [showDelegate, setShowDelegate] = useState(false);
   const [delegateTo, setDelegateTo] = useState("");
+  const workPackages = useAppStore((s) => s.workPackages);
   const [form, setForm] = useState<Partial<Action>>(
     action ?? { task: "", project: "", workPackage: "", dueDate: "", priority: "Medium", status: "Not Started", notes: "" }
   );
+
+  // Build WP options grouped by project
+  const wpOptions = useMemo(() => {
+    const grouped: Record<string, string[]> = {};
+    workPackages.forEach((wp) => {
+      if (!grouped[wp.project]) grouped[wp.project] = [];
+      grouped[wp.project].push(wp.workPackage);
+    });
+    return grouped;
+  }, [workPackages]);
+
+  // Derive project from selected WP
+  const selectedProject = useMemo(() => {
+    if (!form.workPackage) return form.project ?? "";
+    const wp = workPackages.find((w) => w.workPackage === form.workPackage);
+    return wp?.project ?? form.project ?? "";
+  }, [form.workPackage, form.project, workPackages]);
 
   const handleOpen = (o: boolean) => {
     if (o && action) setForm(action);
@@ -40,7 +59,7 @@ export function ActionDialog({ open, onOpenChange, action, onSave, onDelete, onD
     onSave({
       id: action?.id ?? crypto.randomUUID(),
       task: form.task?.trim() ?? "",
-      project: form.project?.trim() ?? "",
+      project: selectedProject,
       workPackage: form.workPackage?.trim() ?? "",
       dueDate: form.dueDate ?? "",
       priority: form.priority ?? "Medium",
@@ -48,6 +67,15 @@ export function ActionDialog({ open, onOpenChange, action, onSave, onDelete, onD
       notes: form.notes?.trim() ?? "",
     });
     onOpenChange(false);
+  };
+
+  const handleWPChange = (val: string) => {
+    if (val === "__none__") {
+      setForm({ ...form, workPackage: "", project: "" });
+    } else {
+      const wp = workPackages.find((w) => w.workPackage === val);
+      setForm({ ...form, workPackage: val, project: wp?.project ?? form.project ?? "" });
+    }
   };
 
   return (
@@ -61,15 +89,25 @@ export function ActionDialog({ open, onOpenChange, action, onSave, onDelete, onD
             <Label htmlFor="task">Task *</Label>
             <Textarea id="task" value={form.task ?? ""} onChange={(e) => setForm({ ...form, task: e.target.value })} className="mt-1" rows={2} maxLength={500} />
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="project">Project</Label>
-              <Input id="project" value={form.project ?? ""} onChange={(e) => setForm({ ...form, project: e.target.value })} className="mt-1" maxLength={100} />
-            </div>
-            <div>
-              <Label htmlFor="wp">Work Package</Label>
-              <Input id="wp" value={form.workPackage ?? ""} onChange={(e) => setForm({ ...form, workPackage: e.target.value })} className="mt-1" maxLength={100} />
-            </div>
+          <div>
+            <Label>Work Package</Label>
+            <Select value={form.workPackage || "__none__"} onValueChange={handleWPChange}>
+              <SelectTrigger className="mt-1"><SelectValue placeholder="None" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">None</SelectItem>
+                {Object.entries(wpOptions).map(([project, wps]) => (
+                  <div key={project}>
+                    <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{project}</div>
+                    {wps.map((wp) => (
+                      <SelectItem key={wp} value={wp}>{wp}</SelectItem>
+                    ))}
+                  </div>
+                ))}
+              </SelectContent>
+            </Select>
+            {selectedProject && (
+              <p className="text-xs text-muted-foreground mt-1">Project: {selectedProject}</p>
+            )}
           </div>
           <div className="grid grid-cols-3 gap-4">
             <div>

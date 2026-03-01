@@ -13,13 +13,16 @@ interface ActionDialogProps {
   action?: Action | null;
   onSave: (action: Action) => void;
   onDelete?: (id: string) => void;
+  onDelegate?: (id: string, toWhom: string) => void;
 }
 
 const priorities: Priority[] = ["High", "Medium", "Low"];
 const statuses: TaskStatus[] = ["Not Started", "In Progress", "Blocked", "Complete"];
 
-export function ActionDialog({ open, onOpenChange, action, onSave, onDelete }: ActionDialogProps) {
+export function ActionDialog({ open, onOpenChange, action, onSave, onDelete, onDelegate }: ActionDialogProps) {
   const isEdit = !!action;
+  const [showDelegate, setShowDelegate] = useState(false);
+  const [delegateTo, setDelegateTo] = useState("");
   const [form, setForm] = useState<Partial<Action>>(
     action ?? { task: "", project: "", workPackage: "", dueDate: "", priority: "Medium", status: "Not Started", notes: "" }
   );
@@ -27,6 +30,8 @@ export function ActionDialog({ open, onOpenChange, action, onSave, onDelete }: A
   const handleOpen = (o: boolean) => {
     if (o && action) setForm(action);
     else if (o) setForm({ task: "", project: "", workPackage: "", dueDate: "", priority: "Medium", status: "Not Started", notes: "" });
+    setShowDelegate(false);
+    setDelegateTo("");
     onOpenChange(o);
   };
 
@@ -92,15 +97,32 @@ export function ActionDialog({ open, onOpenChange, action, onSave, onDelete }: A
           </div>
         </div>
         <DialogFooter className="flex justify-between">
-          {isEdit && onDelete && (
-            <Button variant="destructive" size="sm" onClick={() => { onDelete(action!.id); onOpenChange(false); }}>
-              Delete
-            </Button>
-          )}
-          <div className="flex gap-2 ml-auto">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-            <Button onClick={handleSave} disabled={!form.task?.trim()}>Save</Button>
+          <div className="flex gap-2">
+            {isEdit && onDelete && (
+              <Button variant="destructive" size="sm" onClick={() => { onDelete(action!.id); onOpenChange(false); }}>
+                Delete
+              </Button>
+            )}
+            {isEdit && onDelegate && !showDelegate && (
+              <Button variant="outline" size="sm" onClick={() => setShowDelegate(true)}>
+                Delegate →
+              </Button>
+            )}
           </div>
+          {showDelegate ? (
+            <div className="flex gap-2 items-center ml-auto">
+              <Input placeholder="Assigned to…" value={delegateTo} onChange={(e) => setDelegateTo(e.target.value)} className="w-40" />
+              <Button size="sm" disabled={!delegateTo.trim()} onClick={() => { onDelegate!(action!.id, delegateTo.trim()); onOpenChange(false); }}>
+                Confirm
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setShowDelegate(false)}>Cancel</Button>
+            </div>
+          ) : (
+            <div className="flex gap-2 ml-auto">
+              <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+              <Button onClick={handleSave} disabled={!form.task?.trim()}>Save</Button>
+            </div>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

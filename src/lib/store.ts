@@ -36,6 +36,8 @@ interface AppState {
   updateSOPItem: (id: string, updates: Partial<SOPItem>) => void;
   addSOPItem: (item: SOPItem) => void;
   deleteSOPItem: (id: string) => void;
+  delegateAction: (id: string, toWhom: string) => void;
+  takeBackWaiting: (id: string) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -63,4 +65,44 @@ export const useAppStore = create<AppState>((set) => ({
     set((s) => ({ sopItems: s.sopItems.map((item) => (item.id === id ? { ...item, ...updates } : item)) })),
   addSOPItem: (item) => set((s) => ({ sopItems: [...s.sopItems, item] })),
   deleteSOPItem: (id) => set((s) => ({ sopItems: s.sopItems.filter((item) => item.id !== id) })),
+
+  delegateAction: (id, toWhom) =>
+    set((s) => {
+      const action = s.actions.find((a) => a.id === id);
+      if (!action) return s;
+      const newWaiting: WaitingItem = {
+        id: crypto.randomUUID(),
+        description: action.task,
+        fromWhom: toWhom,
+        projectWP: [action.project, action.workPackage].filter(Boolean).join(" / "),
+        askedOn: new Date().toISOString().split("T")[0],
+        dueBy: action.dueDate,
+        status: "Pending",
+        notes: action.notes,
+      };
+      return {
+        actions: s.actions.filter((a) => a.id !== id),
+        waitingItems: [...s.waitingItems, newWaiting],
+      };
+    }),
+
+  takeBackWaiting: (id) =>
+    set((s) => {
+      const item = s.waitingItems.find((w) => w.id === id);
+      if (!item) return s;
+      const newAction: Action = {
+        id: crypto.randomUUID(),
+        task: item.description,
+        project: item.projectWP.split(" / ")[0] ?? "",
+        workPackage: item.projectWP.split(" / ")[1] ?? "",
+        dueDate: item.dueBy,
+        priority: "Medium",
+        status: "Not Started",
+        notes: item.notes,
+      };
+      return {
+        waitingItems: s.waitingItems.filter((w) => w.id !== id),
+        actions: [...s.actions, newAction],
+      };
+    }),
 }));

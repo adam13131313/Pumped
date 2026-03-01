@@ -20,6 +20,10 @@ const defaultSOP: SOPItem[] = [
 ];
 
 interface AppState {
+  todayIds: Set<string>; // ids of actions/waiting items gathered for today
+  addToday: (id: string) => void;
+  removeToday: (id: string) => void;
+  clearToday: () => void;
   programmes: Programme[];
   projects: Project[];
   workPackages: WorkPackage[];
@@ -49,6 +53,11 @@ interface AppState {
 }
 
 export const useAppStore = create<AppState>((set) => ({
+  todayIds: new Set<string>(),
+  addToday: (id) => set((s) => { const n = new Set(s.todayIds); n.add(id); return { todayIds: n }; }),
+  removeToday: (id) => set((s) => { const n = new Set(s.todayIds); n.delete(id); return { todayIds: n }; }),
+  clearToday: () => set({ todayIds: new Set() }),
+
   programmes: initialProgrammes,
   projects: initialProjects,
   workPackages: initialWP,

@@ -1,4 +1,13 @@
-import { WorkPackage, Action, WaitingItem } from "./types";
+import { WorkPackage, Action, WaitingItem, Project } from "./types";
+
+export const projects: Project[] = [
+  { id: "proj1", name: "Project Alpha", description: "Discovery and stakeholder engagement programme", status: "Active" },
+  { id: "proj2", name: "Project Beta", description: "Planning, implementation and reporting", status: "Active" },
+  { id: "proj3", name: "Ongoing Ops", description: "Governance and compliance operations", status: "Active" },
+  { id: "proj4", name: "Project 1: P3M SDF", description: "P3M standards development framework", status: "Active" },
+  { id: "proj5", name: "Project 4: Infrastructure", description: "Infrastructure management", status: "Active" },
+  { id: "proj6", name: "Team management", description: "People management and HR", status: "Active" },
+];
 
 export const workPackages: WorkPackage[] = [
   { id: "wp1", project: "Project Alpha", workPackage: "WP1: Discovery & Research", wpLead: "Sarah K.", dueDate: "2026-03-15", ragStatus: "Green", blockers: "" },

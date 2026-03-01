@@ -3,6 +3,13 @@ export type TaskStatus = "Not Started" | "In Progress" | "Complete" | "Blocked";
 export type Priority = "High" | "Medium" | "Low";
 export type WaitingStatus = "Pending" | "Received" | "Overdue";
 
+export interface Project {
+  id: string;
+  name: string;
+  description: string;
+  status: "Active" | "On Hold" | "Complete";
+}
+
 export interface WorkPackage {
   id: string;
   project: string;

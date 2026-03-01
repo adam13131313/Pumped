@@ -3,10 +3,17 @@ export type TaskStatus = "Not Started" | "In Progress" | "Complete" | "Blocked";
 export type Priority = "High" | "Medium" | "Low";
 export type WaitingStatus = "Pending" | "Received" | "Overdue";
 
+export interface Programme {
+  id: string;
+  name: string;
+  description: string;
+}
+
 export interface Project {
   id: string;
   name: string;
   description: string;
+  programmeId: string; // empty string = standalone (no programme)
   status: "Active" | "On Hold" | "Complete";
 }
 

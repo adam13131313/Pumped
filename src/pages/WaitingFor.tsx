@@ -3,7 +3,9 @@ import { useAppStore } from "@/lib/store";
 import { WaitingDialog } from "@/components/WaitingDialog";
 import { WaitingItem } from "@/lib/types";
 import { Button } from "@/components/ui/button";
-import { Plus, Pencil } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Plus, Pencil, Target } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export default function WaitingFor() {
   const items = useAppStore((s) => s.waitingItems);
@@ -11,6 +13,9 @@ export default function WaitingFor() {
   const updateWaitingItem = useAppStore((s) => s.updateWaitingItem);
   const deleteWaitingItem = useAppStore((s) => s.deleteWaitingItem);
   const takeBackWaiting = useAppStore((s) => s.takeBackWaiting);
+  const todayIds = useAppStore((s) => s.todayIds);
+  const addToday = useAppStore((s) => s.addToday);
+  const removeToday = useAppStore((s) => s.removeToday);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<WaitingItem | null>(null);
@@ -42,6 +47,7 @@ export default function WaitingFor() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b bg-muted/50">
+                <th className="w-10" />
                 <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Description</th>
                 <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">From</th>
                 <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Project</th>
@@ -52,8 +58,26 @@ export default function WaitingFor() {
               </tr>
             </thead>
             <tbody>
-              {items.map((item) => (
+              {items.map((item) => {
+                const gathered = todayIds.has(item.id);
+                return (
                 <tr key={item.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors group cursor-pointer" onClick={() => { setEditing(item); setDialogOpen(true); }}>
+                  <td className="px-2 py-3" onClick={(e) => e.stopPropagation()}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={() => gathered ? removeToday(item.id) : addToday(item.id)}
+                          className={cn(
+                            "h-7 w-7 flex items-center justify-center rounded-md transition-colors",
+                            gathered ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
+                          )}
+                        >
+                          <Target className="h-3.5 w-3.5" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="right">{gathered ? "Remove from today" : "Gather for today"}</TooltipContent>
+                    </Tooltip>
+                  </td>
                   <td className="max-w-sm px-4 py-3"><p className="font-medium">{item.description}</p></td>
                   <td className="px-4 py-3 text-muted-foreground">{item.fromWhom || "—"}</td>
                   <td className="px-4 py-3 text-muted-foreground text-xs">{item.projectWP || "—"}</td>
@@ -70,7 +94,8 @@ export default function WaitingFor() {
                     <Pencil className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

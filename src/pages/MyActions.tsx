@@ -4,7 +4,8 @@ import { PriorityBadge, StatusBadge } from "@/components/StatusBadges";
 import { Action, TaskStatus } from "@/lib/types";
 import { ActionDialog } from "@/components/ActionDialog";
 import { Button } from "@/components/ui/button";
-import { LayoutList, Columns3, Plus, Pencil } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { LayoutList, Columns3, Plus, Pencil, Target } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const statusColumns: TaskStatus[] = ["Not Started", "In Progress", "Blocked", "Complete"];
@@ -85,11 +86,16 @@ export default function MyActions() {
 }
 
 function ListView({ actions, onEdit }: { actions: Action[]; onEdit: (a: Action) => void }) {
+  const todayIds = useAppStore((s) => s.todayIds);
+  const addToday = useAppStore((s) => s.addToday);
+  const removeToday = useAppStore((s) => s.removeToday);
+
   return (
     <div className="overflow-hidden rounded-lg border bg-card">
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b bg-muted/50">
+            <th className="w-10" />
             <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Task</th>
             <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Project</th>
             <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Due</th>
@@ -99,21 +105,40 @@ function ListView({ actions, onEdit }: { actions: Action[]; onEdit: (a: Action) 
           </tr>
         </thead>
         <tbody>
-          {actions.map((a) => (
-            <tr key={a.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors group cursor-pointer" onClick={() => onEdit(a)}>
-              <td className="max-w-md px-4 py-3">
-                <p className="font-medium truncate">{a.task}</p>
-                {a.workPackage && <p className="text-xs text-muted-foreground mt-0.5">{a.workPackage}</p>}
-              </td>
-              <td className="px-4 py-3 text-muted-foreground text-xs">{a.project || "—"}</td>
-              <td className="px-4 py-3 text-muted-foreground font-mono text-xs">{a.dueDate || "—"}</td>
-              <td className="px-4 py-3"><PriorityBadge priority={a.priority} /></td>
-              <td className="px-4 py-3"><StatusBadge status={a.status} /></td>
-              <td className="px-2 py-3">
-                <Pencil className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-              </td>
-            </tr>
-          ))}
+          {actions.map((a) => {
+            const gathered = todayIds.has(a.id);
+            return (
+              <tr key={a.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors group cursor-pointer" onClick={() => onEdit(a)}>
+                <td className="px-2 py-3" onClick={(e) => e.stopPropagation()}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        onClick={() => gathered ? removeToday(a.id) : addToday(a.id)}
+                        className={cn(
+                          "h-7 w-7 flex items-center justify-center rounded-md transition-colors",
+                          gathered ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
+                        )}
+                      >
+                        <Target className="h-3.5 w-3.5" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="right">{gathered ? "Remove from today" : "Gather for today"}</TooltipContent>
+                  </Tooltip>
+                </td>
+                <td className="max-w-md px-4 py-3">
+                  <p className="font-medium truncate">{a.task}</p>
+                  {a.workPackage && <p className="text-xs text-muted-foreground mt-0.5">{a.workPackage}</p>}
+                </td>
+                <td className="px-4 py-3 text-muted-foreground text-xs">{a.project || "—"}</td>
+                <td className="px-4 py-3 text-muted-foreground font-mono text-xs">{a.dueDate || "—"}</td>
+                <td className="px-4 py-3"><PriorityBadge priority={a.priority} /></td>
+                <td className="px-4 py-3"><StatusBadge status={a.status} /></td>
+                <td className="px-2 py-3">
+                  <Pencil className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
@@ -122,6 +147,9 @@ function ListView({ actions, onEdit }: { actions: Action[]; onEdit: (a: Action) 
 
 function KanbanView({ actions, onStatusChange, onEdit }: { actions: Action[]; onStatusChange: (id: string, status: TaskStatus) => void; onEdit: (a: Action) => void }) {
   const [dragging, setDragging] = useState<string | null>(null);
+  const todayIds = useAppStore((s) => s.todayIds);
+  const addToday = useAppStore((s) => s.addToday);
+  const removeToday = useAppStore((s) => s.removeToday);
 
   return (
     <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
@@ -141,22 +169,36 @@ function KanbanView({ actions, onStatusChange, onEdit }: { actions: Action[]; on
               </span>
             </div>
             <div className="space-y-2">
-              {colActions.map((a) => (
-                <div
-                  key={a.id}
-                  draggable
-                  onDragStart={() => setDragging(a.id)}
-                  onClick={() => onEdit(a)}
-                  className="cursor-grab rounded-lg border bg-card p-3 shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing"
-                >
-                  <p className="text-sm font-medium leading-snug">{a.task}</p>
-                  <div className="mt-2 flex items-center gap-2">
-                    <PriorityBadge priority={a.priority} />
-                    {a.dueDate && <span className="text-xs text-muted-foreground font-mono">{a.dueDate}</span>}
+              {colActions.map((a) => {
+                const gathered = todayIds.has(a.id);
+                return (
+                  <div
+                    key={a.id}
+                    draggable
+                    onDragStart={() => setDragging(a.id)}
+                    onClick={() => onEdit(a)}
+                    className="cursor-grab rounded-lg border bg-card p-3 shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing"
+                  >
+                    <div className="flex items-start justify-between gap-1">
+                      <p className="text-sm font-medium leading-snug flex-1">{a.task}</p>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); gathered ? removeToday(a.id) : addToday(a.id); }}
+                        className={cn(
+                          "h-6 w-6 flex-shrink-0 flex items-center justify-center rounded transition-colors",
+                          gathered ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
+                        )}
+                      >
+                        <Target className="h-3 w-3" />
+                      </button>
+                    </div>
+                    <div className="mt-2 flex items-center gap-2">
+                      <PriorityBadge priority={a.priority} />
+                      {a.dueDate && <span className="text-xs text-muted-foreground font-mono">{a.dueDate}</span>}
+                    </div>
+                    {a.project && <p className="mt-1 text-xs text-muted-foreground">{a.project}</p>}
                   </div>
-                  {a.project && <p className="mt-1 text-xs text-muted-foreground">{a.project}</p>}
-                </div>
-              ))}
+                );
+              })}
               {colActions.length === 0 && (
                 <p className="py-8 text-center text-xs text-muted-foreground">Drop tasks here</p>
               )}

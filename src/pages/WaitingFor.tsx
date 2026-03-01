@@ -10,6 +10,7 @@ export default function WaitingFor() {
   const addWaitingItem = useAppStore((s) => s.addWaitingItem);
   const updateWaitingItem = useAppStore((s) => s.updateWaitingItem);
   const deleteWaitingItem = useAppStore((s) => s.deleteWaitingItem);
+  const takeBackWaiting = useAppStore((s) => s.takeBackWaiting);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<WaitingItem | null>(null);
@@ -81,6 +82,7 @@ export default function WaitingFor() {
         item={editing}
         onSave={handleSave}
         onDelete={(id) => { deleteWaitingItem(id); setEditing(null); }}
+        onTakeBack={(id) => { takeBackWaiting(id); setEditing(null); }}
       />
     </div>
   );

@@ -13,11 +13,12 @@ interface WaitingDialogProps {
   item?: WaitingItem | null;
   onSave: (item: WaitingItem) => void;
   onDelete?: (id: string) => void;
+  onTakeBack?: (id: string) => void;
 }
 
 const statuses: WaitingStatus[] = ["Pending", "Received", "Overdue"];
 
-export function WaitingDialog({ open, onOpenChange, item, onSave, onDelete }: WaitingDialogProps) {
+export function WaitingDialog({ open, onOpenChange, item, onSave, onDelete, onTakeBack }: WaitingDialogProps) {
   const isEdit = !!item;
   const [form, setForm] = useState<Partial<WaitingItem>>(
     item ?? { description: "", fromWhom: "", projectWP: "", askedOn: "", dueBy: "", status: "Pending", notes: "" }
@@ -88,9 +89,16 @@ export function WaitingDialog({ open, onOpenChange, item, onSave, onDelete }: Wa
           </div>
         </div>
         <DialogFooter className="flex justify-between">
-          {isEdit && onDelete && (
-            <Button variant="destructive" size="sm" onClick={() => { onDelete(item!.id); onOpenChange(false); }}>Delete</Button>
-          )}
+          <div className="flex gap-2">
+            {isEdit && onDelete && (
+              <Button variant="destructive" size="sm" onClick={() => { onDelete(item!.id); onOpenChange(false); }}>Delete</Button>
+            )}
+            {isEdit && onTakeBack && (
+              <Button variant="outline" size="sm" onClick={() => { onTakeBack(item!.id); onOpenChange(false); }}>
+                ← Take Back
+              </Button>
+            )}
+          </div>
           <div className="flex gap-2 ml-auto">
             <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
             <Button onClick={handleSave} disabled={!form.description?.trim()}>Save</Button>

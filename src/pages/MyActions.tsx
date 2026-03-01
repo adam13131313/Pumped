@@ -15,6 +15,7 @@ export default function MyActions() {
   const addAction = useAppStore((s) => s.addAction);
   const updateAction = useAppStore((s) => s.updateAction);
   const deleteAction = useAppStore((s) => s.deleteAction);
+  const delegateAction = useAppStore((s) => s.delegateAction);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Action | null>(null);
@@ -77,6 +78,7 @@ export default function MyActions() {
         action={editing}
         onSave={handleSave}
         onDelete={(id) => { deleteAction(id); setEditing(null); }}
+        onDelegate={(id, toWhom) => { delegateAction(id, toWhom); setEditing(null); }}
       />
     </div>
   );

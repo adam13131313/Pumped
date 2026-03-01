@@ -1,9 +1,10 @@
 import { NavLink as RouterNavLink } from "react-router-dom";
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, CheckSquare, Clock, BookOpen, LucideIcon } from "lucide-react";
+import { LayoutDashboard, CheckSquare, Clock, BookOpen, FolderKanban, LucideIcon } from "lucide-react";
 
 const links: { to: string; label: string; icon: LucideIcon }[] = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
+  { to: "/projects", label: "Projects", icon: FolderKanban },
   { to: "/actions", label: "My Actions", icon: CheckSquare },
   { to: "/waiting", label: "Waiting For", icon: Clock },
   { to: "/sop", label: "SOP", icon: BookOpen },

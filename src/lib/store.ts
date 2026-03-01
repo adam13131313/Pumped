@@ -1,6 +1,6 @@
 import { create } from "zustand";
-import { Action, WaitingItem, WorkPackage } from "./types";
-import { actions as initialActions, waitingItems as initialWaiting, workPackages as initialWP } from "./data";
+import { Action, Project, WaitingItem, WorkPackage } from "./types";
+import { actions as initialActions, waitingItems as initialWaiting, workPackages as initialWP, projects as initialProjects } from "./data";
 
 export interface SOPItem {
   id: string;
@@ -20,10 +20,14 @@ const defaultSOP: SOPItem[] = [
 ];
 
 interface AppState {
+  projects: Project[];
   workPackages: WorkPackage[];
   actions: Action[];
   waitingItems: WaitingItem[];
   sopItems: SOPItem[];
+  addProject: (p: Project) => void;
+  updateProject: (id: string, updates: Partial<Project>) => void;
+  deleteProject: (id: string) => void;
   addAction: (action: Action) => void;
   updateAction: (id: string, updates: Partial<Action>) => void;
   deleteAction: (id: string) => void;
@@ -41,10 +45,16 @@ interface AppState {
 }
 
 export const useAppStore = create<AppState>((set) => ({
+  projects: initialProjects,
   workPackages: initialWP,
   actions: initialActions,
   waitingItems: initialWaiting,
   sopItems: defaultSOP,
+
+  addProject: (p) => set((s) => ({ projects: [...s.projects, p] })),
+  updateProject: (id, updates) =>
+    set((s) => ({ projects: s.projects.map((p) => (p.id === id ? { ...p, ...updates } : p)) })),
+  deleteProject: (id) => set((s) => ({ projects: s.projects.filter((p) => p.id !== id) })),
 
   addAction: (action) => set((s) => ({ actions: [...s.actions, action] })),
   updateAction: (id, updates) =>

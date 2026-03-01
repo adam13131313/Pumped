@@ -1,0 +1,102 @@
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+};
+
+serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+
+  try {
+    const { documentTexts, additionalContext } = await req.json();
+
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
+
+    const combinedText = (documentTexts as string[]).join("\n\n---\n\n");
+
+    const systemPrompt = `You are a project planning expert. Analyze the provided project documents and/or context and produce a Work Breakdown Structure (WBS).
+
+Return a JSON object with this exact structure:
+{
+  "programmeName": "string - suggested programme name if applicable, or empty string",
+  "programmeDescription": "string - programme description or empty",
+  "projects": [
+    {
+      "name": "string - project name",
+      "description": "string - brief project description",
+      "workPackages": [
+        {
+          "name": "string - work package name",
+          "lead": "string - suggested lead or empty",
+          "dueDate": "string - suggested due date YYYY-MM-DD or empty",
+          "description": "string - what this work package covers"
+        }
+      ]
+    }
+  ]
+}
+
+Rules:
+- Break work into logical projects and work packages
+- Each project should have 2-8 work packages
+- Work package names should be specific and actionable
+- If documents mention specific people, assign them as leads
+- If dates are mentioned, use them
+- Return ONLY the JSON, no markdown fences`;
+
+    const userContent = additionalContext
+      ? `Documents:\n${combinedText}\n\nAdditional context:\n${additionalContext}`
+      : `Documents:\n${combinedText}`;
+
+    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-3-flash-preview",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userContent },
+        ],
+      }),
+    });
+
+    if (!response.ok) {
+      if (response.status === 429) {
+        return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again in a moment." }), {
+          status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (response.status === 402) {
+        return new Response(JSON.stringify({ error: "AI usage limit reached. Please add credits." }), {
+          status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const t = await response.text();
+      console.error("AI gateway error:", response.status, t);
+      throw new Error("AI gateway error");
+    }
+
+    const data = await response.json();
+    let content = data.choices?.[0]?.message?.content ?? "";
+
+    // Strip markdown fences if present
+    content = content.replace(/^```(?:json)?\s*/, "").replace(/\s*```$/, "").trim();
+
+    const wbs = JSON.parse(content);
+
+    return new Response(JSON.stringify(wbs), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  } catch (e) {
+    console.error("generate-wbs error:", e);
+    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {
+      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+});

@@ -9,6 +9,7 @@ import MyActions from "@/pages/MyActions";
 import WaitingFor from "@/pages/WaitingFor";
 import SOPPage from "@/pages/SOPPage";
 import ProjectsPage from "@/pages/ProjectsPage";
+import WBSPlanner from "@/pages/WBSPlanner";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -25,6 +26,7 @@ const App = () => (
             <Route path="/projects" element={<ProjectsPage />} />
             <Route path="/actions" element={<MyActions />} />
             <Route path="/waiting" element={<WaitingFor />} />
+            <Route path="/planner" element={<WBSPlanner />} />
             <Route path="/sop" element={<SOPPage />} />
             <Route path="*" element={<NotFound />} />
           </Routes>

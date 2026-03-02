@@ -40,6 +40,8 @@ interface AppState {
   addAction: (action: Action) => void;
   updateAction: (id: string, updates: Partial<Action>) => void;
   deleteAction: (id: string) => void;
+  bulkUpdateActions: (ids: string[], updates: Partial<Action>) => void;
+  bulkDeleteActions: (ids: string[]) => void;
   addWorkPackage: (wp: WorkPackage) => void;
   updateWorkPackage: (id: string, updates: Partial<WorkPackage>) => void;
   deleteWorkPackage: (id: string) => void;
@@ -83,6 +85,10 @@ export const useAppStore = create<AppState>()(persist((set) => ({
   updateAction: (id, updates) =>
     set((s) => ({ actions: s.actions.map((a) => (a.id === id ? { ...a, ...updates } : a)) })),
   deleteAction: (id) => set((s) => ({ actions: s.actions.filter((a) => a.id !== id) })),
+  bulkUpdateActions: (ids, updates) =>
+    set((s) => ({ actions: s.actions.map((a) => (ids.includes(a.id) ? { ...a, ...updates } : a)) })),
+  bulkDeleteActions: (ids) =>
+    set((s) => ({ actions: s.actions.filter((a) => !ids.includes(a.id)) })),
 
   addWorkPackage: (wp) => set((s) => ({ workPackages: [...s.workPackages, wp] })),
   updateWorkPackage: (id, updates) =>

@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, DragEvent } from "react";
 import { useAppStore } from "@/lib/store";
 import { InboxItem, Priority } from "@/lib/types";
 import { supabase } from "@/integrations/supabase/client";
@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Inbox, FileText, Mic, Link, Upload, Sparkles, Trash2, ArrowRight,
-  MicOff, Loader2, PenLine, X, Check
+  MicOff, Loader2, PenLine, X, Check, GripVertical
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -33,6 +33,7 @@ export default function InboxPage() {
   const [showPreview, setShowPreview] = useState(false);
   const [sourceLabel, setSourceLabel] = useState("notes");
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [isDragging, setIsDragging] = useState(false);
 
   // Voice recording state
   const [isRecording, setIsRecording] = useState(false);
@@ -42,6 +43,7 @@ export default function InboxPage() {
 
   // File upload
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const dragCounterRef = useRef(0);
 
   const extractTasks = useCallback(async (text: string, source: string) => {
     if (!text.trim()) {
@@ -66,9 +68,7 @@ export default function InboxPage() {
     }
   }, []);
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const readFileContent = async (file: File) => {
     try {
       const text = await file.text();
       setTextInput(text);
@@ -76,7 +76,47 @@ export default function InboxPage() {
     } catch {
       toast.error("Could not read file. Try a text-based format (CSV, TXT, etc.).");
     }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    await readFileContent(file);
     if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const handleDragEnter = (e: DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current++;
+    if (e.dataTransfer.types.includes("Files")) {
+      setIsDragging(true);
+    }
+  };
+
+  const handleDragLeave = (e: DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current--;
+    if (dragCounterRef.current === 0) {
+      setIsDragging(false);
+    }
+  };
+
+  const handleDragOver = (e: DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDrop = async (e: DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    dragCounterRef.current = 0;
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      await readFileContent(files[0]);
+    }
   };
 
   const startRecording = async () => {
@@ -197,85 +237,108 @@ export default function InboxPage() {
       </div>
 
       {/* Capture area */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Sparkles className="h-4 w-4" /> Capture & Extract Tasks
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <Tabs defaultValue="text">
-            <TabsList>
-              <TabsTrigger value="text" className="gap-1.5"><FileText className="h-3.5 w-3.5" />Notes</TabsTrigger>
-              <TabsTrigger value="voice" className="gap-1.5"><Mic className="h-3.5 w-3.5" />Voice</TabsTrigger>
-              <TabsTrigger value="file" className="gap-1.5"><Upload className="h-3.5 w-3.5" />File</TabsTrigger>
-              <TabsTrigger value="link" className="gap-1.5"><Link className="h-3.5 w-3.5" />Link/Paste</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="text" className="space-y-3 mt-3">
-              <Textarea
-                placeholder="Paste meeting notes, email thread, or any text…"
-                value={textInput}
-                onChange={(e) => setTextInput(e.target.value)}
-                rows={6}
-              />
-              <Button onClick={() => extractTasks(textInput, "notes")} disabled={isExtracting || !textInput.trim()}>
-                {isExtracting ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Extracting…</> : <><Sparkles className="h-4 w-4 mr-2" />Extract Tasks</>}
-              </Button>
-            </TabsContent>
-
-            <TabsContent value="voice" className="space-y-3 mt-3">
-              <div className="flex items-center gap-3">
-                {!isRecording ? (
-                  <Button onClick={startRecording} variant="outline" disabled={isTranscribing}>
-                    <Mic className="h-4 w-4 mr-2" />Start Recording
-                  </Button>
-                ) : (
-                  <Button onClick={stopRecording} variant="destructive">
-                    <MicOff className="h-4 w-4 mr-2" />Stop Recording
-                  </Button>
-                )}
-                {isTranscribing && <span className="text-sm text-muted-foreground flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />Transcribing…</span>}
-              </div>
-              {isRecording && (
-                <div className="flex items-center gap-2 text-sm text-destructive animate-pulse">
-                  <div className="h-2 w-2 rounded-full bg-destructive" /> Recording…
-                </div>
-              )}
-              {textInput && !isRecording && !isTranscribing && (
-                <div className="space-y-2">
-                  <p className="text-sm font-medium">Transcript:</p>
-                  <Textarea value={textInput} onChange={(e) => setTextInput(e.target.value)} rows={4} />
-                  <Button onClick={() => extractTasks(textInput, "voice memo")} disabled={isExtracting}>
+      <div
+        onDragEnter={handleDragEnter}
+        onDragLeave={handleDragLeave}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+        className="relative"
+      >
+        {isDragging && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg border-2 border-dashed border-primary bg-primary/5 backdrop-blur-sm">
+            <div className="text-center">
+              <Upload className="h-10 w-10 mx-auto mb-2 text-primary" />
+              <p className="text-lg font-medium text-primary">Drop file here</p>
+              <p className="text-sm text-muted-foreground">TXT, CSV, MD supported</p>
+            </div>
+          </div>
+        )}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Sparkles className="h-4 w-4" /> Capture & Extract Tasks
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Tabs defaultValue="text" orientation="vertical" className="flex gap-4">
+              <div className="flex-1 order-1">
+                <TabsContent value="text" className="space-y-3 mt-0">
+                  <Textarea
+                    placeholder="Paste meeting notes, email thread, or any text…"
+                    value={textInput}
+                    onChange={(e) => setTextInput(e.target.value)}
+                    rows={6}
+                  />
+                  <Button onClick={() => extractTasks(textInput, "notes")} disabled={isExtracting || !textInput.trim()}>
                     {isExtracting ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Extracting…</> : <><Sparkles className="h-4 w-4 mr-2" />Extract Tasks</>}
                   </Button>
-                </div>
-              )}
-            </TabsContent>
+                </TabsContent>
 
-            <TabsContent value="file" className="space-y-3 mt-3">
-              <p className="text-sm text-muted-foreground">Upload a text file (.txt, .csv, .md) to extract tasks from.</p>
-              <input ref={fileInputRef} type="file" accept=".txt,.csv,.md,.tsv" onChange={handleFileUpload} className="hidden" />
-              <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
-                <Upload className="h-4 w-4 mr-2" />Choose File
-              </Button>
-            </TabsContent>
+                <TabsContent value="voice" className="space-y-3 mt-0">
+                  <div className="flex items-center gap-3">
+                    {!isRecording ? (
+                      <Button onClick={startRecording} variant="outline" disabled={isTranscribing}>
+                        <Mic className="h-4 w-4 mr-2" />Start Recording
+                      </Button>
+                    ) : (
+                      <Button onClick={stopRecording} variant="destructive">
+                        <MicOff className="h-4 w-4 mr-2" />Stop Recording
+                      </Button>
+                    )}
+                    {isTranscribing && <span className="text-sm text-muted-foreground flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />Transcribing…</span>}
+                  </div>
+                  {isRecording && (
+                    <div className="flex items-center gap-2 text-sm text-destructive animate-pulse">
+                      <div className="h-2 w-2 rounded-full bg-destructive" /> Recording…
+                    </div>
+                  )}
+                  {textInput && !isRecording && !isTranscribing && (
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium">Transcript:</p>
+                      <Textarea value={textInput} onChange={(e) => setTextInput(e.target.value)} rows={4} />
+                      <Button onClick={() => extractTasks(textInput, "voice memo")} disabled={isExtracting}>
+                        {isExtracting ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Extracting…</> : <><Sparkles className="h-4 w-4 mr-2" />Extract Tasks</>}
+                      </Button>
+                    </div>
+                  )}
+                </TabsContent>
 
-            <TabsContent value="link" className="space-y-3 mt-3">
-              <p className="text-sm text-muted-foreground">Paste a Google Sheet URL or any link's content below, then extract.</p>
-              <Textarea
-                placeholder="Paste link or copied spreadsheet content here…"
-                value={textInput}
-                onChange={(e) => setTextInput(e.target.value)}
-                rows={6}
-              />
-              <Button onClick={() => extractTasks(textInput, "link/paste")} disabled={isExtracting || !textInput.trim()}>
-                {isExtracting ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Extracting…</> : <><Sparkles className="h-4 w-4 mr-2" />Extract Tasks</>}
-              </Button>
-            </TabsContent>
-          </Tabs>
-        </CardContent>
-      </Card>
+                <TabsContent value="file" className="space-y-3 mt-0">
+                  <div className="rounded-lg border-2 border-dashed border-muted-foreground/25 p-8 text-center">
+                    <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground/50" />
+                    <p className="text-sm text-muted-foreground mb-3">Drag & drop a file here, or click to browse</p>
+                    <input ref={fileInputRef} type="file" accept=".txt,.csv,.md,.tsv" onChange={handleFileUpload} className="hidden" />
+                    <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
+                      <Upload className="h-4 w-4 mr-2" />Choose File
+                    </Button>
+                    <p className="text-xs text-muted-foreground mt-2">Supports .txt, .csv, .md, .tsv</p>
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="link" className="space-y-3 mt-0">
+                  <p className="text-sm text-muted-foreground">Paste a Google Sheet URL or any link's content below, then extract.</p>
+                  <Textarea
+                    placeholder="Paste link or copied spreadsheet content here…"
+                    value={textInput}
+                    onChange={(e) => setTextInput(e.target.value)}
+                    rows={6}
+                  />
+                  <Button onClick={() => extractTasks(textInput, "link/paste")} disabled={isExtracting || !textInput.trim()}>
+                    {isExtracting ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Extracting…</> : <><Sparkles className="h-4 w-4 mr-2" />Extract Tasks</>}
+                  </Button>
+                </TabsContent>
+              </div>
+
+              <TabsList className="flex-col h-auto order-2 self-start">
+                <TabsTrigger value="text" className="gap-1.5 w-full justify-start"><FileText className="h-3.5 w-3.5" />Notes</TabsTrigger>
+                <TabsTrigger value="voice" className="gap-1.5 w-full justify-start"><Mic className="h-3.5 w-3.5" />Voice</TabsTrigger>
+                <TabsTrigger value="file" className="gap-1.5 w-full justify-start"><Upload className="h-3.5 w-3.5" />File</TabsTrigger>
+                <TabsTrigger value="link" className="gap-1.5 w-full justify-start"><Link className="h-3.5 w-3.5" />Link/Paste</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Preview dialog (inline) */}
       {showPreview && (

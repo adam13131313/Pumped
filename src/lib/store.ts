@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { persist } from "zustand/middleware";
 import { Action, Programme, Project, WaitingItem, WorkPackage } from "./types";
 import { actions as initialActions, waitingItems as initialWaiting, workPackages as initialWP, projects as initialProjects, programmes as initialProgrammes } from "./data";
 
@@ -52,7 +53,7 @@ interface AppState {
   takeBackWaiting: (id: string) => void;
 }
 
-export const useAppStore = create<AppState>((set) => ({
+export const useAppStore = create<AppState>()(persist((set) => ({
   todayIds: new Set<string>(),
   addToday: (id) => set((s) => { const n = new Set(s.todayIds); n.add(id); return { todayIds: n }; }),
   removeToday: (id) => set((s) => { const n = new Set(s.todayIds); n.delete(id); return { todayIds: n }; }),
@@ -137,4 +138,14 @@ export const useAppStore = create<AppState>((set) => ({
         actions: [...s.actions, newAction],
       };
     }),
+}), {
+  name: "app-store",
+  partialize: (state) => ({
+    programmes: state.programmes,
+    projects: state.projects,
+    workPackages: state.workPackages,
+    actions: state.actions,
+    waitingItems: state.waitingItems,
+    sopItems: state.sopItems,
+  }),
 }));

@@ -195,9 +195,11 @@ export default function WBSPlanner() {
           project: proj.name,
           workPackage: wp.name,
           wpLead: wp.lead,
+          startDate: "",
           dueDate: wp.dueDate,
           ragStatus: "Green",
           blockers: "",
+          dependencies: [],
         });
 
         // Create actions for each work package

@@ -2,6 +2,13 @@ export type RAGStatus = "Green" | "Amber" | "Red";
 export type TaskStatus = "Not Started" | "In Progress" | "Complete" | "Blocked";
 export type Priority = "High" | "Medium" | "Low";
 export type WaitingStatus = "Pending" | "Received" | "Overdue";
+export type DependencyType = "FS" | "FF" | "SS" | "SF";
+
+export interface Dependency {
+  targetId: string; // the WP id this depends on
+  type: DependencyType;
+  lagDays?: number; // optional lag/lead time in days
+}
 
 export interface Programme {
   id: string;
@@ -22,9 +29,11 @@ export interface WorkPackage {
   project: string;
   workPackage: string;
   wpLead: string;
+  startDate: string;
   dueDate: string;
   ragStatus: RAGStatus;
   blockers: string;
+  dependencies: Dependency[];
 }
 
 export interface Action {

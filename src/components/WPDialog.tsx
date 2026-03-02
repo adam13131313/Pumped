@@ -19,12 +19,12 @@ const ragStatuses: RAGStatus[] = ["Green", "Amber", "Red"];
 export function WPDialog({ open, onOpenChange, wp, onSave, onDelete }: WPDialogProps) {
   const isEdit = !!wp;
   const [form, setForm] = useState<Partial<WorkPackage>>(
-    wp ?? { project: "", workPackage: "", wpLead: "", dueDate: "", ragStatus: "Green", blockers: "" }
+    wp ?? { project: "", workPackage: "", wpLead: "", startDate: "", dueDate: "", ragStatus: "Green", blockers: "", dependencies: [] }
   );
 
   const handleOpen = (o: boolean) => {
     if (o && wp) setForm(wp);
-    else if (o) setForm({ project: "", workPackage: "", wpLead: "", dueDate: "", ragStatus: "Green", blockers: "" });
+    else if (o) setForm({ project: "", workPackage: "", wpLead: "", startDate: "", dueDate: "", ragStatus: "Green", blockers: "", dependencies: [] });
     onOpenChange(o);
   };
 
@@ -35,9 +35,11 @@ export function WPDialog({ open, onOpenChange, wp, onSave, onDelete }: WPDialogP
       project: form.project?.trim() ?? "",
       workPackage: form.workPackage?.trim() ?? "",
       wpLead: form.wpLead?.trim() ?? "",
+      startDate: form.startDate ?? "",
       dueDate: form.dueDate ?? "",
       ragStatus: form.ragStatus ?? "Green",
       blockers: form.blockers?.trim() ?? "",
+      dependencies: form.dependencies ?? [],
     });
     onOpenChange(false);
   };
@@ -59,10 +61,14 @@ export function WPDialog({ open, onOpenChange, wp, onSave, onDelete }: WPDialogP
               <Input id="wpname" value={form.workPackage ?? ""} onChange={(e) => setForm({ ...form, workPackage: e.target.value })} className="mt-1" maxLength={100} />
             </div>
           </div>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-4 gap-4">
             <div>
               <Label htmlFor="lead">WP Lead</Label>
               <Input id="lead" value={form.wpLead ?? ""} onChange={(e) => setForm({ ...form, wpLead: e.target.value })} className="mt-1" maxLength={100} />
+            </div>
+            <div>
+              <Label htmlFor="wpstart">Start Date</Label>
+              <Input id="wpstart" type="date" value={form.startDate ?? ""} onChange={(e) => setForm({ ...form, startDate: e.target.value })} className="mt-1" />
             </div>
             <div>
               <Label htmlFor="wpdue">Due Date</Label>

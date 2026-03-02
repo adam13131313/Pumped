@@ -11,11 +11,11 @@ export const projects: Project[] = [
 ];
 
 export const workPackages: WorkPackage[] = [
-  { id: "wp1", project: "Website Redesign", workPackage: "WP1: UX Research", wpLead: "Alex J.", dueDate: "2026-03-20", ragStatus: "Green", blockers: "" },
-  { id: "wp2", project: "Website Redesign", workPackage: "WP2: Visual Design", wpLead: "Morgan T.", dueDate: "2026-04-10", ragStatus: "Amber", blockers: "Awaiting brand guidelines" },
-  { id: "wp3", project: "CRM Migration", workPackage: "WP1: Data Audit", wpLead: "Sam P.", dueDate: "2026-03-15", ragStatus: "Green", blockers: "" },
-  { id: "wp4", project: "CRM Migration", workPackage: "WP2: System Integration", wpLead: "Jordan K.", dueDate: "2026-05-01", ragStatus: "Red", blockers: "API compatibility issue" },
-  { id: "wp5", project: "Office Relocation", workPackage: "WP1: Vendor Selection", wpLead: "Chris L.", dueDate: "2026-03-25", ragStatus: "Green", blockers: "" },
+  { id: "wp1", project: "Website Redesign", workPackage: "WP1: UX Research", wpLead: "Alex J.", startDate: "2026-02-20", dueDate: "2026-03-20", ragStatus: "Green", blockers: "", dependencies: [] },
+  { id: "wp2", project: "Website Redesign", workPackage: "WP2: Visual Design", wpLead: "Morgan T.", startDate: "2026-03-10", dueDate: "2026-04-10", ragStatus: "Amber", blockers: "Awaiting brand guidelines", dependencies: [{ targetId: "wp1", type: "FS" }] },
+  { id: "wp3", project: "CRM Migration", workPackage: "WP1: Data Audit", wpLead: "Sam P.", startDate: "2026-02-15", dueDate: "2026-03-15", ragStatus: "Green", blockers: "", dependencies: [] },
+  { id: "wp4", project: "CRM Migration", workPackage: "WP2: System Integration", wpLead: "Jordan K.", startDate: "2026-03-15", dueDate: "2026-05-01", ragStatus: "Red", blockers: "API compatibility issue", dependencies: [{ targetId: "wp3", type: "FS" }] },
+  { id: "wp5", project: "Office Relocation", workPackage: "WP1: Vendor Selection", wpLead: "Chris L.", startDate: "2026-02-25", dueDate: "2026-03-25", ragStatus: "Green", blockers: "", dependencies: [] },
 ];
 
 export const actions: Action[] = [

@@ -14,6 +14,7 @@ import ProjectDetailPage from "@/pages/ProjectDetailPage";
 import WBSPlanner from "@/pages/WBSPlanner";
 import KnowledgebasePage from "@/pages/KnowledgebasePage";
 import InboxPage from "@/pages/InboxPage";
+import GanttPage from "@/pages/GanttPage";
 import AuthPage from "@/pages/AuthPage";
 import NotFound from "./pages/NotFound";
 
@@ -42,6 +43,7 @@ function ProtectedRoutes() {
         <Route path="/projects" element={<ProjectsPage />} />
         <Route path="/projects/:projectId" element={<ProjectDetailPage />} />
         <Route path="/actions" element={<MyActions />} />
+        <Route path="/gantt" element={<GanttPage />} />
         <Route path="/waiting" element={<WaitingFor />} />
         <Route path="/planner" element={<WBSPlanner />} />
         <Route path="/sop" element={<SOPPage />} />

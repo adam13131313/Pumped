@@ -26,7 +26,7 @@ export function ActionDialog({ open, onOpenChange, action, onSave, onDelete, onD
   const [delegateTo, setDelegateTo] = useState("");
   const workPackages = useAppStore((s) => s.workPackages);
   const [form, setForm] = useState<Partial<Action>>(
-    action ?? { task: "", project: "", workPackage: "", dueDate: "", priority: "Medium", status: "Not Started", notes: "" }
+    action ?? { task: "", project: "", workPackage: "", startDate: "", dueDate: "", priority: "Medium", status: "Not Started", notes: "" }
   );
 
   // Build WP options grouped by project
@@ -48,7 +48,7 @@ export function ActionDialog({ open, onOpenChange, action, onSave, onDelete, onD
 
   const handleOpen = (o: boolean) => {
     if (o && action) setForm(action);
-    else if (o) setForm({ task: "", project: "", workPackage: "", dueDate: "", priority: "Medium", status: "Not Started", notes: "" });
+    else if (o) setForm({ task: "", project: "", workPackage: "", startDate: "", dueDate: "", priority: "Medium", status: "Not Started", notes: "" });
     setShowDelegate(false);
     setDelegateTo("");
     onOpenChange(o);
@@ -61,6 +61,7 @@ export function ActionDialog({ open, onOpenChange, action, onSave, onDelete, onD
       task: form.task?.trim() ?? "",
       project: selectedProject,
       workPackage: form.workPackage?.trim() ?? "",
+      startDate: form.startDate ?? "",
       dueDate: form.dueDate ?? "",
       priority: form.priority ?? "Medium",
       status: form.status ?? "Not Started",
@@ -109,11 +110,17 @@ export function ActionDialog({ open, onOpenChange, action, onSave, onDelete, onD
               <p className="text-xs text-muted-foreground mt-1">Project: {selectedProject}</p>
             )}
           </div>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="start">Start Date</Label>
+              <Input id="start" type="date" value={form.startDate ?? ""} onChange={(e) => setForm({ ...form, startDate: e.target.value })} className="mt-1" />
+            </div>
             <div>
               <Label htmlFor="due">Due Date</Label>
               <Input id="due" type="date" value={form.dueDate ?? ""} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} className="mt-1" />
             </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
             <div>
               <Label>Priority</Label>
               <Select value={form.priority} onValueChange={(v) => setForm({ ...form, priority: v as Priority })}>

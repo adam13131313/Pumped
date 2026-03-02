@@ -41,6 +41,7 @@ export interface Action {
   task: string;
   project: string;
   workPackage: string;
+  startDate: string;
   dueDate: string;
   priority: Priority;
   status: TaskStatus;

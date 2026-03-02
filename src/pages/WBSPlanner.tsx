@@ -209,6 +209,7 @@ export default function WBSPlanner() {
             task: action.task,
             project: proj.name,
             workPackage: wp.name,
+            startDate: "",
             dueDate: action.dueDate || "",
             priority: action.priority || "Medium",
             status: "Not Started",

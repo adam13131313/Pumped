@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { Action, Programme, Project, WaitingItem, WorkPackage } from "./types";
+import { Action, InboxItem, Programme, Project, WaitingItem, WorkPackage } from "./types";
 import { actions as initialActions, waitingItems as initialWaiting, workPackages as initialWP, projects as initialProjects, programmes as initialProgrammes } from "./data";
 
 export interface SOPItem {
@@ -21,7 +21,7 @@ const defaultSOP: SOPItem[] = [
 ];
 
 interface AppState {
-  todayIds: Set<string>; // ids of actions/waiting items gathered for today
+  todayIds: Set<string>;
   addToday: (id: string) => void;
   removeToday: (id: string) => void;
   clearToday: () => void;
@@ -30,6 +30,7 @@ interface AppState {
   workPackages: WorkPackage[];
   actions: Action[];
   waitingItems: WaitingItem[];
+  inboxItems: InboxItem[];
   sopItems: SOPItem[];
   addProgramme: (p: Programme) => void;
   updateProgramme: (id: string, updates: Partial<Programme>) => void;
@@ -48,6 +49,12 @@ interface AppState {
   addWaitingItem: (item: WaitingItem) => void;
   updateWaitingItem: (id: string, updates: Partial<WaitingItem>) => void;
   deleteWaitingItem: (id: string) => void;
+  addInboxItem: (item: InboxItem) => void;
+  addInboxItems: (items: InboxItem[]) => void;
+  updateInboxItem: (id: string, updates: Partial<InboxItem>) => void;
+  deleteInboxItem: (id: string) => void;
+  bulkDeleteInboxItems: (ids: string[]) => void;
+  promoteInboxToActions: (ids: string[]) => void;
   updateSOPItem: (id: string, updates: Partial<SOPItem>) => void;
   addSOPItem: (item: SOPItem) => void;
   deleteSOPItem: (id: string) => void;
@@ -66,6 +73,7 @@ export const useAppStore = create<AppState>()(persist((set) => ({
   workPackages: initialWP,
   actions: initialActions,
   waitingItems: initialWaiting,
+  inboxItems: [],
   sopItems: defaultSOP,
 
   addProgramme: (p) => set((s) => ({ programmes: [...s.programmes, p] })),
@@ -99,6 +107,32 @@ export const useAppStore = create<AppState>()(persist((set) => ({
   updateWaitingItem: (id, updates) =>
     set((s) => ({ waitingItems: s.waitingItems.map((w) => (w.id === id ? { ...w, ...updates } : w)) })),
   deleteWaitingItem: (id) => set((s) => ({ waitingItems: s.waitingItems.filter((w) => w.id !== id) })),
+
+  addInboxItem: (item) => set((s) => ({ inboxItems: [...s.inboxItems, item] })),
+  addInboxItems: (items) => set((s) => ({ inboxItems: [...s.inboxItems, ...items] })),
+  updateInboxItem: (id, updates) =>
+    set((s) => ({ inboxItems: s.inboxItems.map((i) => (i.id === id ? { ...i, ...updates } : i)) })),
+  deleteInboxItem: (id) => set((s) => ({ inboxItems: s.inboxItems.filter((i) => i.id !== id) })),
+  bulkDeleteInboxItems: (ids) =>
+    set((s) => ({ inboxItems: s.inboxItems.filter((i) => !ids.includes(i.id)) })),
+  promoteInboxToActions: (ids) =>
+    set((s) => {
+      const toPromote = s.inboxItems.filter((i) => ids.includes(i.id));
+      const newActions: Action[] = toPromote.map((i) => ({
+        id: crypto.randomUUID(),
+        task: i.task,
+        project: i.project,
+        workPackage: "",
+        dueDate: i.dueDate,
+        priority: i.priority,
+        status: "Not Started" as const,
+        notes: i.notes,
+      }));
+      return {
+        inboxItems: s.inboxItems.filter((i) => !ids.includes(i.id)),
+        actions: [...s.actions, ...newActions],
+      };
+    }),
 
   updateSOPItem: (id, updates) =>
     set((s) => ({ sopItems: s.sopItems.map((item) => (item.id === id ? { ...item, ...updates } : item)) })),
@@ -152,6 +186,7 @@ export const useAppStore = create<AppState>()(persist((set) => ({
     workPackages: state.workPackages,
     actions: state.actions,
     waitingItems: state.waitingItems,
+    inboxItems: state.inboxItems,
     sopItems: state.sopItems,
   }),
 }));

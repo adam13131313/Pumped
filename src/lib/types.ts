@@ -48,3 +48,14 @@ export interface WaitingItem {
   status: WaitingStatus;
   notes: string;
 }
+
+export interface InboxItem {
+  id: string;
+  task: string;
+  priority: Priority;
+  dueDate: string;
+  project: string;
+  notes: string;
+  source: string; // e.g. "voice memo", "notes", "spreadsheet"
+  createdAt: string;
+}

@@ -1,0 +1,383 @@
+import { useState, useRef, useCallback } from "react";
+import { useAppStore } from "@/lib/store";
+import { InboxItem, Priority } from "@/lib/types";
+import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Inbox, FileText, Mic, Link, Upload, Sparkles, Trash2, ArrowRight,
+  MicOff, Loader2, PenLine, X, Check
+} from "lucide-react";
+import { toast } from "sonner";
+
+type ProposedTask = {
+  task: string;
+  priority: Priority;
+  dueDate: string;
+  project: string;
+  notes: string;
+};
+
+export default function InboxPage() {
+  const { inboxItems, addInboxItems, updateInboxItem, deleteInboxItem, bulkDeleteInboxItems, promoteInboxToActions, projects } = useAppStore();
+  const [textInput, setTextInput] = useState("");
+  const [isExtracting, setIsExtracting] = useState(false);
+  const [proposedTasks, setProposedTasks] = useState<ProposedTask[]>([]);
+  const [summary, setSummary] = useState("");
+  const [showPreview, setShowPreview] = useState(false);
+  const [sourceLabel, setSourceLabel] = useState("notes");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  // Voice recording state
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+
+  // File upload
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const extractTasks = useCallback(async (text: string, source: string) => {
+    if (!text.trim()) {
+      toast.error("Please enter some text first");
+      return;
+    }
+    setIsExtracting(true);
+    setSourceLabel(source);
+    try {
+      const { data, error } = await supabase.functions.invoke("extract-tasks", {
+        body: { text, sourceType: source },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      setProposedTasks(data.tasks || []);
+      setSummary(data.summary || "");
+      setShowPreview(true);
+    } catch (e: any) {
+      toast.error(e.message || "Failed to extract tasks");
+    } finally {
+      setIsExtracting(false);
+    }
+  }, []);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      setTextInput(text);
+      extractTasks(text, "file: " + file.name);
+    } catch {
+      toast.error("Could not read file. Try a text-based format (CSV, TXT, etc.).");
+    }
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      chunksRef.current = [];
+      recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+      recorder.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const blob = new Blob(chunksRef.current, { type: "audio/webm" });
+        await transcribeAudio(blob);
+      };
+      recorder.start();
+      mediaRecorderRef.current = recorder;
+      setIsRecording(true);
+    } catch {
+      toast.error("Microphone access denied");
+    }
+  };
+
+  const stopRecording = () => {
+    mediaRecorderRef.current?.stop();
+    setIsRecording(false);
+  };
+
+  const transcribeAudio = async (blob: Blob) => {
+    setIsTranscribing(true);
+    try {
+      const formData = new FormData();
+      formData.append("audio", blob, "recording.webm");
+      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+      const resp = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/transcribe-audio`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}` },
+          body: formData,
+        }
+      );
+      if (!resp.ok) throw new Error("Transcription failed");
+      const data = await resp.json();
+      if (data.error) throw new Error(data.error);
+      const transcript = data.transcript;
+      setTextInput(transcript);
+      toast.success("Audio transcribed!");
+      extractTasks(transcript, "voice memo");
+    } catch (e: any) {
+      toast.error(e.message || "Transcription failed");
+    } finally {
+      setIsTranscribing(false);
+    }
+  };
+
+  const acceptProposed = () => {
+    const now = new Date().toISOString();
+    const items: InboxItem[] = proposedTasks.map((t) => ({
+      id: crypto.randomUUID(),
+      task: t.task,
+      priority: t.priority,
+      dueDate: t.dueDate,
+      project: t.project,
+      notes: t.notes,
+      source: sourceLabel,
+      createdAt: now,
+    }));
+    addInboxItems(items);
+    setShowPreview(false);
+    setProposedTasks([]);
+    setSummary("");
+    setTextInput("");
+    toast.success(`${items.length} tasks added to inbox`);
+  };
+
+  const removeProposed = (idx: number) => {
+    setProposedTasks((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const updateProposed = (idx: number, updates: Partial<ProposedTask>) => {
+    setProposedTasks((prev) => prev.map((t, i) => (i === idx ? { ...t, ...updates } : t)));
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelected((prev) => {
+      const n = new Set(prev);
+      n.has(id) ? n.delete(id) : n.add(id);
+      return n;
+    });
+  };
+  const selectAll = () => setSelected(new Set(inboxItems.map((i) => i.id)));
+  const selectNone = () => setSelected(new Set());
+
+  const promoteSelected = () => {
+    const ids = Array.from(selected);
+    promoteInboxToActions(ids);
+    setSelected(new Set());
+    toast.success(`${ids.length} tasks moved to My Actions`);
+  };
+
+  const deleteSelected = () => {
+    const ids = Array.from(selected);
+    bulkDeleteInboxItems(ids);
+    setSelected(new Set());
+    toast.success(`${ids.length} items deleted`);
+  };
+
+  const priorityColor = (p: Priority) =>
+    p === "High" ? "destructive" : p === "Medium" ? "default" : "secondary";
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center gap-3">
+        <Inbox className="h-6 w-6 text-primary" />
+        <h1 className="text-2xl font-bold">Rapid Capture</h1>
+        {inboxItems.length > 0 && (
+          <Badge variant="outline" className="ml-2">{inboxItems.length} in inbox</Badge>
+        )}
+      </div>
+
+      {/* Capture area */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Sparkles className="h-4 w-4" /> Capture & Extract Tasks
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Tabs defaultValue="text">
+            <TabsList>
+              <TabsTrigger value="text" className="gap-1.5"><FileText className="h-3.5 w-3.5" />Notes</TabsTrigger>
+              <TabsTrigger value="voice" className="gap-1.5"><Mic className="h-3.5 w-3.5" />Voice</TabsTrigger>
+              <TabsTrigger value="file" className="gap-1.5"><Upload className="h-3.5 w-3.5" />File</TabsTrigger>
+              <TabsTrigger value="link" className="gap-1.5"><Link className="h-3.5 w-3.5" />Link/Paste</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="text" className="space-y-3 mt-3">
+              <Textarea
+                placeholder="Paste meeting notes, email thread, or any text…"
+                value={textInput}
+                onChange={(e) => setTextInput(e.target.value)}
+                rows={6}
+              />
+              <Button onClick={() => extractTasks(textInput, "notes")} disabled={isExtracting || !textInput.trim()}>
+                {isExtracting ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Extracting…</> : <><Sparkles className="h-4 w-4 mr-2" />Extract Tasks</>}
+              </Button>
+            </TabsContent>
+
+            <TabsContent value="voice" className="space-y-3 mt-3">
+              <div className="flex items-center gap-3">
+                {!isRecording ? (
+                  <Button onClick={startRecording} variant="outline" disabled={isTranscribing}>
+                    <Mic className="h-4 w-4 mr-2" />Start Recording
+                  </Button>
+                ) : (
+                  <Button onClick={stopRecording} variant="destructive">
+                    <MicOff className="h-4 w-4 mr-2" />Stop Recording
+                  </Button>
+                )}
+                {isTranscribing && <span className="text-sm text-muted-foreground flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />Transcribing…</span>}
+              </div>
+              {isRecording && (
+                <div className="flex items-center gap-2 text-sm text-destructive animate-pulse">
+                  <div className="h-2 w-2 rounded-full bg-destructive" /> Recording…
+                </div>
+              )}
+              {textInput && !isRecording && !isTranscribing && (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">Transcript:</p>
+                  <Textarea value={textInput} onChange={(e) => setTextInput(e.target.value)} rows={4} />
+                  <Button onClick={() => extractTasks(textInput, "voice memo")} disabled={isExtracting}>
+                    {isExtracting ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Extracting…</> : <><Sparkles className="h-4 w-4 mr-2" />Extract Tasks</>}
+                  </Button>
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="file" className="space-y-3 mt-3">
+              <p className="text-sm text-muted-foreground">Upload a text file (.txt, .csv, .md) to extract tasks from.</p>
+              <input ref={fileInputRef} type="file" accept=".txt,.csv,.md,.tsv" onChange={handleFileUpload} className="hidden" />
+              <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
+                <Upload className="h-4 w-4 mr-2" />Choose File
+              </Button>
+            </TabsContent>
+
+            <TabsContent value="link" className="space-y-3 mt-3">
+              <p className="text-sm text-muted-foreground">Paste a Google Sheet URL or any link's content below, then extract.</p>
+              <Textarea
+                placeholder="Paste link or copied spreadsheet content here…"
+                value={textInput}
+                onChange={(e) => setTextInput(e.target.value)}
+                rows={6}
+              />
+              <Button onClick={() => extractTasks(textInput, "link/paste")} disabled={isExtracting || !textInput.trim()}>
+                {isExtracting ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Extracting…</> : <><Sparkles className="h-4 w-4 mr-2" />Extract Tasks</>}
+              </Button>
+            </TabsContent>
+          </Tabs>
+        </CardContent>
+      </Card>
+
+      {/* Preview dialog (inline) */}
+      {showPreview && (
+        <Card className="border-primary/50">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg">Proposed Tasks ({proposedTasks.length})</CardTitle>
+              <div className="flex gap-2">
+                <Button size="sm" variant="ghost" onClick={() => setShowPreview(false)}><X className="h-4 w-4 mr-1" />Cancel</Button>
+                <Button size="sm" onClick={acceptProposed} disabled={proposedTasks.length === 0}>
+                  <Check className="h-4 w-4 mr-1" />Add to Inbox
+                </Button>
+              </div>
+            </div>
+            {summary && <p className="text-sm text-muted-foreground mt-1">{summary}</p>}
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {proposedTasks.map((t, i) => (
+              <div key={i} className="flex items-start gap-3 rounded-lg border p-3">
+                <div className="flex-1 space-y-2">
+                  <Input value={t.task} onChange={(e) => updateProposed(i, { task: e.target.value })} className="font-medium" />
+                  <div className="flex flex-wrap gap-2">
+                    <Select value={t.priority} onValueChange={(v) => updateProposed(i, { priority: v as Priority })}>
+                      <SelectTrigger className="w-28 h-8"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="High">High</SelectItem>
+                        <SelectItem value="Medium">Medium</SelectItem>
+                        <SelectItem value="Low">Low</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Input type="date" value={t.dueDate} onChange={(e) => updateProposed(i, { dueDate: e.target.value })} className="w-40 h-8" />
+                    <Input placeholder="Project" value={t.project} onChange={(e) => updateProposed(i, { project: e.target.value })} className="w-40 h-8" />
+                  </div>
+                  {t.notes && <p className="text-xs text-muted-foreground">{t.notes}</p>}
+                </div>
+                <Button size="icon" variant="ghost" onClick={() => removeProposed(i)}><Trash2 className="h-4 w-4" /></Button>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Inbox items */}
+      {inboxItems.length > 0 && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Inbox className="h-4 w-4" /> Inbox ({inboxItems.length})
+              </CardTitle>
+              <div className="flex gap-2 items-center">
+                <Button size="sm" variant="ghost" onClick={selected.size === inboxItems.length ? selectNone : selectAll}>
+                  {selected.size === inboxItems.length ? "Deselect All" : "Select All"}
+                </Button>
+              </div>
+            </div>
+            {selected.size > 0 && (
+              <div className="flex gap-2 items-center pt-2">
+                <span className="text-sm text-muted-foreground">{selected.size} selected</span>
+                <Button size="sm" onClick={promoteSelected}>
+                  <ArrowRight className="h-4 w-4 mr-1" />Move to Actions
+                </Button>
+                <Button size="sm" variant="destructive" onClick={deleteSelected}>
+                  <Trash2 className="h-4 w-4 mr-1" />Delete
+                </Button>
+              </div>
+            )}
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {inboxItems.map((item) => (
+              <div key={item.id} className="flex items-center gap-3 rounded-lg border p-3 hover:bg-accent/50 transition-colors">
+                <Checkbox checked={selected.has(item.id)} onCheckedChange={() => toggleSelect(item.id)} />
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium truncate">{item.task}</p>
+                  <div className="flex gap-2 mt-1 flex-wrap">
+                    <Badge variant={priorityColor(item.priority)} className="text-xs">{item.priority}</Badge>
+                    {item.project && <Badge variant="outline" className="text-xs">{item.project}</Badge>}
+                    {item.dueDate && <span className="text-xs text-muted-foreground">{item.dueDate}</span>}
+                    <span className="text-xs text-muted-foreground">via {item.source}</span>
+                  </div>
+                </div>
+                <div className="flex gap-1">
+                  <Button size="icon" variant="ghost" onClick={() => {
+                    promoteInboxToActions([item.id]);
+                    toast.success("Moved to My Actions");
+                  }}><ArrowRight className="h-4 w-4" /></Button>
+                  <Button size="icon" variant="ghost" onClick={() => deleteInboxItem(item.id)}>
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {inboxItems.length === 0 && !showPreview && (
+        <div className="text-center py-12 text-muted-foreground">
+          <Inbox className="h-12 w-12 mx-auto mb-3 opacity-30" />
+          <p>Your inbox is empty. Use the capture tools above to add tasks.</p>
+        </div>
+      )}
+    </div>
+  );
+}

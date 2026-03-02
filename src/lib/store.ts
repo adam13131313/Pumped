@@ -1,7 +1,6 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
 import { Action, InboxItem, Programme, Project, WaitingItem, WorkPackage } from "./types";
-import { actions as initialActions, waitingItems as initialWaiting, workPackages as initialWP, projects as initialProjects, programmes as initialProgrammes } from "./data";
+import { supabase } from "@/integrations/supabase/client";
 
 export interface SOPItem {
   id: string;
@@ -27,6 +26,9 @@ export interface GlobalFilter {
 }
 
 interface AppState {
+  // Loading state
+  dataLoaded: boolean;
+  
   todayIds: Set<string>;
   addToday: (id: string) => void;
   removeToday: (id: string) => void;
@@ -41,6 +43,10 @@ interface AppState {
   waitingItems: WaitingItem[];
   inboxItems: InboxItem[];
   sopItems: SOPItem[];
+  
+  // Data loading
+  loadAllData: () => Promise<void>;
+  
   addProgramme: (p: Programme) => void;
   updateProgramme: (id: string, updates: Partial<Programme>) => void;
   deleteProgramme: (id: string) => void;
@@ -73,7 +79,16 @@ interface AppState {
 
 const defaultGlobalFilter: GlobalFilter = { programmeId: "", projectId: "", workPackageId: "" };
 
-export const useAppStore = create<AppState>()(persist((set) => ({
+// Helper to get current user id
+async function getUserId(): Promise<string> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not authenticated");
+  return user.id;
+}
+
+export const useAppStore = create<AppState>()((set, get) => ({
+  dataLoaded: false,
+  
   todayIds: new Set<string>(),
   addToday: (id) => set((s) => { const n = new Set(s.todayIds); n.add(id); return { todayIds: n }; }),
   removeToday: (id) => set((s) => { const n = new Set(s.todayIds); n.delete(id); return { todayIds: n }; }),
@@ -83,127 +98,314 @@ export const useAppStore = create<AppState>()(persist((set) => ({
   setGlobalFilter: (filter) => set({ globalFilter: filter }),
   clearGlobalFilter: () => set({ globalFilter: defaultGlobalFilter }),
 
-  programmes: initialProgrammes,
-  projects: initialProjects,
-  workPackages: initialWP,
-  actions: initialActions,
-  waitingItems: initialWaiting,
+  programmes: [],
+  projects: [],
+  workPackages: [],
+  actions: [],
+  waitingItems: [],
   inboxItems: [],
-  sopItems: defaultSOP,
+  sopItems: [],
 
-  addProgramme: (p) => set((s) => ({ programmes: [...s.programmes, p] })),
-  updateProgramme: (id, updates) =>
-    set((s) => ({ programmes: s.programmes.map((p) => (p.id === id ? { ...p, ...updates } : p)) })),
-  deleteProgramme: (id) => set((s) => ({
-    programmes: s.programmes.filter((p) => p.id !== id),
-    projects: s.projects.map((p) => p.programmeId === id ? { ...p, programmeId: "" } : p),
-  })),
+  loadAllData: async () => {
+    const [
+      { data: programmes },
+      { data: projects },
+      { data: workPackages },
+      { data: actions },
+      { data: waitingItems },
+      { data: inboxItems },
+      { data: sopItems },
+    ] = await Promise.all([
+      supabase.from("programmes").select("*"),
+      supabase.from("projects").select("*"),
+      supabase.from("work_packages").select("*"),
+      supabase.from("actions").select("*"),
+      supabase.from("waiting_items").select("*"),
+      supabase.from("inbox_items").select("*"),
+      supabase.from("sop_items").select("*"),
+    ]);
 
-  addProject: (p) => set((s) => ({ projects: [...s.projects, p] })),
-  updateProject: (id, updates) =>
-    set((s) => ({ projects: s.projects.map((p) => (p.id === id ? { ...p, ...updates } : p)) })),
-  deleteProject: (id) => set((s) => ({ projects: s.projects.filter((p) => p.id !== id) })),
+    const mapProgramme = (r: any): Programme => ({ id: r.id, name: r.name, description: r.description });
+    const mapProject = (r: any): Project => ({ id: r.id, name: r.name, description: r.description, programmeId: r.programme_id, status: r.status });
+    const mapWP = (r: any): WorkPackage => ({ id: r.id, project: r.project, workPackage: r.work_package, wpLead: r.wp_lead, startDate: r.start_date, dueDate: r.due_date, ragStatus: r.rag_status, blockers: r.blockers, dependencies: r.dependencies || [] });
+    const mapAction = (r: any): Action => ({ id: r.id, task: r.task, project: r.project, workPackage: r.work_package, startDate: r.start_date, dueDate: r.due_date, priority: r.priority, status: r.status, notes: r.notes });
+    const mapWaiting = (r: any): WaitingItem => ({ id: r.id, description: r.description, fromWhom: r.from_whom, projectWP: r.project_wp, askedOn: r.asked_on, dueBy: r.due_by, status: r.status, notes: r.notes });
+    const mapInbox = (r: any): InboxItem => ({ id: r.id, task: r.task, priority: r.priority, dueDate: r.due_date, project: r.project, notes: r.notes, source: r.source, createdAt: r.created_at });
+    const mapSOP = (r: any): SOPItem => ({ id: r.id, when: r.trigger_when, instruction: r.instruction });
 
-  addAction: (action) => set((s) => ({ actions: [...s.actions, action] })),
-  updateAction: (id, updates) =>
-    set((s) => ({ actions: s.actions.map((a) => (a.id === id ? { ...a, ...updates } : a)) })),
-  deleteAction: (id) => set((s) => ({ actions: s.actions.filter((a) => a.id !== id) })),
-  bulkUpdateActions: (ids, updates) =>
-    set((s) => ({ actions: s.actions.map((a) => (ids.includes(a.id) ? { ...a, ...updates } : a)) })),
-  bulkDeleteActions: (ids) =>
-    set((s) => ({ actions: s.actions.filter((a) => !ids.includes(a.id)) })),
+    const mappedSOP = (sopItems || []).map(mapSOP);
+    
+    // If user has no SOP items yet, seed with defaults
+    if (mappedSOP.length === 0) {
+      const userId = await getUserId();
+      const sopRows = defaultSOP.map((s) => ({ user_id: userId, trigger_when: s.when, instruction: s.instruction }));
+      const { data: inserted } = await supabase.from("sop_items").insert(sopRows).select();
+      set({
+        dataLoaded: true,
+        programmes: (programmes || []).map(mapProgramme),
+        projects: (projects || []).map(mapProject),
+        workPackages: (workPackages || []).map(mapWP),
+        actions: (actions || []).map(mapAction),
+        waitingItems: (waitingItems || []).map(mapWaiting),
+        inboxItems: (inboxItems || []).map(mapInbox),
+        sopItems: (inserted || []).map(mapSOP),
+      });
+    } else {
+      set({
+        dataLoaded: true,
+        programmes: (programmes || []).map(mapProgramme),
+        projects: (projects || []).map(mapProject),
+        workPackages: (workPackages || []).map(mapWP),
+        actions: (actions || []).map(mapAction),
+        waitingItems: (waitingItems || []).map(mapWaiting),
+        inboxItems: (inboxItems || []).map(mapInbox),
+        sopItems: mappedSOP,
+      });
+    }
+  },
 
-  addWorkPackage: (wp) => set((s) => ({ workPackages: [...s.workPackages, wp] })),
-  updateWorkPackage: (id, updates) =>
-    set((s) => ({ workPackages: s.workPackages.map((wp) => (wp.id === id ? { ...wp, ...updates } : wp)) })),
-  deleteWorkPackage: (id) => set((s) => ({ workPackages: s.workPackages.filter((wp) => wp.id !== id) })),
+  // --- Programmes ---
+  addProgramme: (p) => {
+    set((s) => ({ programmes: [...s.programmes, p] }));
+    getUserId().then((uid) => supabase.from("programmes").insert({ id: p.id, user_id: uid, name: p.name, description: p.description }).then());
+  },
+  updateProgramme: (id, updates) => {
+    set((s) => ({ programmes: s.programmes.map((p) => (p.id === id ? { ...p, ...updates } : p)) }));
+    const dbUpdates: any = {};
+    if (updates.name !== undefined) dbUpdates.name = updates.name;
+    if (updates.description !== undefined) dbUpdates.description = updates.description;
+    supabase.from("programmes").update(dbUpdates).eq("id", id).then();
+  },
+  deleteProgramme: (id) => {
+    set((s) => ({
+      programmes: s.programmes.filter((p) => p.id !== id),
+      projects: s.projects.map((p) => p.programmeId === id ? { ...p, programmeId: "" } : p),
+    }));
+    supabase.from("programmes").delete().eq("id", id).then();
+    supabase.from("projects").update({ programme_id: "" }).eq("programme_id", id).then();
+  },
 
-  addWaitingItem: (item) => set((s) => ({ waitingItems: [...s.waitingItems, item] })),
-  updateWaitingItem: (id, updates) =>
-    set((s) => ({ waitingItems: s.waitingItems.map((w) => (w.id === id ? { ...w, ...updates } : w)) })),
-  deleteWaitingItem: (id) => set((s) => ({ waitingItems: s.waitingItems.filter((w) => w.id !== id) })),
+  // --- Projects ---
+  addProject: (p) => {
+    set((s) => ({ projects: [...s.projects, p] }));
+    getUserId().then((uid) => supabase.from("projects").insert({ id: p.id, user_id: uid, name: p.name, description: p.description, programme_id: p.programmeId, status: p.status }).then());
+  },
+  updateProject: (id, updates) => {
+    set((s) => ({ projects: s.projects.map((p) => (p.id === id ? { ...p, ...updates } : p)) }));
+    const dbUpdates: any = {};
+    if (updates.name !== undefined) dbUpdates.name = updates.name;
+    if (updates.description !== undefined) dbUpdates.description = updates.description;
+    if (updates.programmeId !== undefined) dbUpdates.programme_id = updates.programmeId;
+    if (updates.status !== undefined) dbUpdates.status = updates.status;
+    supabase.from("projects").update(dbUpdates).eq("id", id).then();
+  },
+  deleteProject: (id) => {
+    set((s) => ({ projects: s.projects.filter((p) => p.id !== id) }));
+    supabase.from("projects").delete().eq("id", id).then();
+  },
 
-  addInboxItem: (item) => set((s) => ({ inboxItems: [...s.inboxItems, item] })),
-  addInboxItems: (items) => set((s) => ({ inboxItems: [...s.inboxItems, ...items] })),
-  updateInboxItem: (id, updates) =>
-    set((s) => ({ inboxItems: s.inboxItems.map((i) => (i.id === id ? { ...i, ...updates } : i)) })),
-  deleteInboxItem: (id) => set((s) => ({ inboxItems: s.inboxItems.filter((i) => i.id !== id) })),
-  bulkDeleteInboxItems: (ids) =>
-    set((s) => ({ inboxItems: s.inboxItems.filter((i) => !ids.includes(i.id)) })),
-  promoteInboxToActions: (ids) =>
-    set((s) => {
-      const toPromote = s.inboxItems.filter((i) => ids.includes(i.id));
-      const newActions: Action[] = toPromote.map((i) => ({
-        id: crypto.randomUUID(),
-        task: i.task,
-        project: i.project,
-        workPackage: "",
-        startDate: "",
-        dueDate: i.dueDate,
-        priority: i.priority,
-        status: "Not Started" as const,
-        notes: i.notes,
-      }));
-      return {
-        inboxItems: s.inboxItems.filter((i) => !ids.includes(i.id)),
-        actions: [...s.actions, ...newActions],
-      };
-    }),
+  // --- Actions ---
+  addAction: (action) => {
+    set((s) => ({ actions: [...s.actions, action] }));
+    getUserId().then((uid) => supabase.from("actions").insert({ id: action.id, user_id: uid, task: action.task, project: action.project, work_package: action.workPackage, start_date: action.startDate, due_date: action.dueDate, priority: action.priority, status: action.status, notes: action.notes }).then());
+  },
+  updateAction: (id, updates) => {
+    set((s) => ({ actions: s.actions.map((a) => (a.id === id ? { ...a, ...updates } : a)) }));
+    const dbUpdates: any = {};
+    if (updates.task !== undefined) dbUpdates.task = updates.task;
+    if (updates.project !== undefined) dbUpdates.project = updates.project;
+    if (updates.workPackage !== undefined) dbUpdates.work_package = updates.workPackage;
+    if (updates.startDate !== undefined) dbUpdates.start_date = updates.startDate;
+    if (updates.dueDate !== undefined) dbUpdates.due_date = updates.dueDate;
+    if (updates.priority !== undefined) dbUpdates.priority = updates.priority;
+    if (updates.status !== undefined) dbUpdates.status = updates.status;
+    if (updates.notes !== undefined) dbUpdates.notes = updates.notes;
+    supabase.from("actions").update(dbUpdates).eq("id", id).then();
+  },
+  deleteAction: (id) => {
+    set((s) => ({ actions: s.actions.filter((a) => a.id !== id) }));
+    supabase.from("actions").delete().eq("id", id).then();
+  },
+  bulkUpdateActions: (ids, updates) => {
+    set((s) => ({ actions: s.actions.map((a) => (ids.includes(a.id) ? { ...a, ...updates } : a)) }));
+    const dbUpdates: any = {};
+    if (updates.task !== undefined) dbUpdates.task = updates.task;
+    if (updates.project !== undefined) dbUpdates.project = updates.project;
+    if (updates.workPackage !== undefined) dbUpdates.work_package = updates.workPackage;
+    if (updates.startDate !== undefined) dbUpdates.start_date = updates.startDate;
+    if (updates.dueDate !== undefined) dbUpdates.due_date = updates.dueDate;
+    if (updates.priority !== undefined) dbUpdates.priority = updates.priority;
+    if (updates.status !== undefined) dbUpdates.status = updates.status;
+    if (updates.notes !== undefined) dbUpdates.notes = updates.notes;
+    ids.forEach((id) => supabase.from("actions").update(dbUpdates).eq("id", id).then());
+  },
+  bulkDeleteActions: (ids) => {
+    set((s) => ({ actions: s.actions.filter((a) => !ids.includes(a.id)) }));
+    supabase.from("actions").delete().in("id", ids).then();
+  },
 
-  updateSOPItem: (id, updates) =>
-    set((s) => ({ sopItems: s.sopItems.map((item) => (item.id === id ? { ...item, ...updates } : item)) })),
-  addSOPItem: (item) => set((s) => ({ sopItems: [...s.sopItems, item] })),
-  deleteSOPItem: (id) => set((s) => ({ sopItems: s.sopItems.filter((item) => item.id !== id) })),
+  // --- Work Packages ---
+  addWorkPackage: (wp) => {
+    set((s) => ({ workPackages: [...s.workPackages, wp] }));
+    getUserId().then((uid) => supabase.from("work_packages").insert({ id: wp.id, user_id: uid, project: wp.project, work_package: wp.workPackage, wp_lead: wp.wpLead, start_date: wp.startDate, due_date: wp.dueDate, rag_status: wp.ragStatus, blockers: wp.blockers, dependencies: wp.dependencies as any }).then());
+  },
+  updateWorkPackage: (id, updates) => {
+    set((s) => ({ workPackages: s.workPackages.map((wp) => (wp.id === id ? { ...wp, ...updates } : wp)) }));
+    const dbUpdates: any = {};
+    if (updates.project !== undefined) dbUpdates.project = updates.project;
+    if (updates.workPackage !== undefined) dbUpdates.work_package = updates.workPackage;
+    if (updates.wpLead !== undefined) dbUpdates.wp_lead = updates.wpLead;
+    if (updates.startDate !== undefined) dbUpdates.start_date = updates.startDate;
+    if (updates.dueDate !== undefined) dbUpdates.due_date = updates.dueDate;
+    if (updates.ragStatus !== undefined) dbUpdates.rag_status = updates.ragStatus;
+    if (updates.blockers !== undefined) dbUpdates.blockers = updates.blockers;
+    if (updates.dependencies !== undefined) dbUpdates.dependencies = updates.dependencies;
+    supabase.from("work_packages").update(dbUpdates).eq("id", id).then();
+  },
+  deleteWorkPackage: (id) => {
+    set((s) => ({ workPackages: s.workPackages.filter((wp) => wp.id !== id) }));
+    supabase.from("work_packages").delete().eq("id", id).then();
+  },
 
-  delegateAction: (id, toWhom) =>
-    set((s) => {
-      const action = s.actions.find((a) => a.id === id);
-      if (!action) return s;
-      const newWaiting: WaitingItem = {
-        id: crypto.randomUUID(),
-        description: action.task,
-        fromWhom: toWhom,
-        projectWP: [action.project, action.workPackage].filter(Boolean).join(" / "),
-        askedOn: new Date().toISOString().split("T")[0],
-        dueBy: action.dueDate,
-        status: "Pending",
-        notes: action.notes,
-      };
-      return {
-        actions: s.actions.filter((a) => a.id !== id),
-        waitingItems: [...s.waitingItems, newWaiting],
-      };
-    }),
+  // --- Waiting Items ---
+  addWaitingItem: (item) => {
+    set((s) => ({ waitingItems: [...s.waitingItems, item] }));
+    getUserId().then((uid) => supabase.from("waiting_items").insert({ id: item.id, user_id: uid, description: item.description, from_whom: item.fromWhom, project_wp: item.projectWP, asked_on: item.askedOn, due_by: item.dueBy, status: item.status, notes: item.notes }).then());
+  },
+  updateWaitingItem: (id, updates) => {
+    set((s) => ({ waitingItems: s.waitingItems.map((w) => (w.id === id ? { ...w, ...updates } : w)) }));
+    const dbUpdates: any = {};
+    if (updates.description !== undefined) dbUpdates.description = updates.description;
+    if (updates.fromWhom !== undefined) dbUpdates.from_whom = updates.fromWhom;
+    if (updates.projectWP !== undefined) dbUpdates.project_wp = updates.projectWP;
+    if (updates.askedOn !== undefined) dbUpdates.asked_on = updates.askedOn;
+    if (updates.dueBy !== undefined) dbUpdates.due_by = updates.dueBy;
+    if (updates.status !== undefined) dbUpdates.status = updates.status;
+    if (updates.notes !== undefined) dbUpdates.notes = updates.notes;
+    supabase.from("waiting_items").update(dbUpdates).eq("id", id).then();
+  },
+  deleteWaitingItem: (id) => {
+    set((s) => ({ waitingItems: s.waitingItems.filter((w) => w.id !== id) }));
+    supabase.from("waiting_items").delete().eq("id", id).then();
+  },
 
-  takeBackWaiting: (id) =>
-    set((s) => {
-      const item = s.waitingItems.find((w) => w.id === id);
-      if (!item) return s;
-      const newAction: Action = {
-        id: crypto.randomUUID(),
-        task: item.description,
-        project: item.projectWP.split(" / ")[0] ?? "",
-        workPackage: item.projectWP.split(" / ")[1] ?? "",
-        startDate: "",
-        dueDate: item.dueBy,
-        priority: "Medium",
-        status: "Not Started",
-        notes: item.notes,
-      };
-      return {
-        waitingItems: s.waitingItems.filter((w) => w.id !== id),
-        actions: [...s.actions, newAction],
-      };
-    }),
-}), {
-  name: "app-store",
-  partialize: (state) => ({
-    programmes: state.programmes,
-    projects: state.projects,
-    workPackages: state.workPackages,
-    actions: state.actions,
-    waitingItems: state.waitingItems,
-    inboxItems: state.inboxItems,
-    sopItems: state.sopItems,
-  }),
+  // --- Inbox Items ---
+  addInboxItem: (item) => {
+    set((s) => ({ inboxItems: [...s.inboxItems, item] }));
+    getUserId().then((uid) => supabase.from("inbox_items").insert({ id: item.id, user_id: uid, task: item.task, priority: item.priority, due_date: item.dueDate, project: item.project, notes: item.notes, source: item.source }).then());
+  },
+  addInboxItems: (items) => {
+    set((s) => ({ inboxItems: [...s.inboxItems, ...items] }));
+    getUserId().then((uid) => {
+      const rows = items.map((i) => ({ id: i.id, user_id: uid, task: i.task, priority: i.priority, due_date: i.dueDate, project: i.project, notes: i.notes, source: i.source }));
+      supabase.from("inbox_items").insert(rows).then();
+    });
+  },
+  updateInboxItem: (id, updates) => {
+    set((s) => ({ inboxItems: s.inboxItems.map((i) => (i.id === id ? { ...i, ...updates } : i)) }));
+    const dbUpdates: any = {};
+    if (updates.task !== undefined) dbUpdates.task = updates.task;
+    if (updates.priority !== undefined) dbUpdates.priority = updates.priority;
+    if (updates.dueDate !== undefined) dbUpdates.due_date = updates.dueDate;
+    if (updates.project !== undefined) dbUpdates.project = updates.project;
+    if (updates.notes !== undefined) dbUpdates.notes = updates.notes;
+    if (updates.source !== undefined) dbUpdates.source = updates.source;
+    supabase.from("inbox_items").update(dbUpdates).eq("id", id).then();
+  },
+  deleteInboxItem: (id) => {
+    set((s) => ({ inboxItems: s.inboxItems.filter((i) => i.id !== id) }));
+    supabase.from("inbox_items").delete().eq("id", id).then();
+  },
+  bulkDeleteInboxItems: (ids) => {
+    set((s) => ({ inboxItems: s.inboxItems.filter((i) => !ids.includes(i.id)) }));
+    supabase.from("inbox_items").delete().in("id", ids).then();
+  },
+  promoteInboxToActions: (ids) => {
+    const s = get();
+    const toPromote = s.inboxItems.filter((i) => ids.includes(i.id));
+    const newActions: Action[] = toPromote.map((i) => ({
+      id: crypto.randomUUID(),
+      task: i.task,
+      project: i.project,
+      workPackage: "",
+      startDate: "",
+      dueDate: i.dueDate,
+      priority: i.priority,
+      status: "Not Started" as const,
+      notes: i.notes,
+    }));
+    set({
+      inboxItems: s.inboxItems.filter((i) => !ids.includes(i.id)),
+      actions: [...s.actions, ...newActions],
+    });
+    // Persist both operations
+    supabase.from("inbox_items").delete().in("id", ids).then();
+    getUserId().then((uid) => {
+      const rows = newActions.map((a) => ({ id: a.id, user_id: uid, task: a.task, project: a.project, work_package: a.workPackage, start_date: a.startDate, due_date: a.dueDate, priority: a.priority, status: a.status, notes: a.notes }));
+      supabase.from("actions").insert(rows).then();
+    });
+  },
+
+  // --- SOP Items ---
+  updateSOPItem: (id, updates) => {
+    set((s) => ({ sopItems: s.sopItems.map((item) => (item.id === id ? { ...item, ...updates } : item)) }));
+    const dbUpdates: any = {};
+    if (updates.when !== undefined) dbUpdates.trigger_when = updates.when;
+    if (updates.instruction !== undefined) dbUpdates.instruction = updates.instruction;
+    supabase.from("sop_items").update(dbUpdates).eq("id", id).then();
+  },
+  addSOPItem: (item) => {
+    set((s) => ({ sopItems: [...s.sopItems, item] }));
+    getUserId().then((uid) => supabase.from("sop_items").insert({ id: item.id, user_id: uid, trigger_when: item.when, instruction: item.instruction }).then());
+  },
+  deleteSOPItem: (id) => {
+    set((s) => ({ sopItems: s.sopItems.filter((item) => item.id !== id) }));
+    supabase.from("sop_items").delete().eq("id", id).then();
+  },
+
+  // --- Cross-entity operations ---
+  delegateAction: (id, toWhom) => {
+    const s = get();
+    const action = s.actions.find((a) => a.id === id);
+    if (!action) return;
+    const newWaiting: WaitingItem = {
+      id: crypto.randomUUID(),
+      description: action.task,
+      fromWhom: toWhom,
+      projectWP: [action.project, action.workPackage].filter(Boolean).join(" / "),
+      askedOn: new Date().toISOString().split("T")[0],
+      dueBy: action.dueDate,
+      status: "Pending",
+      notes: action.notes,
+    };
+    set({
+      actions: s.actions.filter((a) => a.id !== id),
+      waitingItems: [...s.waitingItems, newWaiting],
+    });
+    supabase.from("actions").delete().eq("id", id).then();
+    getUserId().then((uid) => supabase.from("waiting_items").insert({ id: newWaiting.id, user_id: uid, description: newWaiting.description, from_whom: newWaiting.fromWhom, project_wp: newWaiting.projectWP, asked_on: newWaiting.askedOn, due_by: newWaiting.dueBy, status: newWaiting.status, notes: newWaiting.notes }).then());
+  },
+
+  takeBackWaiting: (id) => {
+    const s = get();
+    const item = s.waitingItems.find((w) => w.id === id);
+    if (!item) return;
+    const newAction: Action = {
+      id: crypto.randomUUID(),
+      task: item.description,
+      project: item.projectWP.split(" / ")[0] ?? "",
+      workPackage: item.projectWP.split(" / ")[1] ?? "",
+      startDate: "",
+      dueDate: item.dueBy,
+      priority: "Medium",
+      status: "Not Started",
+      notes: item.notes,
+    };
+    set({
+      waitingItems: s.waitingItems.filter((w) => w.id !== id),
+      actions: [...s.actions, newAction],
+    });
+    supabase.from("waiting_items").delete().eq("id", id).then();
+    getUserId().then((uid) => supabase.from("actions").insert({ id: newAction.id, user_id: uid, task: newAction.task, project: newAction.project, work_package: newAction.workPackage, start_date: newAction.startDate, due_date: newAction.dueDate, priority: newAction.priority, status: newAction.status, notes: newAction.notes }).then());
+  },
 }));

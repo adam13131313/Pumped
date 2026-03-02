@@ -14,6 +14,84 @@ export type Database = {
   }
   public: {
     Tables: {
+      actions: {
+        Row: {
+          created_at: string
+          due_date: string
+          id: string
+          notes: string
+          priority: string
+          project: string
+          start_date: string
+          status: string
+          task: string
+          user_id: string
+          work_package: string
+        }
+        Insert: {
+          created_at?: string
+          due_date?: string
+          id?: string
+          notes?: string
+          priority?: string
+          project?: string
+          start_date?: string
+          status?: string
+          task?: string
+          user_id: string
+          work_package?: string
+        }
+        Update: {
+          created_at?: string
+          due_date?: string
+          id?: string
+          notes?: string
+          priority?: string
+          project?: string
+          start_date?: string
+          status?: string
+          task?: string
+          user_id?: string
+          work_package?: string
+        }
+        Relationships: []
+      }
+      inbox_items: {
+        Row: {
+          created_at: string
+          due_date: string
+          id: string
+          notes: string
+          priority: string
+          project: string
+          source: string
+          task: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          due_date?: string
+          id?: string
+          notes?: string
+          priority?: string
+          project?: string
+          source?: string
+          task?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          due_date?: string
+          id?: string
+          notes?: string
+          priority?: string
+          project?: string
+          source?: string
+          task?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
@@ -38,6 +116,165 @@ export type Database = {
           last_name?: string | null
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      programmes: {
+        Row: {
+          created_at: string
+          description: string
+          id: string
+          name: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string
+          id?: string
+          name: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          id?: string
+          name?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      projects: {
+        Row: {
+          created_at: string
+          description: string
+          id: string
+          name: string
+          programme_id: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string
+          id?: string
+          name: string
+          programme_id?: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          id?: string
+          name?: string
+          programme_id?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      sop_items: {
+        Row: {
+          created_at: string
+          id: string
+          instruction: string
+          trigger_when: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          instruction?: string
+          trigger_when?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          instruction?: string
+          trigger_when?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      waiting_items: {
+        Row: {
+          asked_on: string
+          created_at: string
+          description: string
+          due_by: string
+          from_whom: string
+          id: string
+          notes: string
+          project_wp: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          asked_on?: string
+          created_at?: string
+          description?: string
+          due_by?: string
+          from_whom?: string
+          id?: string
+          notes?: string
+          project_wp?: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          asked_on?: string
+          created_at?: string
+          description?: string
+          due_by?: string
+          from_whom?: string
+          id?: string
+          notes?: string
+          project_wp?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      work_packages: {
+        Row: {
+          blockers: string
+          created_at: string
+          dependencies: Json
+          due_date: string
+          id: string
+          project: string
+          rag_status: string
+          start_date: string
+          user_id: string
+          work_package: string
+          wp_lead: string
+        }
+        Insert: {
+          blockers?: string
+          created_at?: string
+          dependencies?: Json
+          due_date?: string
+          id?: string
+          project?: string
+          rag_status?: string
+          start_date?: string
+          user_id: string
+          work_package?: string
+          wp_lead?: string
+        }
+        Update: {
+          blockers?: string
+          created_at?: string
+          dependencies?: Json
+          due_date?: string
+          id?: string
+          project?: string
+          rag_status?: string
+          start_date?: string
+          user_id?: string
+          work_package?: string
+          wp_lead?: string
         }
         Relationships: []
       }

@@ -311,12 +311,33 @@ export default function GanttPage() {
                       {row.wp.id !== "__unassigned__" && (
                         <>
                           <RAGBadge status={row.wp.ragStatus} />
-                          {isCritical && (
+                          {node && (
                             <Tooltip>
                               <TooltipTrigger>
-                                <AlertTriangle className="h-3 w-3 text-[hsl(var(--rag-red))]" />
+                                <Badge
+                                  variant={isCritical ? "destructive" : "outline"}
+                                  className="text-[8px] px-1 h-3.5 font-mono cursor-default"
+                                >
+                                  {isCritical ? (
+                                    <><AlertTriangle className="h-2.5 w-2.5 mr-0.5" />{node.duration}d</>
+                                  ) : (
+                                    <>{node.duration}d · {node.slack}d slack</>
+                                  )}
+                                </Badge>
                               </TooltipTrigger>
-                              <TooltipContent>Critical · Slack: {node?.slack ?? 0}d</TooltipContent>
+                              <TooltipContent className="text-xs space-y-1">
+                                <p className="font-semibold">{row.wp.workPackage}</p>
+                                <p>Duration: {node.duration}d · Slack: {node.slack}d</p>
+                                <p>ES: {node.es}d · EF: {node.ef}d</p>
+                                <p>LS: {node.ls}d · LF: {node.lf}d</p>
+                                {(row.wp.dependencies || []).length > 0 && (
+                                  <p>Deps: {(row.wp.dependencies || []).map(d => {
+                                    const t = allWorkPackages.find(w => w.id === d.targetId);
+                                    return t ? `${t.workPackage} (${d.type})` : null;
+                                  }).filter(Boolean).join(", ")}</p>
+                                )}
+                                {isCritical && <p className="text-destructive font-semibold">⚠ On Critical Path</p>}
+                              </TooltipContent>
                             </Tooltip>
                           )}
                           <Tooltip>
@@ -595,82 +616,6 @@ export default function GanttPage() {
         </Card>
       )}
 
-      {/* Schedule Analysis */}
-      {wpOnlyRows.length > 0 && (
-        <Card>
-          <CardHeader className="py-3">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <Info className="h-4 w-4" /> Schedule Analysis
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="overflow-hidden rounded-b-lg">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-muted/50 text-left">
-                    <th className="px-3 py-2 font-medium">Work Package</th>
-                    <th className="px-3 py-2 font-medium">Project</th>
-                    <th className="px-3 py-2 font-medium">Tasks</th>
-                    <th className="px-3 py-2 font-medium">Duration</th>
-                    <th className="px-3 py-2 font-medium">Dependencies</th>
-                    <th className="px-3 py-2 font-medium">Slack</th>
-                    <th className="px-3 py-2 font-medium">Critical</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {workPackages.filter((wp) => wp.id !== "__unassigned__").map((wp) => {
-                    const node = cpmNodes.get(wp.id);
-                    const deps = (wp.dependencies || [])
-                      .map((d) => {
-                        const target = allWorkPackages.find((w) => w.id === d.targetId);
-                        return target ? `${target.workPackage} (${d.type})` : null;
-                      })
-                      .filter(Boolean);
-                    const tCount = taskCountForWP(wp);
-
-                    return (
-                      <tr
-                        key={wp.id}
-                        className={cn(
-                          "border-t hover:bg-muted/30 cursor-pointer",
-                          node?.isCritical && showCritical && "bg-[hsl(var(--rag-red))]/5"
-                        )}
-                        onClick={() => openDepDialog(wp.id)}
-                      >
-                        <td className="px-3 py-2 font-medium">{wp.workPackage}</td>
-                        <td className="px-3 py-2 text-muted-foreground text-xs">{wp.project}</td>
-                        <td className="px-3 py-2 text-xs">{tCount}</td>
-                        <td className="px-3 py-2 text-xs font-mono">
-                          {wp.startDate && wp.dueDate ? `${node?.duration ?? "?"}d` : "—"}
-                        </td>
-                        <td className="px-3 py-2">
-                          {deps.length > 0 ? (
-                            <div className="flex flex-wrap gap-1">
-                              {deps.map((d, i) => (
-                                <Badge key={i} variant="outline" className="text-[10px]">{d}</Badge>
-                              ))}
-                            </div>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">None</span>
-                          )}
-                        </td>
-                        <td className="px-3 py-2 text-xs font-mono">{node ? `${node.slack}d` : "—"}</td>
-                        <td className="px-3 py-2">
-                          {node?.isCritical ? (
-                            <Badge variant="destructive" className="text-[10px]">Critical</Badge>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">No</span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Dependency Dialog */}
       <DependencyDialog

@@ -2,7 +2,7 @@ import { NavLink as RouterNavLink } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, CheckSquare, Clock, BookOpen, FolderKanban,
-  Sparkles, Library, Inbox, GanttChart, LucideIcon, PanelLeftClose, PanelLeft,
+  Sparkles, Library, Inbox, LucideIcon, PanelLeftClose, PanelLeft,
 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,7 @@ const links: { to: string; label: string; icon: LucideIcon }[] = [
   { to: "/actions", label: "My Actions", icon: CheckSquare },
   { to: "/waiting", label: "Waiting For", icon: Clock },
   { to: "/projects", label: "Projects", icon: FolderKanban },
-  { to: "/gantt", label: "Gantt", icon: GanttChart },
+  
   { to: "/planner", label: "WBS Planner", icon: Sparkles },
   { to: "/sop", label: "SOP", icon: BookOpen },
   { to: "/knowledgebase", label: "Knowledgebase", icon: Library },

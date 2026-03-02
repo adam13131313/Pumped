@@ -5,6 +5,7 @@ import { WorkPackage, Action, DependencyType, Dependency } from "@/lib/types";
 import { calculateCriticalPath } from "@/lib/criticalPath";
 import { RAGBadge } from "@/components/RAGBadge";
 import { ActionDialog } from "@/components/ActionDialog";
+import { WPDialog } from "@/components/WPDialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -42,6 +43,7 @@ export default function GanttPage() {
   const allWorkPackages = useAppStore((s) => s.workPackages);
   const allActions = useAppStore((s) => s.actions);
   const updateWorkPackage = useAppStore((s) => s.updateWorkPackage);
+  const deleteWorkPackage = useAppStore((s) => s.deleteWorkPackage);
   const addAction = useAppStore((s) => s.addAction);
   const updateAction = useAppStore((s) => s.updateAction);
   const deleteAction = useAppStore((s) => s.deleteAction);
@@ -54,6 +56,8 @@ export default function GanttPage() {
   const [actionDialogOpen, setActionDialogOpen] = useState(false);
   const [editingAction, setEditingAction] = useState<Action | null>(null);
   const [addToWPContext, setAddToWPContext] = useState<WorkPackage | null>(null);
+  const [wpDialogOpen, setWpDialogOpen] = useState(false);
+  const [editingWP, setEditingWP] = useState<WorkPackage | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Build flat rows: WP + its child tasks
@@ -194,6 +198,19 @@ export default function GanttPage() {
     setActionDialogOpen(true);
   };
 
+  const handleEditWP = (wp: WorkPackage) => {
+    setEditingWP(wp);
+    setWpDialogOpen(true);
+  };
+
+  const handleSaveWP = (wp: WorkPackage) => {
+    if (editingWP) {
+      updateWorkPackage(wp.id, wp);
+    }
+    setWpDialogOpen(false);
+    setEditingWP(null);
+  };
+
   const handleEditTask = (action: Action) => {
     setEditingAction(action);
     setAddToWPContext(null);
@@ -309,6 +326,14 @@ export default function GanttPage() {
                               </button>
                             </TooltipTrigger>
                             <TooltipContent>Manage dependencies</TooltipContent>
+                          </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button className="p-0.5 hover:bg-accent rounded" onClick={(e) => { e.stopPropagation(); handleEditWP(row.wp); }}>
+                                <Pencil className="h-3 w-3 text-muted-foreground" />
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent>Edit work package</TooltipContent>
                           </Tooltip>
                           <Tooltip>
                             <TooltipTrigger asChild>
@@ -679,6 +704,15 @@ export default function GanttPage() {
         onSave={handleSaveAction}
         onDelete={(id) => { deleteAction(id); setActionDialogOpen(false); }}
         onDelegate={(id, to) => { delegateAction(id, to); setActionDialogOpen(false); }}
+      />
+
+      {/* WP Edit Dialog */}
+      <WPDialog
+        open={wpDialogOpen}
+        onOpenChange={(o) => { setWpDialogOpen(o); if (!o) setEditingWP(null); }}
+        wp={editingWP}
+        onSave={handleSaveWP}
+        onDelete={(id) => { deleteWorkPackage(id); setWpDialogOpen(false); setEditingWP(null); }}
       />
     </div>
   );

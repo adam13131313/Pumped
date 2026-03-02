@@ -60,7 +60,7 @@ export default function InboxPage() {
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-      setProposedTasks(data.tasks || []);
+      setProposedTasks((prev) => [...prev, ...(data.tasks || [])]);
       setSummary(data.summary || "");
       setShowPreview(true);
     } catch (e: any) {

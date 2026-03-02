@@ -10,7 +10,7 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { documentTexts, additionalContext } = await req.json();
+    const { documentTexts, additionalContext, currentWbs, iteratePrompt } = await req.json();
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
@@ -45,11 +45,15 @@ Rules:
 - Work package names should be specific and actionable
 - If documents mention specific people, assign them as leads
 - If dates are mentioned, use them
+- If a current WBS is provided with a refinement request, modify and improve the existing structure based on the user's feedback. Keep what works, change what they asked for.
 - Return ONLY the JSON, no markdown fences`;
 
-    const userContent = additionalContext
-      ? `Documents:\n${combinedText}\n\nAdditional context:\n${additionalContext}`
-      : `Documents:\n${combinedText}`;
+    let userContent = "";
+    if (combinedText) userContent += `Documents:\n${combinedText}\n\n`;
+    if (additionalContext) userContent += `Additional context:\n${additionalContext}\n\n`;
+    if (currentWbs && iteratePrompt) {
+      userContent += `Current WBS (iterate on this):\n${JSON.stringify(currentWbs, null, 2)}\n\nUser's refinement request:\n${iteratePrompt}`;
+    }
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",

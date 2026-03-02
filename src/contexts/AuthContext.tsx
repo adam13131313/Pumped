@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import { useAppStore } from "@/lib/store";
 
 interface AuthContextType {
   session: Session | null;
@@ -21,18 +22,25 @@ export const useAuth = () => useContext(AuthContext);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const loadAllData = useAppStore((s) => s.loadAllData);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, session) => {
         setSession(session);
         setLoading(false);
+        if (session) {
+          loadAllData();
+        }
       }
     );
 
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setLoading(false);
+      if (session) {
+        loadAllData();
+      }
     });
 
     return () => subscription.unsubscribe();

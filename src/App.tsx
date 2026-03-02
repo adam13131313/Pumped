@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { useAppStore } from "@/lib/store";
 import { AppShell } from "@/components/AppShell";
 import Dashboard from "@/pages/Dashboard";
 import MyActions from "@/pages/MyActions";
@@ -23,8 +24,9 @@ const queryClient = new QueryClient();
 
 function ProtectedRoutes() {
   const { session, loading } = useAuth();
+  const dataLoaded = useAppStore((s) => s.dataLoaded);
 
-  if (loading) {
+  if (loading || (session && !dataLoaded)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />

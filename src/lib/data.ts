@@ -19,11 +19,11 @@ export const workPackages: WorkPackage[] = [
 ];
 
 export const actions: Action[] = [
-  { id: "a1", task: "Draft wireframes for homepage redesign", project: "Website Redesign", workPackage: "WP1: UX Research", dueDate: "2026-03-10", priority: "High", status: "In Progress", notes: "" },
-  { id: "a2", task: "Review vendor shortlist for CRM platform", project: "CRM Migration", workPackage: "WP1: Data Audit", dueDate: "2026-03-12", priority: "High", status: "Not Started", notes: "" },
-  { id: "a3", task: "Confirm floor plan with facilities team", project: "Office Relocation", workPackage: "WP1: Vendor Selection", dueDate: "2026-03-18", priority: "Medium", status: "Not Started", notes: "" },
-  { id: "a4", task: "Prepare stakeholder update presentation", project: "", workPackage: "", dueDate: "2026-03-14", priority: "Medium", status: "Not Started", notes: "" },
-  { id: "a5", task: "Schedule team retrospective for Q1", project: "", workPackage: "", dueDate: "2026-03-20", priority: "Low", status: "Not Started", notes: "" },
+  { id: "a1", task: "Draft wireframes for homepage redesign", project: "Website Redesign", workPackage: "WP1: UX Research", startDate: "2026-02-25", dueDate: "2026-03-10", priority: "High", status: "In Progress", notes: "" },
+  { id: "a2", task: "Review vendor shortlist for CRM platform", project: "CRM Migration", workPackage: "WP1: Data Audit", startDate: "2026-03-01", dueDate: "2026-03-12", priority: "High", status: "Not Started", notes: "" },
+  { id: "a3", task: "Confirm floor plan with facilities team", project: "Office Relocation", workPackage: "WP1: Vendor Selection", startDate: "2026-03-10", dueDate: "2026-03-18", priority: "Medium", status: "Not Started", notes: "" },
+  { id: "a4", task: "Prepare stakeholder update presentation", project: "", workPackage: "", startDate: "2026-03-10", dueDate: "2026-03-14", priority: "Medium", status: "Not Started", notes: "" },
+  { id: "a5", task: "Schedule team retrospective for Q1", project: "", workPackage: "", startDate: "2026-03-17", dueDate: "2026-03-20", priority: "Low", status: "Not Started", notes: "" },
 ];
 
 export const waitingItems: WaitingItem[] = [

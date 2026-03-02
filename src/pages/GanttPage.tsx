@@ -112,6 +112,11 @@ export default function GanttPage() {
       if (wp.dueDate) max = Math.max(max, new Date(wp.dueDate).getTime());
     }
     for (const a of actions) {
+      if (a.startDate) {
+        const t = new Date(a.startDate).getTime();
+        min = Math.min(min, t);
+        max = Math.max(max, t);
+      }
       if (a.dueDate) {
         const t = new Date(a.dueDate).getTime();
         min = Math.min(min, t);
@@ -457,14 +462,11 @@ export default function GanttPage() {
                       } else {
                         // Task bar
                         const a = row.action!;
-                        if (!a.dueDate) return <g key={`task-bar-${a.id}`} />;
+                        if (!a.dueDate && !a.startDate) return <g key={`task-bar-${a.id}`} />;
 
-                        // Tasks show as smaller bars. Use WP startDate as implicit start if no task start.
-                        const wp = row.wp;
-                        const taskEnd = dayOffset(a.dueDate);
-                        // Estimate task start: if WP has a start date, use max(wpStart, taskEnd - 3d)
-                        const wpStartOff = wp.startDate ? dayOffset(wp.startDate) : taskEnd - 3;
-                        const taskStart = Math.min(wpStartOff, taskEnd - 1);
+                        // Use actual task dates
+                        const taskEnd = a.dueDate ? dayOffset(a.dueDate) : (a.startDate ? dayOffset(a.startDate) + 3 : 0);
+                        const taskStart = a.startDate ? dayOffset(a.startDate) : taskEnd - 3;
                         const barWidth = Math.max((taskEnd - taskStart) * DAY_WIDTH, 8);
                         const x = taskStart * DAY_WIDTH;
                         const y = currentY + row.rowHeight / 2 - 5;
@@ -668,6 +670,7 @@ export default function GanttPage() {
           task: "",
           project: addToWPContext.project,
           workPackage: addToWPContext.workPackage,
+          startDate: "",
           dueDate: "",
           priority: "Medium",
           status: "Not Started",

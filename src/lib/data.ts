@@ -1,44 +1,32 @@
 import { WorkPackage, Action, WaitingItem, Project, Programme } from "./types";
 
 export const programmes: Programme[] = [
-  { id: "prog1", name: "P3M Standards Programme", description: "Standards development and framework programme" },
+  { id: "prog1", name: "Digital Transformation", description: "Enterprise digital modernisation programme" },
 ];
 
 export const projects: Project[] = [
-  { id: "proj1", name: "Project Alpha", description: "Discovery and stakeholder engagement programme", programmeId: "", status: "Active" },
-  { id: "proj2", name: "Project Beta", description: "Planning, implementation and reporting", programmeId: "", status: "Active" },
-  { id: "proj3", name: "Ongoing Ops", description: "Governance and compliance operations", programmeId: "", status: "Active" },
-  { id: "proj4", name: "Project 1: P3M SDF", description: "P3M standards development framework", programmeId: "prog1", status: "Active" },
-  { id: "proj5", name: "Project 4: Infrastructure", description: "Infrastructure management", programmeId: "prog1", status: "Active" },
-  { id: "proj6", name: "Team management", description: "People management and HR", programmeId: "", status: "Active" },
+  { id: "proj1", name: "Website Redesign", description: "Redesign the corporate website for improved UX", programmeId: "prog1", status: "Active" },
+  { id: "proj2", name: "CRM Migration", description: "Migrate legacy CRM to a modern cloud platform", programmeId: "prog1", status: "Active" },
+  { id: "proj3", name: "Office Relocation", description: "Coordinate the move to new headquarters", programmeId: "", status: "Active" },
 ];
 
 export const workPackages: WorkPackage[] = [
-  { id: "wp1", project: "Project Alpha", workPackage: "WP1: Discovery & Research", wpLead: "Sarah K.", dueDate: "2026-03-15", ragStatus: "Green", blockers: "" },
-  { id: "wp2", project: "Project Alpha", workPackage: "WP2: Stakeholder Engagement", wpLead: "Tom R.", dueDate: "2026-03-31", ragStatus: "Amber", blockers: "Waiting on legal sign-off" },
-  { id: "wp3", project: "Project Alpha", workPackage: "WP3: Deliverable Production", wpLead: "Sarah K.", dueDate: "2026-04-30", ragStatus: "Green", blockers: "" },
-  { id: "wp4", project: "Project Beta", workPackage: "WP1: Planning & Scoping", wpLead: "James L.", dueDate: "2026-02-28", ragStatus: "Red", blockers: "Resource constraint — escalate" },
-  { id: "wp5", project: "Project Beta", workPackage: "WP2: Implementation", wpLead: "Priya M.", dueDate: "2026-05-15", ragStatus: "Green", blockers: "" },
-  { id: "wp6", project: "Project Beta", workPackage: "WP3: Reporting", wpLead: "Tom R.", dueDate: "2026-05-31", ragStatus: "Green", blockers: "" },
-  { id: "wp7", project: "Ongoing Ops", workPackage: "WP1: Governance & Compliance", wpLead: "James L.", dueDate: "Ongoing", ragStatus: "Amber", blockers: "Monthly report overdue" },
+  { id: "wp1", project: "Website Redesign", workPackage: "WP1: UX Research", wpLead: "Alex J.", dueDate: "2026-03-20", ragStatus: "Green", blockers: "" },
+  { id: "wp2", project: "Website Redesign", workPackage: "WP2: Visual Design", wpLead: "Morgan T.", dueDate: "2026-04-10", ragStatus: "Amber", blockers: "Awaiting brand guidelines" },
+  { id: "wp3", project: "CRM Migration", workPackage: "WP1: Data Audit", wpLead: "Sam P.", dueDate: "2026-03-15", ragStatus: "Green", blockers: "" },
+  { id: "wp4", project: "CRM Migration", workPackage: "WP2: System Integration", wpLead: "Jordan K.", dueDate: "2026-05-01", ragStatus: "Red", blockers: "API compatibility issue" },
+  { id: "wp5", project: "Office Relocation", workPackage: "WP1: Vendor Selection", wpLead: "Chris L.", dueDate: "2026-03-25", ragStatus: "Green", blockers: "" },
 ];
 
 export const actions: Action[] = [
-  { id: "a1", task: "Add to the Opportunity Acceptance Guidance - system development notes, internal P3M version, KPIs", project: "Project 1: P3M SDF", workPackage: "WP:010 Guidance", dueDate: "2026-02-19", priority: "High", status: "In Progress", notes: "" },
-  { id: "a2", task: "Capability team guidance documentation", project: "Project 1: P3M SDF", workPackage: "WP: 009", dueDate: "2026-02-19", priority: "High", status: "In Progress", notes: "" },
-  { id: "a3", task: "Technical Standard comments to Gordon after my team reviews today", project: "Project 1: P3M SDF", workPackage: "WP:002 - Policy and Standard development", dueDate: "2026-02-19", priority: "High", status: "Not Started", notes: "" },
-  { id: "a4", task: "ToR for my support role on the infrastructure management work", project: "Project 4: Infrastructure", workPackage: "04.01 Policy and Standard", dueDate: "2026-02-24", priority: "High", status: "Not Started", notes: "" },
-  { id: "a5", task: "Review Million's 2025 self assessment PER", project: "Team management", workPackage: "NA", dueDate: "2026-02-23", priority: "High", status: "Not Started", notes: "" },
-  { id: "a6", task: "Complete the P3M work breakdown structure, work plan, and resource allocation model", project: "", workPackage: "", dueDate: "", priority: "Medium", status: "Not Started", notes: "" },
-  { id: "a7", task: "Review Alfredo's Work Packages and Ad Hoc Work Overview document", project: "", workPackage: "", dueDate: "", priority: "Medium", status: "Not Started", notes: "" },
-  { id: "a8", task: "Review Alfredo's infrastructure analysis in detail", project: "", workPackage: "", dueDate: "", priority: "Medium", status: "Not Started", notes: "" },
-  { id: "a9", task: "Define and formalise Alfredo's areas of responsibility", project: "", workPackage: "", dueDate: "", priority: "Medium", status: "Not Started", notes: "" },
-  { id: "a10", task: "Prepare a structured responsibility and work allocation model for Alfredo", project: "", workPackage: "", dueDate: "", priority: "Medium", status: "Not Started", notes: "" },
-  { id: "a11", task: "Review Carlos' document on processes and governance structuring", project: "", workPackage: "", dueDate: "", priority: "Low", status: "Not Started", notes: "" },
-  { id: "a12", task: "Oren's email re. PPP and uploading content", project: "", workPackage: "", dueDate: "", priority: "Low", status: "Not Started", notes: "" },
+  { id: "a1", task: "Draft wireframes for homepage redesign", project: "Website Redesign", workPackage: "WP1: UX Research", dueDate: "2026-03-10", priority: "High", status: "In Progress", notes: "" },
+  { id: "a2", task: "Review vendor shortlist for CRM platform", project: "CRM Migration", workPackage: "WP1: Data Audit", dueDate: "2026-03-12", priority: "High", status: "Not Started", notes: "" },
+  { id: "a3", task: "Confirm floor plan with facilities team", project: "Office Relocation", workPackage: "WP1: Vendor Selection", dueDate: "2026-03-18", priority: "Medium", status: "Not Started", notes: "" },
+  { id: "a4", task: "Prepare stakeholder update presentation", project: "", workPackage: "", dueDate: "2026-03-14", priority: "Medium", status: "Not Started", notes: "" },
+  { id: "a5", task: "Schedule team retrospective for Q1", project: "", workPackage: "", dueDate: "2026-03-20", priority: "Low", status: "Not Started", notes: "" },
 ];
 
 export const waitingItems: WaitingItem[] = [
-  { id: "w1", description: "Model the key HR processes relevant to opportunity development and mobilisation", fromWhom: "Alfredo", projectWP: "Project 1", askedOn: "2026-02-20", dueBy: "2026-02-27", status: "Pending", notes: "" },
-  { id: "w2", description: "Determine solution to keeping people updated - whether we use a requirements tracker or not", fromWhom: "", projectWP: "", askedOn: "", dueBy: "", status: "Pending", notes: "" },
+  { id: "w1", description: "Brand guidelines document from marketing", fromWhom: "Marketing Team", projectWP: "Website Redesign", askedOn: "2026-02-28", dueBy: "2026-03-08", status: "Pending", notes: "" },
+  { id: "w2", description: "API documentation from vendor", fromWhom: "Vendor Support", projectWP: "CRM Migration", askedOn: "2026-03-01", dueBy: "2026-03-10", status: "Pending", notes: "" },
 ];

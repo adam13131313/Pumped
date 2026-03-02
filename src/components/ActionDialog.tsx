@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,9 +25,16 @@ export function ActionDialog({ open, onOpenChange, action, onSave, onDelete, onD
   const [showDelegate, setShowDelegate] = useState(false);
   const [delegateTo, setDelegateTo] = useState("");
   const workPackages = useAppStore((s) => s.workPackages);
-  const [form, setForm] = useState<Partial<Action>>(
-    action ?? { task: "", project: "", workPackage: "", startDate: "", dueDate: "", priority: "Medium", status: "Not Started", notes: "" }
-  );
+  const emptyForm: Partial<Action> = { task: "", project: "", workPackage: "", startDate: "", dueDate: "", priority: "Medium", status: "Not Started", notes: "" };
+  const [form, setForm] = useState<Partial<Action>>(action ?? emptyForm);
+
+  useEffect(() => {
+    if (open) {
+      setForm(action ?? emptyForm);
+      setShowDelegate(false);
+      setDelegateTo("");
+    }
+  }, [open, action]);
 
   // Build WP options grouped by project
   const wpOptions = useMemo(() => {

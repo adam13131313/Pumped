@@ -173,6 +173,16 @@ export default function GanttPage() {
     updateWorkPackage(wpId, { dependencies: (wp.dependencies || []).filter((d) => d.targetId !== targetId) });
   };
 
+  const updateDependency = (wpId: string, targetId: string, updates: Partial<Dependency>) => {
+    const wp = allWorkPackages.find((w) => w.id === wpId);
+    if (!wp) return;
+    updateWorkPackage(wpId, {
+      dependencies: (wp.dependencies || []).map((d) =>
+        d.targetId === targetId ? { ...d, ...updates } : d
+      ),
+    });
+  };
+
   const handleAddTask = (wp: WorkPackage) => {
     setAddToWPContext(wp);
     setEditingAction(null);
@@ -643,6 +653,7 @@ export default function GanttPage() {
         allWPs={allWorkPackages}
         onAdd={addDependency}
         onRemove={removeDependency}
+        onUpdate={updateDependency}
       />
 
       {/* Action Dialog for add/edit tasks */}
@@ -677,6 +688,7 @@ function DependencyDialog({
   allWPs,
   onAdd,
   onRemove,
+  onUpdate,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
@@ -684,6 +696,7 @@ function DependencyDialog({
   allWPs: WorkPackage[];
   onAdd: (wpId: string, dep: Dependency) => void;
   onRemove: (wpId: string, targetId: string) => void;
+  onUpdate: (wpId: string, targetId: string, updates: Partial<Dependency>) => void;
 }) {
   const wp = allWPs.find((w) => w.id === wpId);
   const [newTarget, setNewTarget] = useState("");
@@ -721,13 +734,35 @@ function DependencyDialog({
               {deps.map((d) => {
                 const target = allWPs.find((w) => w.id === d.targetId);
                 return (
-                  <div key={d.targetId} className="flex items-center gap-2 rounded-lg border p-2">
-                    <div className="flex-1 text-sm">
-                      <span className="font-medium">{target?.workPackage ?? "Unknown"}</span>
-                      <Badge variant="outline" className="ml-2 text-[10px]">{depTypeLabels[d.type]}</Badge>
-                      {d.lagDays ? <span className="text-xs text-muted-foreground ml-2">+{d.lagDays}d lag</span> : null}
+                  <div key={d.targetId} className="flex items-center gap-2 rounded-lg border p-2.5">
+                    <div className="flex-1 min-w-0 space-y-1.5">
+                      <p className="text-sm font-medium truncate">{target?.workPackage ?? "Unknown"}</p>
+                      <div className="flex items-center gap-2">
+                        <Select
+                          value={d.type}
+                          onValueChange={(v) => onUpdate(wpId, d.targetId, { type: v as DependencyType })}
+                        >
+                          <SelectTrigger className="h-7 w-[140px] text-[11px]">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {(Object.entries(depTypeLabels) as [DependencyType, string][]).map(([k, v]) => (
+                              <SelectItem key={k} value={k} className="text-xs">{v}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <div className="flex items-center gap-1">
+                          <Input
+                            type="number"
+                            value={d.lagDays ?? 0}
+                            onChange={(e) => onUpdate(wpId, d.targetId, { lagDays: parseInt(e.target.value) || 0 })}
+                            className="w-14 h-7 text-[11px]"
+                          />
+                          <span className="text-[10px] text-muted-foreground">days lag</span>
+                        </div>
+                      </div>
                     </div>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => onRemove(wpId, d.targetId)}>
+                    <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive flex-shrink-0" onClick={() => onRemove(wpId, d.targetId)}>
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
                   </div>
@@ -753,7 +788,7 @@ function DependencyDialog({
                   </SelectContent>
                 </Select>
                 <Select value={newType} onValueChange={(v) => setNewType(v as DependencyType)}>
-                  <SelectTrigger className="w-[120px] h-9 text-xs">
+                  <SelectTrigger className="w-[140px] h-9 text-xs">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>

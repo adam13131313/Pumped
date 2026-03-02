@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useAppStore } from "@/lib/store";
+import { useFilteredData } from "@/hooks/useFilteredData";
 import { PriorityBadge, StatusBadge } from "@/components/StatusBadges";
 import { Action, TaskStatus, Priority } from "@/lib/types";
 import { ActionDialog } from "@/components/ActionDialog";
@@ -16,7 +17,7 @@ const priorities: Priority[] = ["High", "Medium", "Low"];
 
 export default function MyActions() {
   const [view, setView] = useState<"list" | "kanban">("list");
-  const actions = useAppStore((s) => s.actions);
+  const { actions } = useFilteredData();
   const addAction = useAppStore((s) => s.addAction);
   const updateAction = useAppStore((s) => s.updateAction);
   const deleteAction = useAppStore((s) => s.deleteAction);

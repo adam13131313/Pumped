@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, DragEvent } from "react";
 import { useAppStore } from "@/lib/store";
+import { useFilteredData } from "@/hooks/useFilteredData";
 import { InboxItem, Priority } from "@/lib/types";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -25,7 +26,8 @@ type ProposedTask = {
 };
 
 export default function InboxPage() {
-  const { inboxItems, addInboxItems, updateInboxItem, deleteInboxItem, bulkDeleteInboxItems, promoteInboxToActions, projects } = useAppStore();
+  const { addInboxItems, updateInboxItem, deleteInboxItem, bulkDeleteInboxItems, promoteInboxToActions, projects } = useAppStore();
+  const { inboxItems } = useFilteredData();
   const [textInput, setTextInput] = useState("");
   const [isExtracting, setIsExtracting] = useState(false);
   const [proposedTasks, setProposedTasks] = useState<ProposedTask[]>([]);

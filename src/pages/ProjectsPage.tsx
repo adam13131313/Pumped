@@ -10,7 +10,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { RAGBadge } from "@/components/RAGBadge";
 import { WPDialog } from "@/components/WPDialog";
-import { Plus, Pencil, Trash2, FolderOpen, ChevronDown, ChevronRight, Layers } from "lucide-react";
+import { Plus, Pencil, Trash2, FolderOpen, ChevronDown, ChevronRight, Layers, ExternalLink } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 /* ── Programme Dialog ── */
 function ProgrammeDialog({ open, onOpenChange, programme, onSave, onDelete }: {
@@ -136,7 +137,7 @@ const statusColor: Record<Project["status"], string> = {
 };
 
 /* ── Project Card (reused in programme groups & standalone) ── */
-function ProjectCard({ proj, workPackages, onEditProject, onDeleteProject, onEditWP, onAddWP, onDeleteWP, expanded, toggleExpand }: {
+function ProjectCard({ proj, workPackages, onEditProject, onDeleteProject, onEditWP, onAddWP, onDeleteWP, expanded, toggleExpand, onOpen }: {
   proj: Project;
   workPackages: WorkPackage[];
   onEditProject: (p: Project) => void;
@@ -146,6 +147,7 @@ function ProjectCard({ proj, workPackages, onEditProject, onDeleteProject, onEdi
   onDeleteWP: (id: string) => void;
   expanded: boolean;
   toggleExpand: () => void;
+  onOpen: () => void;
 }) {
   const projWPs = workPackages.filter((wp) => wp.project === proj.name);
 
@@ -159,6 +161,7 @@ function ProjectCard({ proj, workPackages, onEditProject, onDeleteProject, onEdi
           <span className="text-xs text-muted-foreground">{projWPs.length} WP{projWPs.length !== 1 ? "s" : ""}</span>
         </div>
         <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onOpen}><ExternalLink className="h-3 w-3" /></Button>
           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onEditProject(proj)}><Pencil className="h-3 w-3" /></Button>
           <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => onDeleteProject(proj.id)}><Trash2 className="h-3 w-3" /></Button>
         </div>
@@ -212,6 +215,7 @@ function ProjectCard({ proj, workPackages, onEditProject, onDeleteProject, onEdi
 
 /* ── Main Page ── */
 export default function ProjectsPage() {
+  const navigate = useNavigate();
   const store = useAppStore();
   const { programmes, projects, workPackages } = store;
 
@@ -308,6 +312,7 @@ export default function ProjectsPage() {
                     onDeleteWP={store.deleteWorkPackage}
                     expanded={expanded[proj.id] ?? true}
                     toggleExpand={() => toggleExpand(proj.id)}
+                    onOpen={() => navigate(`/projects/${proj.id}`)}
                   />
                 ))}
                 <Button variant="outline" size="sm" className="ml-5" onClick={() => { setEditProject({ id: "", name: "", description: "", programmeId: prog.id, status: "Active" } as any); setEditProject(null); setProjDialogOpen(true); }}>
@@ -335,6 +340,7 @@ export default function ProjectsPage() {
               onDeleteWP={store.deleteWorkPackage}
               expanded={expanded[proj.id] ?? true}
               toggleExpand={() => toggleExpand(proj.id)}
+              onOpen={() => navigate(`/projects/${proj.id}`)}
             />
           ))}
         </div>

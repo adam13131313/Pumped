@@ -17,7 +17,7 @@ serve(async (req) => {
 
     const combinedText = (documentTexts as string[]).join("\n\n---\n\n");
 
-    const systemPrompt = `You are a project planning expert. Analyze the provided project documents and/or context and produce a Work Breakdown Structure (WBS).
+    const systemPrompt = `You are a project planning expert. Analyze the provided project documents and/or context and produce a Work Breakdown Structure (WBS) with initial tasks.
 
 Return a JSON object with this exact structure:
 {
@@ -32,7 +32,14 @@ Return a JSON object with this exact structure:
           "name": "string - work package name",
           "lead": "string - suggested lead or empty",
           "dueDate": "string - suggested due date YYYY-MM-DD or empty",
-          "description": "string - what this work package covers"
+          "description": "string - what this work package covers",
+          "actions": [
+            {
+              "task": "string - specific actionable task",
+              "priority": "High" | "Medium" | "Low",
+              "dueDate": "string - YYYY-MM-DD or empty"
+            }
+          ]
         }
       ]
     }
@@ -42,6 +49,8 @@ Return a JSON object with this exact structure:
 Rules:
 - Break work into logical projects and work packages
 - Each project should have 2-8 work packages
+- Each work package should have 2-6 initial actions (specific, actionable tasks)
+- Actions should be concrete next steps, not vague descriptions
 - Work package names should be specific and actionable
 - If documents mention specific people, assign them as leads
 - If dates are mentioned, use them

@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import React, { useState, useCallback } from "react";
 import { useAppStore } from "@/lib/store";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -10,11 +10,18 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { Upload, Sparkles, Trash2, Plus, Check, FileText, X, Loader2 } from "lucide-react";
 
+interface WBSAction {
+  task: string;
+  priority: "High" | "Medium" | "Low";
+  dueDate: string;
+}
+
 interface WBSWorkPackage {
   name: string;
   lead: string;
   dueDate: string;
   description: string;
+  actions: WBSAction[];
 }
 
 interface WBSProject {
@@ -113,6 +120,38 @@ export default function WBSPlanner() {
       return { ...prev, projects };
     });
 
+  const updateAction = (pi: number, wi: number, ai: number, field: keyof WBSAction, value: string) =>
+    setWbs((prev) => {
+      if (!prev) return prev;
+      const projects = [...prev.projects];
+      const wps = [...projects[pi].workPackages];
+      const actions = [...wps[wi].actions];
+      actions[ai] = { ...actions[ai], [field]: value };
+      wps[wi] = { ...wps[wi], actions };
+      projects[pi] = { ...projects[pi], workPackages: wps };
+      return { ...prev, projects };
+    });
+
+  const removeAction = (pi: number, wi: number, ai: number) =>
+    setWbs((prev) => {
+      if (!prev) return prev;
+      const projects = [...prev.projects];
+      const wps = [...projects[pi].workPackages];
+      wps[wi] = { ...wps[wi], actions: wps[wi].actions.filter((_, i) => i !== ai) };
+      projects[pi] = { ...projects[pi], workPackages: wps };
+      return { ...prev, projects };
+    });
+
+  const addAction = (pi: number, wi: number) =>
+    setWbs((prev) => {
+      if (!prev) return prev;
+      const projects = [...prev.projects];
+      const wps = [...projects[pi].workPackages];
+      wps[wi] = { ...wps[wi], actions: [...wps[wi].actions, { task: "New task", priority: "Medium", dueDate: "" }] };
+      projects[pi] = { ...projects[pi], workPackages: wps };
+      return { ...prev, projects };
+    });
+
   const removeProject = (pi: number) =>
     setWbs((prev) => prev ? { ...prev, projects: prev.projects.filter((_, i) => i !== pi) } : prev);
 
@@ -131,7 +170,7 @@ export default function WBSPlanner() {
     setWbs((prev) => {
       if (!prev) return prev;
       const projects = [...prev.projects];
-      projects[pi] = { ...projects[pi], workPackages: [...projects[pi].workPackages, { name: "New Work Package", lead: "", dueDate: "", description: "" }] };
+      projects[pi] = { ...projects[pi], workPackages: [...projects[pi].workPackages, { name: "New Work Package", lead: "", dueDate: "", description: "", actions: [] }] };
       return { ...prev, projects };
     });
 
@@ -159,6 +198,20 @@ export default function WBSPlanner() {
           dueDate: wp.dueDate,
           ragStatus: "Green",
           blockers: "",
+        });
+
+        // Create actions for each work package
+        (wp.actions ?? []).forEach((action) => {
+          store.addAction({
+            id: crypto.randomUUID(),
+            task: action.task,
+            project: proj.name,
+            workPackage: wp.name,
+            dueDate: action.dueDate || "",
+            priority: action.priority || "Medium",
+            status: "Not Started",
+            notes: "",
+          });
         });
       });
     });
@@ -348,20 +401,50 @@ export default function WBSPlanner() {
                       </thead>
                       <tbody>
                         {proj.workPackages.map((wp, wi) => (
-                          <tr key={wi} className="border-t">
-                            <td className="px-2 py-1">
-                              <Input value={wp.name} onChange={(e) => updateWP(pi, wi, "name", e.target.value)} className="h-7 text-sm border-0 shadow-none" />
-                            </td>
-                            <td className="px-2 py-1">
-                              <Input value={wp.lead} onChange={(e) => updateWP(pi, wi, "lead", e.target.value)} className="h-7 text-sm border-0 shadow-none" placeholder="—" />
-                            </td>
-                            <td className="px-2 py-1">
-                              <Input type="date" value={wp.dueDate} onChange={(e) => updateWP(pi, wi, "dueDate", e.target.value)} className="h-7 text-sm border-0 shadow-none" />
-                            </td>
-                            <td className="px-1 py-1">
-                              <button onClick={() => removeWP(pi, wi)} className="p-1 text-muted-foreground hover:text-destructive"><Trash2 className="h-3 w-3" /></button>
-                            </td>
-                          </tr>
+                          <React.Fragment key={wi}>
+                            <tr className="border-t">
+                              <td className="px-2 py-1">
+                                <Input value={wp.name} onChange={(e) => updateWP(pi, wi, "name", e.target.value)} className="h-7 text-sm border-0 shadow-none font-medium" />
+                              </td>
+                              <td className="px-2 py-1">
+                                <Input value={wp.lead} onChange={(e) => updateWP(pi, wi, "lead", e.target.value)} className="h-7 text-sm border-0 shadow-none" placeholder="—" />
+                              </td>
+                              <td className="px-2 py-1">
+                                <Input type="date" value={wp.dueDate} onChange={(e) => updateWP(pi, wi, "dueDate", e.target.value)} className="h-7 text-sm border-0 shadow-none" />
+                              </td>
+                              <td className="px-1 py-1">
+                                <button onClick={() => removeWP(pi, wi)} className="p-1 text-muted-foreground hover:text-destructive"><Trash2 className="h-3 w-3" /></button>
+                              </td>
+                            </tr>
+                            {/* Actions nested under WP */}
+                            {(wp.actions ?? []).map((action, ai) => (
+                              <tr key={`${wi}-a-${ai}`} className="border-t bg-muted/20">
+                                <td className="px-2 py-1 pl-6">
+                                  <Input value={action.task} onChange={(e) => updateAction(pi, wi, ai, "task", e.target.value)} className="h-7 text-xs border-0 shadow-none" placeholder="Task description" />
+                                </td>
+                                <td className="px-2 py-1">
+                                  <select value={action.priority} onChange={(e) => updateAction(pi, wi, ai, "priority", e.target.value)} className="h-7 text-xs bg-transparent border-0 outline-none">
+                                    <option value="High">High</option>
+                                    <option value="Medium">Medium</option>
+                                    <option value="Low">Low</option>
+                                  </select>
+                                </td>
+                                <td className="px-2 py-1">
+                                  <Input type="date" value={action.dueDate} onChange={(e) => updateAction(pi, wi, ai, "dueDate", e.target.value)} className="h-7 text-xs border-0 shadow-none" />
+                                </td>
+                                <td className="px-1 py-1">
+                                  <button onClick={() => removeAction(pi, wi, ai)} className="p-1 text-muted-foreground hover:text-destructive"><Trash2 className="h-3 w-3" /></button>
+                                </td>
+                              </tr>
+                            ))}
+                            <tr className="border-t bg-muted/10">
+                              <td colSpan={4} className="px-2 py-1 pl-6">
+                                <button onClick={() => addAction(pi, wi)} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
+                                  <Plus className="h-3 w-3" /> Add task
+                                </button>
+                              </td>
+                            </tr>
+                          </React.Fragment>
                         ))}
                       </tbody>
                     </table>

@@ -9,6 +9,7 @@ import MyActions from "@/pages/MyActions";
 import WaitingFor from "@/pages/WaitingFor";
 import SOPPage from "@/pages/SOPPage";
 import ProjectsPage from "@/pages/ProjectsPage";
+import ProjectDetailPage from "@/pages/ProjectDetailPage";
 import WBSPlanner from "@/pages/WBSPlanner";
 import NotFound from "./pages/NotFound";
 
@@ -24,6 +25,7 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/projects" element={<ProjectsPage />} />
+            <Route path="/projects/:projectId" element={<ProjectDetailPage />} />
             <Route path="/actions" element={<MyActions />} />
             <Route path="/waiting" element={<WaitingFor />} />
             <Route path="/planner" element={<WBSPlanner />} />

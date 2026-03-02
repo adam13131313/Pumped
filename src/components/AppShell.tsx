@@ -1,4 +1,5 @@
 import { AppNav } from "./AppNav";
+import { GlobalFilter } from "./GlobalFilter";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { LogOut } from "lucide-react";
@@ -22,6 +23,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <LogOut className="h-4 w-4" />
             </Button>
           </div>
+        </div>
+        <div className="mx-auto max-w-7xl px-4 pb-2 sm:px-6">
+          <GlobalFilter />
         </div>
       </header>
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 animate-fade-in">

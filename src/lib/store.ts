@@ -20,11 +20,20 @@ const defaultSOP: SOPItem[] = [
   { id: "s8", when: "Delegation Rule", instruction: "When delegating a WP or task: always specify WHAT, by WHEN, and what DONE looks like. A clear ask = fewer follow-up conversations." },
 ];
 
+export interface GlobalFilter {
+  programmeId: string;
+  projectId: string;
+  workPackageId: string;
+}
+
 interface AppState {
   todayIds: Set<string>;
   addToday: (id: string) => void;
   removeToday: (id: string) => void;
   clearToday: () => void;
+  globalFilter: GlobalFilter;
+  setGlobalFilter: (filter: GlobalFilter) => void;
+  clearGlobalFilter: () => void;
   programmes: Programme[];
   projects: Project[];
   workPackages: WorkPackage[];
@@ -62,11 +71,17 @@ interface AppState {
   takeBackWaiting: (id: string) => void;
 }
 
+const defaultGlobalFilter: GlobalFilter = { programmeId: "", projectId: "", workPackageId: "" };
+
 export const useAppStore = create<AppState>()(persist((set) => ({
   todayIds: new Set<string>(),
   addToday: (id) => set((s) => { const n = new Set(s.todayIds); n.add(id); return { todayIds: n }; }),
   removeToday: (id) => set((s) => { const n = new Set(s.todayIds); n.delete(id); return { todayIds: n }; }),
   clearToday: () => set({ todayIds: new Set() }),
+
+  globalFilter: defaultGlobalFilter,
+  setGlobalFilter: (filter) => set({ globalFilter: filter }),
+  clearGlobalFilter: () => set({ globalFilter: defaultGlobalFilter }),
 
   programmes: initialProgrammes,
   projects: initialProjects,

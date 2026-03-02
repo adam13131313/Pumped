@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useAppStore } from "@/lib/store";
+import { useFilteredData } from "@/hooks/useFilteredData";
 import { WaitingDialog } from "@/components/WaitingDialog";
 import { WaitingItem } from "@/lib/types";
 import { Button } from "@/components/ui/button";
@@ -8,7 +9,7 @@ import { Plus, Pencil, Target } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export default function WaitingFor() {
-  const items = useAppStore((s) => s.waitingItems);
+  const { waitingItems: items } = useFilteredData();
   const addWaitingItem = useAppStore((s) => s.addWaitingItem);
   const updateWaitingItem = useAppStore((s) => s.updateWaitingItem);
   const deleteWaitingItem = useAppStore((s) => s.deleteWaitingItem);

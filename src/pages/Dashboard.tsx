@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useAppStore } from "@/lib/store";
+import { useFilteredData } from "@/hooks/useFilteredData";
 import { Action, WaitingItem } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -14,8 +15,7 @@ type TodayItem =
   | { kind: "waiting"; data: WaitingItem };
 
 export default function Dashboard() {
-  const actions = useAppStore((s) => s.actions);
-  const waitingItems = useAppStore((s) => s.waitingItems);
+  const { actions, waitingItems } = useFilteredData();
   const todayIds = useAppStore((s) => s.todayIds);
   const addToday = useAppStore((s) => s.addToday);
   const removeToday = useAppStore((s) => s.removeToday);

@@ -38,6 +38,8 @@ export default function WBSPlanner() {
   const [loading, setLoading] = useState(false);
   const [wbs, setWbs] = useState<WBSResult | null>(null);
   const [accepted, setAccepted] = useState(false);
+  const [iteratePrompt, setIteratePrompt] = useState("");
+  const [iterating, setIterating] = useState(false);
 
   const handleFileAdd = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const newFiles = Array.from(e.target.files ?? []);
@@ -165,6 +167,39 @@ export default function WBSPlanner() {
     toast({ title: "Work breakdown structure accepted and added to your projects!" });
   };
 
+  const handleIterate = async () => {
+    if (!wbs || !iteratePrompt.trim()) return;
+    setIterating(true);
+    try {
+      const documentTexts = await Promise.all(
+        files.map(async (f) => {
+          const text = await readFileAsText(f);
+          return `--- ${f.name} ---\n${text}`;
+        })
+      );
+
+      const { data, error } = await supabase.functions.invoke("generate-wbs", {
+        body: {
+          documentTexts,
+          additionalContext: additionalContext.trim(),
+          currentWbs: wbs,
+          iteratePrompt: iteratePrompt.trim(),
+        },
+      });
+
+      if (error) throw error;
+      if (data.error) throw new Error(data.error);
+
+      setWbs(data as WBSResult);
+      setIteratePrompt("");
+      toast({ title: "WBS refined!" });
+    } catch (e: any) {
+      toast({ title: "Refinement failed", description: e.message, variant: "destructive" });
+    } finally {
+      setIterating(false);
+    }
+  };
+
   const handleReset = () => {
     setWbs(null);
     setAccepted(false);
@@ -248,6 +283,27 @@ export default function WBSPlanner() {
               <Button onClick={handleAccept}><Check className="h-4 w-4 mr-2" /> Accept & Create</Button>
             </div>
           </div>
+
+          {/* Iterate prompt */}
+          <Card>
+            <CardContent className="pt-4 pb-3">
+              <div className="flex gap-2 items-end">
+                <div className="flex-1">
+                  <Label className="text-xs text-muted-foreground">Refine this WBS</Label>
+                  <Textarea
+                    value={iteratePrompt}
+                    onChange={(e) => setIteratePrompt(e.target.value)}
+                    className="mt-1"
+                    rows={2}
+                    placeholder="e.g. Split the first project into two, add more detail to testing work packages, add a data migration project..."
+                  />
+                </div>
+                <Button onClick={handleIterate} disabled={iterating || !iteratePrompt.trim()} className="shrink-0">
+                  {iterating ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Refining...</> : <><Sparkles className="h-4 w-4 mr-2" /> Refine</>}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
 
           {/* Programme */}
           <Card>

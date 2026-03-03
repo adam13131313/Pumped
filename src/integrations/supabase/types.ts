@@ -199,34 +199,43 @@ export type Database = {
       }
       task_attachments: {
         Row: {
-          action_id: string
+          action_id: string | null
           created_at: string
           file_name: string
           file_path: string
           file_size: number
           file_type: string
           id: string
+          item_type: string
           user_id: string
+          waiting_item_id: string | null
+          work_package_id: string | null
         }
         Insert: {
-          action_id: string
+          action_id?: string | null
           created_at?: string
           file_name: string
           file_path: string
           file_size?: number
           file_type?: string
           id?: string
+          item_type?: string
           user_id: string
+          waiting_item_id?: string | null
+          work_package_id?: string | null
         }
         Update: {
-          action_id?: string
+          action_id?: string | null
           created_at?: string
           file_name?: string
           file_path?: string
           file_size?: number
           file_type?: string
           id?: string
+          item_type?: string
           user_id?: string
+          waiting_item_id?: string | null
+          work_package_id?: string | null
         }
         Relationships: [
           {
@@ -234,6 +243,20 @@ export type Database = {
             columns: ["action_id"]
             isOneToOne: false
             referencedRelation: "actions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_attachments_waiting_item_id_fkey"
+            columns: ["waiting_item_id"]
+            isOneToOne: false
+            referencedRelation: "waiting_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_attachments_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "work_packages"
             referencedColumns: ["id"]
           },
         ]

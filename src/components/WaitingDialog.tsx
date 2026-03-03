@@ -6,6 +6,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { WaitingItem, WaitingStatus } from "@/lib/types";
+import { LinkRenderer } from "@/components/LinkRenderer";
+import { TaskAttachments } from "@/components/TaskAttachments";
 
 interface WaitingDialogProps {
   open: boolean;
@@ -85,7 +87,16 @@ export function WaitingDialog({ open, onOpenChange, item, onSave, onDelete, onTa
           </div>
           <div>
             <Label htmlFor="wnotes">Notes</Label>
-            <Textarea id="wnotes" value={form.notes ?? ""} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="mt-1" rows={2} maxLength={1000} />
+            <Textarea id="wnotes" value={form.notes ?? ""} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="mt-1" rows={2} maxLength={1000} placeholder="Add notes or paste links (Google Docs, Sheets, etc.)" />
+            {form.notes && /(https?:\/\/[^\s]+)/.test(form.notes) && (
+              <div className="mt-1.5 text-sm"><LinkRenderer text={form.notes} /></div>
+            )}
+          </div>
+          <div>
+            <Label>Attachments</Label>
+            <div className="mt-1">
+              <TaskAttachments itemId={isEdit ? item?.id : undefined} itemType="waiting_item" isNew={!isEdit} />
+            </div>
           </div>
         </div>
         <DialogFooter className="flex justify-between">

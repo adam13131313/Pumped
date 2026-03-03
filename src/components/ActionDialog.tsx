@@ -155,7 +155,7 @@ export function ActionDialog({ open, onOpenChange, action, onSave, onDelete, onD
           <div>
             <Label>Attachments</Label>
             <div className="mt-1">
-              <TaskAttachments actionId={isEdit ? action?.id : undefined} isNewTask={!isEdit} />
+              <TaskAttachments itemId={isEdit ? action?.id : undefined} itemType="action" isNew={!isEdit} />
             </div>
           </div>
         </div>

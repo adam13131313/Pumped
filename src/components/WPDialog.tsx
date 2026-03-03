@@ -2,9 +2,12 @@ import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { WorkPackage, RAGStatus } from "@/lib/types";
+import { LinkRenderer } from "@/components/LinkRenderer";
+import { TaskAttachments } from "@/components/TaskAttachments";
 
 interface WPDialogProps {
   open: boolean;
@@ -84,7 +87,16 @@ export function WPDialog({ open, onOpenChange, wp, onSave, onDelete }: WPDialogP
           </div>
           <div>
             <Label htmlFor="blockers">Blockers / Notes</Label>
-            <Input id="blockers" value={form.blockers ?? ""} onChange={(e) => setForm({ ...form, blockers: e.target.value })} className="mt-1" maxLength={500} />
+            <Textarea id="blockers" value={form.blockers ?? ""} onChange={(e) => setForm({ ...form, blockers: e.target.value })} className="mt-1" rows={2} maxLength={500} placeholder="Add notes or paste links (Google Docs, Sheets, etc.)" />
+            {form.blockers && /(https?:\/\/[^\s]+)/.test(form.blockers) && (
+              <div className="mt-1.5 text-sm"><LinkRenderer text={form.blockers} /></div>
+            )}
+          </div>
+          <div>
+            <Label>Attachments</Label>
+            <div className="mt-1">
+              <TaskAttachments itemId={isEdit ? wp?.id : undefined} itemType="work_package" isNew={!isEdit} />
+            </div>
           </div>
         </div>
         <DialogFooter className="flex justify-between">

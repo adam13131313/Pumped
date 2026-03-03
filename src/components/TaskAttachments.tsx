@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
-import { Paperclip, X, Upload, FileIcon, Image as ImageIcon, Loader2 } from "lucide-react";
+import { X, Upload, FileIcon, Image as ImageIcon, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 interface Attachment {
@@ -13,33 +13,44 @@ interface Attachment {
   file_size: number;
 }
 
+type ItemType = "action" | "waiting_item" | "work_package";
+
 interface TaskAttachmentsProps {
-  actionId: string | undefined; // undefined for new tasks
-  isNewTask?: boolean;
+  itemId: string | undefined;
+  itemType: ItemType;
+  isNew?: boolean;
 }
 
-export function TaskAttachments({ actionId, isNewTask }: TaskAttachmentsProps) {
+const ID_COLUMN: Record<ItemType, string> = {
+  action: "action_id",
+  waiting_item: "waiting_item_id",
+  work_package: "work_package_id",
+};
+
+export function TaskAttachments({ itemId, itemType, isNew }: TaskAttachmentsProps) {
   const { user } = useAuth();
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Load existing attachments
+  const colName = ID_COLUMN[itemType];
+
   useEffect(() => {
-    if (!actionId || isNewTask) return;
-    supabase
-      .from("task_attachments")
-      .select("id, file_name, file_path, file_type, file_size")
-      .eq("action_id", actionId)
-      .then(({ data }) => {
-        if (data) setAttachments(data);
-      });
-  }, [actionId, isNewTask]);
+    if (!itemId || isNew) return;
+    const load = async () => {
+      const { data } = await (supabase
+        .from("task_attachments")
+        .select("id, file_name, file_path, file_type, file_size") as any)
+        .eq(colName, itemId);
+      if (data) setAttachments(data);
+    };
+    load();
+  }, [itemId, isNew, colName]);
 
   const uploadFile = useCallback(async (file: File) => {
-    if (!user || !actionId) {
-      toast.error("Save the task first before adding attachments");
+    if (!user || !itemId) {
+      toast.error("Save the item first before adding attachments");
       return;
     }
     if (file.size > 10 * 1024 * 1024) {
@@ -49,27 +60,29 @@ export function TaskAttachments({ actionId, isNewTask }: TaskAttachmentsProps) {
     setUploading(true);
     try {
       const ext = file.name.split(".").pop() || "bin";
-      const path = `${user.id}/${actionId}/${crypto.randomUUID()}.${ext}`;
+      const path = `${user.id}/${itemId}/${crypto.randomUUID()}.${ext}`;
       const { error: uploadErr } = await supabase.storage
         .from("task-attachments")
         .upload(path, file);
       if (uploadErr) throw uploadErr;
 
-      const { error: dbErr } = await supabase.from("task_attachments").insert({
-        action_id: actionId,
+      const insertData: Record<string, unknown> = {
         user_id: user.id,
         file_name: file.name,
         file_path: path,
         file_type: file.type,
         file_size: file.size,
-      });
+        item_type: itemType,
+        [colName]: itemId,
+      };
+
+      const { error: dbErr } = await supabase.from("task_attachments").insert(insertData as any);
       if (dbErr) throw dbErr;
 
-      // Refresh list
-      const { data } = await supabase
+      const { data } = await (supabase
         .from("task_attachments")
-        .select("id, file_name, file_path, file_type, file_size")
-        .eq("action_id", actionId);
+        .select("id, file_name, file_path, file_type, file_size") as any)
+        .eq(colName, itemId);
       if (data) setAttachments(data);
       toast.success("File attached");
     } catch (e: any) {
@@ -77,13 +90,12 @@ export function TaskAttachments({ actionId, isNewTask }: TaskAttachmentsProps) {
     } finally {
       setUploading(false);
     }
-  }, [user, actionId]);
+  }, [user, itemId, itemType, colName]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setDragOver(false);
-    const files = Array.from(e.dataTransfer.files);
-    files.forEach(uploadFile);
+    Array.from(e.dataTransfer.files).forEach(uploadFile);
   }, [uploadFile]);
 
   const handleDelete = async (att: Attachment) => {
@@ -100,7 +112,6 @@ export function TaskAttachments({ actionId, isNewTask }: TaskAttachmentsProps) {
 
   return (
     <div className="space-y-2">
-      {/* Drop zone */}
       <div
         onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
         onDragLeave={() => setDragOver(false)}
@@ -116,14 +127,14 @@ export function TaskAttachments({ actionId, isNewTask }: TaskAttachmentsProps) {
           <Upload className="h-4 w-4 text-muted-foreground" />
         )}
         <span className="text-muted-foreground">
-          {!actionId ? "Save task first to attach files" : uploading ? "Uploading…" : "Drop files here or click to browse"}
+          {!itemId ? "Save first to attach files" : uploading ? "Uploading…" : "Drop files here or click to browse"}
         </span>
         <input
           ref={fileInputRef}
           type="file"
           className="hidden"
           multiple
-          disabled={!actionId || uploading}
+          disabled={!itemId || uploading}
           onChange={(e) => {
             Array.from(e.target.files || []).forEach(uploadFile);
             e.target.value = "";
@@ -131,7 +142,6 @@ export function TaskAttachments({ actionId, isNewTask }: TaskAttachmentsProps) {
         />
       </div>
 
-      {/* Attachment list */}
       {attachments.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {attachments.map((att) => (

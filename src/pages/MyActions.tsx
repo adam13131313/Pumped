@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useAppStore } from "@/lib/store";
 import { useFilteredData } from "@/hooks/useFilteredData";
 import { PriorityBadge, StatusBadge } from "@/components/StatusBadges";
@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { LayoutList, Columns3, Plus, Pencil, Target, Trash2, X, CheckSquare } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { LayoutList, Columns3, Plus, Pencil, Target, Trash2, X, CheckSquare, Filter } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -17,7 +18,7 @@ const priorities: Priority[] = ["High", "Medium", "Low"];
 
 export default function MyActions() {
   const [view, setView] = useState<"list" | "kanban">("list");
-  const { actions } = useFilteredData();
+  const { actions: allActions } = useFilteredData();
   const addAction = useAppStore((s) => s.addAction);
   const updateAction = useAppStore((s) => s.updateAction);
   const deleteAction = useAppStore((s) => s.deleteAction);
@@ -28,6 +29,32 @@ export default function MyActions() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Action | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  // Filters
+  const [filterTask, setFilterTask] = useState("");
+  const [filterProject, setFilterProject] = useState("");
+  const [filterPriority, setFilterPriority] = useState<string>("all");
+  const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [showFilters, setShowFilters] = useState(false);
+
+  const actions = useMemo(() => {
+    return allActions.filter((a) => {
+      if (filterTask && !a.task.toLowerCase().includes(filterTask.toLowerCase())) return false;
+      if (filterProject && !a.project.toLowerCase().includes(filterProject.toLowerCase())) return false;
+      if (filterPriority !== "all" && a.priority !== filterPriority) return false;
+      if (filterStatus !== "all" && a.status !== filterStatus) return false;
+      return true;
+    });
+  }, [allActions, filterTask, filterProject, filterPriority, filterStatus]);
+
+  const hasActiveFilters = filterTask || filterProject || filterPriority !== "all" || filterStatus !== "all";
+
+  const clearFilters = () => {
+    setFilterTask("");
+    setFilterProject("");
+    setFilterPriority("all");
+    setFilterStatus("all");
+  };
 
   const toggleSelect = (id: string) => {
     setSelected((prev) => {
@@ -80,6 +107,17 @@ export default function MyActions() {
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">My Actions</h2>
         <div className="flex items-center gap-3">
+          <Button
+            size="sm"
+            variant={showFilters ? "secondary" : "outline"}
+            onClick={() => setShowFilters(!showFilters)}
+            className="relative"
+          >
+            <Filter className="mr-1.5 h-4 w-4" /> Filters
+            {hasActiveFilters && (
+              <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-primary" />
+            )}
+          </Button>
           <Button size="sm" onClick={() => { setEditing(null); setDialogOpen(true); }}>
             <Plus className="mr-1.5 h-4 w-4" /> New Action
           </Button>
@@ -105,6 +143,48 @@ export default function MyActions() {
           </div>
         </div>
       </div>
+
+      {/* Filter bar */}
+      {showFilters && (
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-muted/30 p-3">
+          <Input
+            placeholder="Filter by task..."
+            value={filterTask}
+            onChange={(e) => setFilterTask(e.target.value)}
+            className="h-8 w-[180px] text-xs"
+          />
+          <Input
+            placeholder="Filter by project..."
+            value={filterProject}
+            onChange={(e) => setFilterProject(e.target.value)}
+            className="h-8 w-[160px] text-xs"
+          />
+          <Select value={filterPriority} onValueChange={setFilterPriority}>
+            <SelectTrigger className="h-8 w-[120px] text-xs">
+              <SelectValue placeholder="Priority" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All priorities</SelectItem>
+              {priorities.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={filterStatus} onValueChange={setFilterStatus}>
+            <SelectTrigger className="h-8 w-[130px] text-xs">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All statuses</SelectItem>
+              {statusColumns.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          {hasActiveFilters && (
+            <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={clearFilters}>
+              <X className="mr-1 h-3.5 w-3.5" /> Clear
+            </Button>
+          )}
+          <span className="ml-auto text-xs text-muted-foreground">{actions.length} of {allActions.length} shown</span>
+        </div>
+      )}
 
       {/* Bulk action toolbar */}
       {selected.size > 0 && (
@@ -144,9 +224,13 @@ export default function MyActions() {
         </div>
       )}
 
-      {actions.length === 0 ? (
+      {allActions.length === 0 ? (
         <div className="rounded-lg border border-dashed bg-card p-12 text-center text-sm text-muted-foreground">
           No actions yet. Click "New Action" to create your first task.
+        </div>
+      ) : actions.length === 0 ? (
+        <div className="rounded-lg border border-dashed bg-card p-12 text-center text-sm text-muted-foreground">
+          No actions match your filters.
         </div>
       ) : view === "list" ? (
         <ListView actions={actions} onEdit={handleEdit} selected={selected} onToggle={toggleSelect} onToggleAll={toggleAll} />

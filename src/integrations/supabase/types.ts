@@ -16,6 +16,8 @@ export type Database = {
     Tables: {
       actions: {
         Row: {
+          archived: boolean
+          completed_at: string | null
           created_at: string
           due_date: string
           id: string
@@ -29,6 +31,8 @@ export type Database = {
           work_package: string
         }
         Insert: {
+          archived?: boolean
+          completed_at?: string | null
           created_at?: string
           due_date?: string
           id?: string
@@ -42,6 +46,8 @@ export type Database = {
           work_package?: string
         }
         Update: {
+          archived?: boolean
+          completed_at?: string | null
           created_at?: string
           due_date?: string
           id?: string

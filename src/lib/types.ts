@@ -46,6 +46,7 @@ export interface Action {
   priority: Priority;
   status: TaskStatus;
   notes: string;
+  completedAt?: string;
 }
 
 export interface WaitingItem {

@@ -10,11 +10,10 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 
 const links: { to: string; label: string; icon: LucideIcon }[] = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/inbox", label: "Rapid Capture", icon: Inbox },
   { to: "/actions", label: "My Actions", icon: CheckSquare },
   { to: "/waiting", label: "Waiting For", icon: Clock },
+  { to: "/inbox", label: "Rapid Capture", icon: Inbox },
   { to: "/projects", label: "Projects", icon: FolderKanban },
-  
   { to: "/planner", label: "WBS Planner", icon: Sparkles },
   { to: "/sop", label: "SOP", icon: BookOpen },
   { to: "/knowledgebase", label: "Knowledgebase", icon: Library },

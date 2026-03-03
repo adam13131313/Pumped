@@ -107,6 +107,16 @@ export const useAppStore = create<AppState>()((set, get) => ({
   sopItems: [],
 
   loadAllData: async () => {
+    // Auto-archive actions completed more than 24 hours ago
+    const archiveCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    supabase.from("actions")
+      .update({ archived: true } as any)
+      .eq("archived", false)
+      .eq("status", "Complete")
+      .not("completed_at", "is", null)
+      .lt("completed_at", archiveCutoff)
+      .then();
+
     const [
       { data: programmes },
       { data: projects },
@@ -119,7 +129,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
       supabase.from("programmes").select("*"),
       supabase.from("projects").select("*"),
       supabase.from("work_packages").select("*"),
-      supabase.from("actions").select("*"),
+      supabase.from("actions").select("*").eq("archived", false),
       supabase.from("waiting_items").select("*"),
       supabase.from("inbox_items").select("*"),
       supabase.from("sop_items").select("*"),
@@ -128,7 +138,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
     const mapProgramme = (r: any): Programme => ({ id: r.id, name: r.name, description: r.description });
     const mapProject = (r: any): Project => ({ id: r.id, name: r.name, description: r.description, programmeId: r.programme_id, status: r.status });
     const mapWP = (r: any): WorkPackage => ({ id: r.id, project: r.project, workPackage: r.work_package, wpLead: r.wp_lead, startDate: r.start_date, dueDate: r.due_date, ragStatus: r.rag_status, blockers: r.blockers, dependencies: r.dependencies || [] });
-    const mapAction = (r: any): Action => ({ id: r.id, task: r.task, project: r.project, workPackage: r.work_package, startDate: r.start_date, dueDate: r.due_date, priority: r.priority, status: r.status, notes: r.notes });
+    const mapAction = (r: any): Action => ({ id: r.id, task: r.task, project: r.project, workPackage: r.work_package, startDate: r.start_date, dueDate: r.due_date, priority: r.priority, status: r.status, notes: r.notes, completedAt: r.completed_at || undefined });
     const mapWaiting = (r: any): WaitingItem => ({ id: r.id, description: r.description, fromWhom: r.from_whom, projectWP: r.project_wp, askedOn: r.asked_on, dueBy: r.due_by, status: r.status, notes: r.notes });
     const mapInbox = (r: any): InboxItem => ({ id: r.id, task: r.task, priority: r.priority, dueDate: r.due_date, project: r.project, notes: r.notes, source: r.source, createdAt: r.created_at });
     const mapSOP = (r: any): SOPItem => ({ id: r.id, when: r.trigger_when, instruction: r.instruction });
@@ -210,6 +220,13 @@ export const useAppStore = create<AppState>()((set, get) => ({
     getUserId().then((uid) => supabase.from("actions").insert({ id: action.id, user_id: uid, task: action.task, project: action.project, work_package: action.workPackage, start_date: action.startDate, due_date: action.dueDate, priority: action.priority, status: action.status, notes: action.notes }).then());
   },
   updateAction: (id, updates) => {
+    // Track completed_at when status changes to Complete
+    const currentAction = get().actions.find((a) => a.id === id);
+    if (updates.status === "Complete" && currentAction?.status !== "Complete") {
+      (updates as any).completedAt = new Date().toISOString();
+    } else if (updates.status && updates.status !== "Complete") {
+      (updates as any).completedAt = null;
+    }
     set((s) => ({ actions: s.actions.map((a) => (a.id === id ? { ...a, ...updates } : a)) }));
     const dbUpdates: any = {};
     if (updates.task !== undefined) dbUpdates.task = updates.task;
@@ -220,6 +237,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
     if (updates.priority !== undefined) dbUpdates.priority = updates.priority;
     if (updates.status !== undefined) dbUpdates.status = updates.status;
     if (updates.notes !== undefined) dbUpdates.notes = updates.notes;
+    if ((updates as any).completedAt !== undefined) dbUpdates.completed_at = (updates as any).completedAt;
     supabase.from("actions").update(dbUpdates).eq("id", id).then();
   },
   deleteAction: (id) => {

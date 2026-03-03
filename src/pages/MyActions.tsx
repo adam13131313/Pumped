@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback, useRef } from "react";
 import { useAppStore } from "@/lib/store";
 import { useFilteredData } from "@/hooks/useFilteredData";
 import { PriorityBadge, StatusBadge } from "@/components/StatusBadges";
@@ -101,6 +101,51 @@ export default function MyActions() {
     setEditing(action);
     setDialogOpen(true);
   };
+
+  // Kanban column ordering state
+  const [columnOrder, setColumnOrder] = useState<Record<string, string[]>>({});
+
+  const getOrderedActions = useCallback((status: TaskStatus, colActions: Action[]) => {
+    const order = columnOrder[status];
+    if (!order) return colActions;
+    const ordered: Action[] = [];
+    for (const id of order) {
+      const a = colActions.find((x) => x.id === id);
+      if (a) ordered.push(a);
+    }
+    // Append any new items not yet in order
+    for (const a of colActions) {
+      if (!order.includes(a.id)) ordered.push(a);
+    }
+    return ordered;
+  }, [columnOrder]);
+
+  const handleReorder = useCallback((status: TaskStatus, fromIndex: number, toIndex: number, colActions: Action[]) => {
+    const ordered = getOrderedActions(status, colActions).map((a) => a.id);
+    const [moved] = ordered.splice(fromIndex, 1);
+    ordered.splice(toIndex, 0, moved);
+    setColumnOrder((prev) => ({ ...prev, [status]: ordered }));
+  }, [getOrderedActions]);
+
+  const handleStatusChange = useCallback((id: string, newStatus: TaskStatus, dropIndex?: number) => {
+    updateAction(id, { status: newStatus });
+    if (dropIndex !== undefined) {
+      // Insert at specific position in the target column
+      setColumnOrder((prev) => {
+        const existing = prev[newStatus] || [];
+        const filtered = existing.filter((x) => x !== id);
+        filtered.splice(dropIndex, 0, id);
+        // Also remove from old columns
+        const updated = { ...prev, [newStatus]: filtered };
+        for (const col of statusColumns) {
+          if (col !== newStatus && updated[col]) {
+            updated[col] = updated[col].filter((x) => x !== id);
+          }
+        }
+        return updated;
+      });
+    }
+  }, [updateAction]);
 
   return (
     <div className="space-y-4">
@@ -235,7 +280,15 @@ export default function MyActions() {
       ) : view === "list" ? (
         <ListView actions={actions} onEdit={handleEdit} selected={selected} onToggle={toggleSelect} onToggleAll={toggleAll} />
       ) : (
-        <KanbanView actions={actions} onStatusChange={(id, status) => updateAction(id, { status })} onEdit={handleEdit} selected={selected} onToggle={toggleSelect} />
+        <KanbanView
+          actions={actions}
+          onStatusChange={handleStatusChange}
+          onEdit={handleEdit}
+          selected={selected}
+          onToggle={toggleSelect}
+          getOrderedActions={getOrderedActions}
+          onReorder={handleReorder}
+        />
       )}
 
       <ActionDialog
@@ -318,22 +371,86 @@ function ListView({ actions, onEdit, selected, onToggle, onToggleAll }: { action
   );
 }
 
-function KanbanView({ actions, onStatusChange, onEdit, selected, onToggle }: { actions: Action[]; onStatusChange: (id: string, status: TaskStatus) => void; onEdit: (a: Action) => void; selected: Set<string>; onToggle: (id: string) => void }) {
-  const [dragging, setDragging] = useState<string | null>(null);
+function KanbanView({
+  actions,
+  onStatusChange,
+  onEdit,
+  selected,
+  onToggle,
+  getOrderedActions,
+  onReorder,
+}: {
+  actions: Action[];
+  onStatusChange: (id: string, status: TaskStatus, dropIndex?: number) => void;
+  onEdit: (a: Action) => void;
+  selected: Set<string>;
+  onToggle: (id: string) => void;
+  getOrderedActions: (status: TaskStatus, colActions: Action[]) => Action[];
+  onReorder: (status: TaskStatus, fromIndex: number, toIndex: number, colActions: Action[]) => void;
+}) {
   const todayIds = useAppStore((s) => s.todayIds);
   const addToday = useAppStore((s) => s.addToday);
   const removeToday = useAppStore((s) => s.removeToday);
 
+  const dragItemRef = useRef<{ id: string; sourceStatus: TaskStatus; sourceIndex: number } | null>(null);
+  const [dropTarget, setDropTarget] = useState<{ status: TaskStatus; index: number } | null>(null);
+
+  const handleDragStart = (id: string, status: TaskStatus, index: number) => {
+    dragItemRef.current = { id, sourceStatus: status, sourceIndex: index };
+  };
+
+  const handleDragOverCard = (e: React.DragEvent, status: TaskStatus, index: number) => {
+    e.preventDefault();
+    setDropTarget({ status, index });
+  };
+
+  const handleDragOverColumn = (e: React.DragEvent, status: TaskStatus, colLength: number) => {
+    e.preventDefault();
+    // Only set drop target to end if not already over a card
+    if (!dropTarget || dropTarget.status !== status) {
+      setDropTarget({ status, index: colLength });
+    }
+  };
+
+  const handleDrop = (status: TaskStatus, colActions: Action[]) => {
+    const drag = dragItemRef.current;
+    if (!drag) return;
+
+    const targetIndex = dropTarget?.status === status ? dropTarget.index : colActions.length;
+
+    if (drag.sourceStatus === status) {
+      // Reorder within same column
+      if (drag.sourceIndex !== targetIndex) {
+        onReorder(status, drag.sourceIndex, targetIndex > drag.sourceIndex ? targetIndex - 1 : targetIndex, colActions);
+      }
+    } else {
+      // Move to different column
+      onStatusChange(drag.id, status, targetIndex);
+    }
+
+    dragItemRef.current = null;
+    setDropTarget(null);
+  };
+
+  const handleDragEnd = () => {
+    dragItemRef.current = null;
+    setDropTarget(null);
+  };
+
   return (
     <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
       {statusColumns.map((col) => {
-        const colActions = actions.filter((a) => a.status === col);
+        const rawColActions = actions.filter((a) => a.status === col);
+        const colActions = getOrderedActions(col, rawColActions);
         return (
           <div
             key={col}
-            className="rounded-lg border bg-muted/30 p-3"
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={() => { if (dragging) onStatusChange(dragging, col); setDragging(null); }}
+            className={cn(
+              "rounded-lg border bg-muted/30 p-3",
+              dropTarget?.status === col && "ring-2 ring-primary/30"
+            )}
+            onDragOver={(e) => handleDragOverColumn(e, col, colActions.length)}
+            onDrop={() => handleDrop(col, colActions)}
           >
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-sm font-semibold">{col}</h3>
@@ -342,44 +459,58 @@ function KanbanView({ actions, onStatusChange, onEdit, selected, onToggle }: { a
               </span>
             </div>
             <div className="space-y-2">
-              {colActions.map((a) => {
+              {colActions.map((a, idx) => {
                 const gathered = todayIds.has(a.id);
                 const isSelected = selected.has(a.id);
+                const isDropBefore = dropTarget?.status === col && dropTarget.index === idx;
                 return (
-                  <div
-                    key={a.id}
-                    draggable
-                    onDragStart={() => setDragging(a.id)}
-                    onClick={() => onEdit(a)}
-                    className={cn("cursor-grab rounded-lg border bg-card p-3 shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing", isSelected && "ring-2 ring-primary")}
-                  >
-                    <div className="flex items-start gap-2">
-                      <div className="pt-0.5" onClick={(e) => e.stopPropagation()}>
-                        <Checkbox checked={isSelected} onCheckedChange={() => onToggle(a.id)} aria-label={`Select ${a.task}`} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-1">
-                          <p className="text-sm font-medium leading-snug flex-1">{a.task}</p>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); gathered ? removeToday(a.id) : addToday(a.id); }}
-                            className={cn(
-                              "h-6 w-6 flex-shrink-0 flex items-center justify-center rounded transition-colors",
-                              gathered ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
-                            )}
-                          >
-                            <Target className="h-3 w-3" />
-                          </button>
+                  <div key={a.id}>
+                    {isDropBefore && (
+                      <div className="h-1 rounded-full bg-primary mb-2 transition-all" />
+                    )}
+                    <div
+                      draggable
+                      onDragStart={() => handleDragStart(a.id, col, idx)}
+                      onDragOver={(e) => handleDragOverCard(e, col, idx)}
+                      onDragEnd={handleDragEnd}
+                      onClick={() => onEdit(a)}
+                      className={cn(
+                        "cursor-grab rounded-lg border bg-card p-3 shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing",
+                        isSelected && "ring-2 ring-primary"
+                      )}
+                    >
+                      <div className="flex items-start gap-2">
+                        <div className="pt-0.5" onClick={(e) => e.stopPropagation()}>
+                          <Checkbox checked={isSelected} onCheckedChange={() => onToggle(a.id)} aria-label={`Select ${a.task}`} />
                         </div>
-                        <div className="mt-2 flex items-center gap-2">
-                          <PriorityBadge priority={a.priority} />
-                          {a.dueDate && <span className="text-xs text-muted-foreground font-mono">{a.dueDate}</span>}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-1">
+                            <p className="text-sm font-medium leading-snug flex-1">{a.task}</p>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); gathered ? removeToday(a.id) : addToday(a.id); }}
+                              className={cn(
+                                "h-6 w-6 flex-shrink-0 flex items-center justify-center rounded transition-colors",
+                                gathered ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
+                              )}
+                            >
+                              <Target className="h-3 w-3" />
+                            </button>
+                          </div>
+                          <div className="mt-2 flex items-center gap-2">
+                            <PriorityBadge priority={a.priority} />
+                            {a.dueDate && <span className="text-xs text-muted-foreground font-mono">{a.dueDate}</span>}
+                          </div>
+                          {a.project && <p className="mt-1 text-xs text-muted-foreground">{a.project}</p>}
                         </div>
-                        {a.project && <p className="mt-1 text-xs text-muted-foreground">{a.project}</p>}
                       </div>
                     </div>
                   </div>
                 );
               })}
+              {/* Drop indicator at end of column */}
+              {dropTarget?.status === col && dropTarget.index === colActions.length && colActions.length > 0 && (
+                <div className="h-1 rounded-full bg-primary transition-all" />
+              )}
               {colActions.length === 0 && (
                 <p className="py-8 text-center text-xs text-muted-foreground">Drop tasks here</p>
               )}

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useAppStore } from "@/lib/store";
 import { useFilteredData } from "@/hooks/useFilteredData";
 import { Action, WaitingItem } from "@/lib/types";
@@ -8,11 +8,14 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Target, Plus, X, CheckCircle2, Clock, ListChecks } from "lucide-react";
+import { Target, Plus, X, CheckCircle2, Clock, ListChecks, CalendarCheck } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 type TodayItem =
   | { kind: "action"; data: Action }
   | { kind: "waiting"; data: WaitingItem };
+
+type ViewMode = "gathered" | "due-today";
 
 export default function Dashboard() {
   const { actions, waitingItems } = useFilteredData();
@@ -22,12 +25,29 @@ export default function Dashboard() {
   const clearToday = useAppStore((s) => s.clearToday);
 
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>("gathered");
+
+  // Today's date as YYYY-MM-DD for comparison
+  const todayStr = new Date().toISOString().slice(0, 10);
 
   // Gathered items
-  const todayItems: TodayItem[] = [
+  const gatheredItems: TodayItem[] = [
     ...actions.filter((a) => todayIds.has(a.id)).map((a) => ({ kind: "action" as const, data: a })),
     ...waitingItems.filter((w) => todayIds.has(w.id)).map((w) => ({ kind: "waiting" as const, data: w })),
   ];
+
+  // Due-today items
+  const dueTodayItems: TodayItem[] = useMemo(() => {
+    const dueActions = actions
+      .filter((a) => a.status !== "Complete" && a.dueDate && a.dueDate.slice(0, 10) === todayStr)
+      .map((a) => ({ kind: "action" as const, data: a }));
+    const dueWaiting = waitingItems
+      .filter((w) => w.status !== "Received" && w.dueBy && w.dueBy.slice(0, 10) === todayStr)
+      .map((w) => ({ kind: "waiting" as const, data: w }));
+    return [...dueActions, ...dueWaiting];
+  }, [actions, waitingItems, todayStr]);
+
+  const todayItems = viewMode === "gathered" ? gatheredItems : dueTodayItems;
 
   // Available to pick (not already gathered)
   const availableActions = actions.filter((a) => !todayIds.has(a.id) && a.status !== "Complete");
@@ -43,29 +63,81 @@ export default function Dashboard() {
           </h1>
           <p className="text-muted-foreground text-sm mt-1">
             {todayItems.length === 0
-              ? "Gather the tasks you'll work on today"
-              : `${todayItems.length} item${todayItems.length !== 1 ? "s" : ""} gathered`}
+              ? viewMode === "gathered"
+                ? "Gather the tasks you'll work on today"
+                : "No tasks due today"
+              : `${todayItems.length} item${todayItems.length !== 1 ? "s" : ""} ${viewMode === "gathered" ? "gathered" : "due today"}`}
           </p>
         </div>
         <div className="flex gap-2">
-          {todayItems.length > 0 && (
+          {viewMode === "gathered" && todayItems.length > 0 && (
             <Button variant="outline" size="sm" onClick={clearToday}>
               Clear All
             </Button>
           )}
-          <Button onClick={() => setPickerOpen(true)}>
-            <Plus className="h-4 w-4 mr-2" /> Gather Tasks
-          </Button>
+          {viewMode === "gathered" && (
+            <Button onClick={() => setPickerOpen(true)}>
+              <Plus className="h-4 w-4 mr-2" /> Gather Tasks
+            </Button>
+          )}
         </div>
+      </div>
+
+      {/* View mode toggle */}
+      <div className="flex items-center gap-1 rounded-lg border bg-card p-1 w-fit">
+        <button
+          onClick={() => setViewMode("gathered")}
+          className={cn(
+            "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+            viewMode === "gathered" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent"
+          )}
+        >
+          <Target className="h-4 w-4" /> Gathered
+          {gatheredItems.length > 0 && (
+            <span className={cn(
+              "ml-1 text-xs rounded-full px-1.5 py-0.5",
+              viewMode === "gathered" ? "bg-primary-foreground/20 text-primary-foreground" : "bg-muted text-muted-foreground"
+            )}>
+              {gatheredItems.length}
+            </span>
+          )}
+        </button>
+        <button
+          onClick={() => setViewMode("due-today")}
+          className={cn(
+            "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+            viewMode === "due-today" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent"
+          )}
+        >
+          <CalendarCheck className="h-4 w-4" /> Due Today
+          {dueTodayItems.length > 0 && (
+            <span className={cn(
+              "ml-1 text-xs rounded-full px-1.5 py-0.5",
+              viewMode === "due-today" ? "bg-primary-foreground/20 text-primary-foreground" : "bg-muted text-muted-foreground"
+            )}>
+              {dueTodayItems.length}
+            </span>
+          )}
+        </button>
       </div>
 
       {/* Today's items */}
       {todayItems.length === 0 ? (
         <Card>
           <CardContent className="py-16 text-center text-muted-foreground">
-            <ListChecks className="h-12 w-12 mx-auto mb-4 opacity-30" />
-            <p className="text-base font-medium mb-1">No tasks gathered yet</p>
-            <p className="text-sm">Click "Gather Tasks" to pick what you'll focus on today.</p>
+            {viewMode === "gathered" ? (
+              <>
+                <ListChecks className="h-12 w-12 mx-auto mb-4 opacity-30" />
+                <p className="text-base font-medium mb-1">No tasks gathered yet</p>
+                <p className="text-sm">Click "Gather Tasks" to pick what you'll focus on today.</p>
+              </>
+            ) : (
+              <>
+                <CalendarCheck className="h-12 w-12 mx-auto mb-4 opacity-30" />
+                <p className="text-base font-medium mb-1">Nothing due today</p>
+                <p className="text-sm">No actions or waiting items have today's date as their due date.</p>
+              </>
+            )}
           </CardContent>
         </Card>
       ) : (
@@ -104,14 +176,16 @@ export default function Dashboard() {
                     {!isAction && w!.dueBy && <span className="font-mono">Due: {w!.dueBy}</span>}
                   </div>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
-                  onClick={() => removeToday(id)}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
+                {viewMode === "gathered" && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+                    onClick={() => removeToday(id)}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
               </div>
             );
           })}

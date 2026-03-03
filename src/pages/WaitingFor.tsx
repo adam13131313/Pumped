@@ -32,7 +32,7 @@ export default function WaitingFor() {
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Waiting For</h2>
         <div className="flex items-center gap-3">
-          <p className="text-sm text-muted-foreground hidden sm:block">Review every Wednesday · Send nudges for overdue items</p>
+          <p className="text-sm text-muted-foreground hidden sm:block">Review every Wednesday</p>
           <Button size="sm" onClick={() => { setEditing(null); setDialogOpen(true); }}>
             <Plus className="mr-1.5 h-4 w-4" /> Add Item
           </Button>

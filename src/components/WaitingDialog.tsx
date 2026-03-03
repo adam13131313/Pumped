@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,11 +26,11 @@ export function WaitingDialog({ open, onOpenChange, item, onSave, onDelete, onTa
     item ?? { description: "", fromWhom: "", projectWP: "", askedOn: "", dueBy: "", status: "Pending", notes: "" }
   );
 
-  const handleOpen = (o: boolean) => {
-    if (o && item) setForm(item);
-    else if (o) setForm({ description: "", fromWhom: "", projectWP: "", askedOn: "", dueBy: "", status: "Pending", notes: "" });
-    onOpenChange(o);
-  };
+  useEffect(() => {
+    if (open) {
+      setForm(item ?? { description: "", fromWhom: "", projectWP: "", askedOn: "", dueBy: "", status: "Pending", notes: "" });
+    }
+  }, [open, item]);
 
   const handleSave = () => {
     if (!form.description?.trim()) return;
@@ -48,7 +48,7 @@ export function WaitingDialog({ open, onOpenChange, item, onSave, onDelete, onTa
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleOpen}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{isEdit ? "Edit Waiting Item" : "New Waiting Item"}</DialogTitle>

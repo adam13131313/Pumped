@@ -1,15 +1,19 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useAppStore } from "@/lib/store";
 import { useFilteredData } from "@/hooks/useFilteredData";
 import { WaitingDialog } from "@/components/WaitingDialog";
-import { WaitingItem } from "@/lib/types";
+import { WaitingItem, WaitingStatus } from "@/lib/types";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Plus, Pencil, Target } from "lucide-react";
+import { Plus, Pencil, Target, Filter, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+const statuses: WaitingStatus[] = ["Pending", "Received", "Overdue"];
+
 export default function WaitingFor() {
-  const { waitingItems: items } = useFilteredData();
+  const { waitingItems: allItems } = useFilteredData();
   const addWaitingItem = useAppStore((s) => s.addWaitingItem);
   const updateWaitingItem = useAppStore((s) => s.updateWaitingItem);
   const deleteWaitingItem = useAppStore((s) => s.deleteWaitingItem);
@@ -20,6 +24,32 @@ export default function WaitingFor() {
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<WaitingItem | null>(null);
+
+  // Filters
+  const [filterDesc, setFilterDesc] = useState("");
+  const [filterFrom, setFilterFrom] = useState("");
+  const [filterProject, setFilterProject] = useState("");
+  const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [showFilters, setShowFilters] = useState(false);
+
+  const items = useMemo(() => {
+    return allItems.filter((i) => {
+      if (filterDesc && !i.description.toLowerCase().includes(filterDesc.toLowerCase())) return false;
+      if (filterFrom && !i.fromWhom.toLowerCase().includes(filterFrom.toLowerCase())) return false;
+      if (filterProject && !i.projectWP.toLowerCase().includes(filterProject.toLowerCase())) return false;
+      if (filterStatus !== "all" && i.status !== filterStatus) return false;
+      return true;
+    });
+  }, [allItems, filterDesc, filterFrom, filterProject, filterStatus]);
+
+  const hasActiveFilters = filterDesc || filterFrom || filterProject || filterStatus !== "all";
+
+  const clearFilters = () => {
+    setFilterDesc("");
+    setFilterFrom("");
+    setFilterProject("");
+    setFilterStatus("all");
+  };
 
   const handleSave = (item: WaitingItem) => {
     if (editing) updateWaitingItem(item.id, item);
@@ -33,15 +63,69 @@ export default function WaitingFor() {
         <h2 className="text-lg font-semibold">Waiting For</h2>
         <div className="flex items-center gap-3">
           <p className="text-sm text-muted-foreground hidden sm:block">Review every Wednesday</p>
+          <Button
+            size="sm"
+            variant={showFilters ? "secondary" : "outline"}
+            onClick={() => setShowFilters(!showFilters)}
+            className="relative"
+          >
+            <Filter className="mr-1.5 h-4 w-4" /> Filters
+            {hasActiveFilters && (
+              <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-primary" />
+            )}
+          </Button>
           <Button size="sm" onClick={() => { setEditing(null); setDialogOpen(true); }}>
             <Plus className="mr-1.5 h-4 w-4" /> Add Item
           </Button>
         </div>
       </div>
 
-      {items.length === 0 ? (
+      {/* Filter bar */}
+      {showFilters && (
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-muted/30 p-3">
+          <Input
+            placeholder="Filter by description..."
+            value={filterDesc}
+            onChange={(e) => setFilterDesc(e.target.value)}
+            className="h-8 w-[180px] text-xs"
+          />
+          <Input
+            placeholder="Filter by from..."
+            value={filterFrom}
+            onChange={(e) => setFilterFrom(e.target.value)}
+            className="h-8 w-[140px] text-xs"
+          />
+          <Input
+            placeholder="Filter by project..."
+            value={filterProject}
+            onChange={(e) => setFilterProject(e.target.value)}
+            className="h-8 w-[140px] text-xs"
+          />
+          <Select value={filterStatus} onValueChange={setFilterStatus}>
+            <SelectTrigger className="h-8 w-[120px] text-xs">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All statuses</SelectItem>
+              {statuses.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          {hasActiveFilters && (
+            <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={clearFilters}>
+              <X className="mr-1 h-3.5 w-3.5" /> Clear
+            </Button>
+          )}
+          <span className="ml-auto text-xs text-muted-foreground">{items.length} of {allItems.length} shown</span>
+        </div>
+      )}
+
+      {allItems.length === 0 ? (
         <div className="rounded-lg border border-dashed bg-card p-12 text-center text-sm text-muted-foreground">
           Nothing pending. Click "Add Item" when you delegate work or wait on someone.
+        </div>
+      ) : items.length === 0 ? (
+        <div className="rounded-lg border border-dashed bg-card p-12 text-center text-sm text-muted-foreground">
+          No items match your filters.
         </div>
       ) : (
         <div className="overflow-hidden rounded-lg border bg-card">

@@ -7,6 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Action, Priority, TaskStatus } from "@/lib/types";
 import { useAppStore } from "@/lib/store";
+import { LinkRenderer } from "@/components/LinkRenderer";
+import { TaskAttachments } from "@/components/TaskAttachments";
 
 interface ActionDialogProps {
   open: boolean;
@@ -145,7 +147,16 @@ export function ActionDialog({ open, onOpenChange, action, onSave, onDelete, onD
           </div>
           <div>
             <Label htmlFor="notes">Notes</Label>
-            <Textarea id="notes" value={form.notes ?? ""} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="mt-1" rows={2} maxLength={1000} />
+            <Textarea id="notes" value={form.notes ?? ""} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="mt-1" rows={2} maxLength={1000} placeholder="Add notes or paste links (Google Docs, Sheets, etc.)" />
+            {form.notes && /(https?:\/\/[^\s]+)/.test(form.notes) && (
+              <div className="mt-1.5 text-sm"><LinkRenderer text={form.notes} /></div>
+            )}
+          </div>
+          <div>
+            <Label>Attachments</Label>
+            <div className="mt-1">
+              <TaskAttachments actionId={isEdit ? action?.id : undefined} isNewTask={!isEdit} />
+            </div>
           </div>
         </div>
         <DialogFooter className="flex justify-between">

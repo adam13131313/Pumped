@@ -374,7 +374,7 @@ export default function WBSPlanner() {
                   <Button variant="outline" size="sm" asChild>
                     <span>Choose Files</span>
                   </Button>
-                  <input type="file" multiple accept=".txt,.md,.csv,.json,.xml,.doc,.docx,.rtf,.pdf" className="hidden" onChange={handleFileAdd} />
+                  <input type="file" multiple accept=".txt,.md,.csv,.json,.xml,.doc,.docx,.rtf,.pdf,.png,.jpg,.jpeg,.gif,.webp,.bmp" className="hidden" onChange={handleFileAdd} />
                 </label>
               </div>
               {files.length > 0 && (

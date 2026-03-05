@@ -107,15 +107,20 @@ export const useAppStore = create<AppState>()((set, get) => ({
   sopItems: [],
 
   loadAllData: async () => {
+    // Backfill completed_at for any Complete tasks missing it, then archive
+    await supabase.from("actions")
+      .update({ completed_at: new Date().toISOString() } as any)
+      .eq("status", "Complete")
+      .is("completed_at", null);
+
     // Auto-archive actions completed more than 24 hours ago
     const archiveCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-    supabase.from("actions")
+    await supabase.from("actions")
       .update({ archived: true } as any)
       .eq("archived", false)
       .eq("status", "Complete")
       .not("completed_at", "is", null)
-      .lt("completed_at", archiveCutoff)
-      .then();
+      .lt("completed_at", archiveCutoff);
 
     const [
       { data: programmes },

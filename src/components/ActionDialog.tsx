@@ -29,21 +29,21 @@ export function ActionDialog({ open, onOpenChange, action, onSave, onDelete, onD
   const programmes = useAppStore((s) => s.programmes);
   const projects = useAppStore((s) => s.projects);
   const workPackages = useAppStore((s) => s.workPackages);
+  const globalFilter = useAppStore((s) => s.globalFilter);
 
   const emptyForm: Partial<Action> = { task: "", project: "", workPackage: "", startDate: "", dueDate: "", priority: "Medium", status: "Not Started", notes: "" };
   const [form, setForm] = useState<Partial<Action>>(action ?? emptyForm);
   const [selectedProgrammeId, setSelectedProgrammeId] = useState("");
   const [selectedProjectId, setSelectedProjectId] = useState("");
 
-  // Derive initial programme/project IDs from the action's project/workPackage names
+  // Derive initial programme/project IDs from the action or global filter
   useEffect(() => {
     if (open) {
-      setForm(action ?? emptyForm);
       setShowDelegate(false);
       setDelegateTo("");
 
       if (action) {
-        // Find the project by name
+        setForm(action);
         const proj = projects.find((p) => p.name === action.project);
         if (proj) {
           setSelectedProjectId(proj.id);
@@ -53,8 +53,21 @@ export function ActionDialog({ open, onOpenChange, action, onSave, onDelete, onD
           setSelectedProgrammeId("");
         }
       } else {
-        setSelectedProgrammeId("");
-        setSelectedProjectId("");
+        // New task: pre-populate from global filter
+        const prefillProgrammeId = globalFilter.programmeId || "";
+        const prefillProjectId = globalFilter.projectId || "";
+        const prefillWPId = globalFilter.workPackageId || "";
+
+        const proj = prefillProjectId ? projects.find((p) => p.id === prefillProjectId) : null;
+        const wp = prefillWPId ? workPackages.find((w) => w.id === prefillWPId) : null;
+
+        setSelectedProgrammeId(prefillProgrammeId);
+        setSelectedProjectId(prefillProjectId);
+        setForm({
+          ...emptyForm,
+          project: proj?.name ?? "",
+          workPackage: wp?.workPackage ?? "",
+        });
       }
     }
   }, [open, action]);

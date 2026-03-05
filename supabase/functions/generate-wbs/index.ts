@@ -21,23 +21,27 @@ serve(async (req) => {
 
 Return a JSON object with this exact structure:
 {
-  "programmeName": "string - suggested programme name if applicable, or empty string",
-  "programmeDescription": "string - programme description or empty",
-  "projects": [
+  "programmes": [
     {
-      "name": "string - project name",
-      "description": "string - brief project description",
-      "workPackages": [
+      "name": "string - programme name",
+      "description": "string - programme description",
+      "projects": [
         {
-          "name": "string - work package name",
-          "lead": "string - suggested lead or empty",
-          "dueDate": "string - suggested due date YYYY-MM-DD or empty",
-          "description": "string - what this work package covers",
-          "actions": [
+          "name": "string - project name",
+          "description": "string - brief project description",
+          "workPackages": [
             {
-              "task": "string - specific actionable task",
-              "priority": "High" | "Medium" | "Low",
-              "dueDate": "string - YYYY-MM-DD or empty"
+              "name": "string - work package name",
+              "lead": "string - suggested lead or empty",
+              "dueDate": "string - suggested due date YYYY-MM-DD or empty",
+              "description": "string - what this work package covers",
+              "actions": [
+                {
+                  "task": "string - specific actionable task",
+                  "priority": "High" | "Medium" | "Low",
+                  "dueDate": "string - YYYY-MM-DD or empty"
+                }
+              ]
             }
           ]
         }
@@ -47,7 +51,9 @@ Return a JSON object with this exact structure:
 }
 
 Rules:
-- Break work into logical projects and work packages
+- Group projects under programmes as instructed by the user
+- If the user specifies multiple programmes, create multiple programme objects
+- If no programme grouping is needed, use a single programme with an empty name
 - Each project should have 2-8 work packages
 - Each work package should have 2-6 initial actions (specific, actionable tasks)
 - Actions should be concrete next steps, not vague descriptions

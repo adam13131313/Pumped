@@ -54,12 +54,20 @@ export function WaitingDialog({ open, onOpenChange, item, onSave, onDelete, onTa
         }
       } else {
         // New item: pre-populate from global filter
-        const prefillProgrammeId = globalFilter.programmeId || "";
-        const prefillProjectId = globalFilter.projectId || "";
+        let prefillProjectId = globalFilter.projectId || "";
         const prefillWPId = globalFilter.workPackageId || "";
 
-        const proj = prefillProjectId ? projects.find((p) => p.id === prefillProjectId) : null;
+        // If WP is selected, derive project from it
         const wp = prefillWPId ? workPackages.find((w) => w.id === prefillWPId) : null;
+        if (wp && !prefillProjectId) {
+          const derivedProj = projects.find((p) => p.name === wp.project);
+          if (derivedProj) prefillProjectId = derivedProj.id;
+        }
+
+        const proj = prefillProjectId ? projects.find((p) => p.id === prefillProjectId) : null;
+
+        // Derive programme from project if not explicitly set
+        const prefillProgrammeId = globalFilter.programmeId || proj?.programmeId || "";
 
         setSelectedProgrammeId(prefillProgrammeId);
         setSelectedProjectId(prefillProjectId);

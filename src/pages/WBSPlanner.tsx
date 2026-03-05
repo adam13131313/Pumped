@@ -51,6 +51,7 @@ export default function WBSPlanner() {
   const [accepted, setAccepted] = useState(false);
   const [iteratePrompt, setIteratePrompt] = useState("");
   const [iterating, setIterating] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
 
   const handleFileAdd = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const newFiles = Array.from(e.target.files ?? []);
@@ -59,6 +60,28 @@ export default function WBSPlanner() {
   }, []);
 
   const removeFile = (idx: number) => setFiles((prev) => prev.filter((_, i) => i !== idx));
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    const droppedFiles = Array.from(e.dataTransfer.files);
+    if (droppedFiles.length > 0) {
+      setFiles((prev) => [...prev, ...droppedFiles]);
+    }
+  }, []);
 
   const isImageFile = (file: File) => file.type.startsWith("image/");
 
@@ -367,9 +390,16 @@ export default function WBSPlanner() {
           <CardContent className="space-y-4">
             <div>
               <Label>Documents</Label>
-              <div className="mt-2 border-2 border-dashed rounded-lg p-6 text-center hover:border-primary/50 transition-colors">
+              <div
+                className={`mt-2 border-2 border-dashed rounded-lg p-6 text-center transition-colors ${isDragging ? "border-primary bg-primary/5" : "hover:border-primary/50"}`}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+              >
                 <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-                <p className="text-sm text-muted-foreground mb-2">Upload project plans, briefs, or any planning documents</p>
+                <p className="text-sm text-muted-foreground mb-2">
+                  {isDragging ? "Drop files here…" : "Drag & drop files here, or click to browse"}
+                </p>
                 <label className="cursor-pointer">
                   <Button variant="outline" size="sm" asChild>
                     <span>Choose Files</span>

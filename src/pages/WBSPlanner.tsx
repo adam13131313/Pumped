@@ -299,16 +299,27 @@ export default function WBSPlanner() {
     if (!wbs || !iteratePrompt.trim()) return;
     setIterating(true);
     try {
+      const imageFiles = files.filter(isImageFile);
+      const textFiles = files.filter((f) => !isImageFile(f));
+
       const documentTexts = await Promise.all(
-        files.map(async (f) => {
+        textFiles.map(async (f) => {
           const text = await readFileAsText(f);
           return `--- ${f.name} ---\n${text}`;
         })
       );
 
+      const images = await Promise.all(
+        imageFiles.map(async (f) => ({
+          name: f.name,
+          dataUrl: await readFileAsDataUrl(f),
+        }))
+      );
+
       const { data, error } = await supabase.functions.invoke("generate-wbs", {
         body: {
           documentTexts,
+          images,
           additionalContext: additionalContext.trim(),
           currentWbs: wbs,
           iteratePrompt: iteratePrompt.trim(),

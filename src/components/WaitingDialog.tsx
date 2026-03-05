@@ -26,32 +26,50 @@ export function WaitingDialog({ open, onOpenChange, item, onSave, onDelete, onTa
   const programmes = useAppStore((s) => s.programmes);
   const projects = useAppStore((s) => s.projects);
   const workPackages = useAppStore((s) => s.workPackages);
+  const globalFilter = useAppStore((s) => s.globalFilter);
 
-  const [form, setForm] = useState<Partial<WaitingItem>>(
-    item ?? { description: "", fromWhom: "", projectWP: "", askedOn: "", dueBy: "", status: "Pending", notes: "" }
-  );
+  const emptyForm: Partial<WaitingItem> = { description: "", fromWhom: "", projectWP: "", askedOn: "", dueBy: "", status: "Pending", notes: "" };
+  const [form, setForm] = useState<Partial<WaitingItem>>(item ?? emptyForm);
   const [selectedProgrammeId, setSelectedProgrammeId] = useState("");
   const [selectedProjectId, setSelectedProjectId] = useState("");
   const [selectedWPId, setSelectedWPId] = useState("");
 
   useEffect(() => {
     if (open) {
-      setForm(item ?? { description: "", fromWhom: "", projectWP: "", askedOn: "", dueBy: "", status: "Pending", notes: "" });
-
-      if (item?.projectWP) {
-        // Try to parse "Project / WP" format
-        const parts = item.projectWP.split(" / ");
-        const projName = parts[0]?.trim();
-        const wpName = parts[1]?.trim();
-        const proj = projects.find((p) => p.name === projName);
-        const wp = wpName ? workPackages.find((w) => w.workPackage === wpName) : undefined;
-        setSelectedProjectId(proj?.id ?? "");
-        setSelectedProgrammeId(proj?.programmeId ?? "");
-        setSelectedWPId(wp?.id ?? "");
+      if (item) {
+        setForm(item);
+        if (item.projectWP) {
+          const parts = item.projectWP.split(" / ");
+          const projName = parts[0]?.trim();
+          const wpName = parts[1]?.trim();
+          const proj = projects.find((p) => p.name === projName);
+          const wp = wpName ? workPackages.find((w) => w.workPackage === wpName) : undefined;
+          setSelectedProjectId(proj?.id ?? "");
+          setSelectedProgrammeId(proj?.programmeId ?? "");
+          setSelectedWPId(wp?.id ?? "");
+        } else {
+          setSelectedProgrammeId("");
+          setSelectedProjectId("");
+          setSelectedWPId("");
+        }
       } else {
-        setSelectedProgrammeId("");
-        setSelectedProjectId("");
-        setSelectedWPId("");
+        // New item: pre-populate from global filter
+        const prefillProgrammeId = globalFilter.programmeId || "";
+        const prefillProjectId = globalFilter.projectId || "";
+        const prefillWPId = globalFilter.workPackageId || "";
+
+        const proj = prefillProjectId ? projects.find((p) => p.id === prefillProjectId) : null;
+        const wp = prefillWPId ? workPackages.find((w) => w.id === prefillWPId) : null;
+
+        setSelectedProgrammeId(prefillProgrammeId);
+        setSelectedProjectId(prefillProjectId);
+        setSelectedWPId(prefillWPId);
+
+        let projectWP = "";
+        if (proj && wp) projectWP = `${proj.name} / ${wp.workPackage}`;
+        else if (proj) projectWP = proj.name;
+
+        setForm({ ...emptyForm, projectWP });
       }
     }
   }, [open, item]);

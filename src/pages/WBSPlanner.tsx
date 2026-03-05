@@ -60,12 +60,22 @@ export default function WBSPlanner() {
 
   const removeFile = (idx: number) => setFiles((prev) => prev.filter((_, i) => i !== idx));
 
+  const isImageFile = (file: File) => file.type.startsWith("image/");
+
   const readFileAsText = (file: File): Promise<string> =>
     new Promise((resolve) => {
       const reader = new FileReader();
       reader.onload = () => resolve(reader.result as string);
       reader.onerror = () => resolve(`[Could not read file: ${file.name}]`);
       reader.readAsText(file);
+    });
+
+  const readFileAsDataUrl = (file: File): Promise<string> =>
+    new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => resolve("");
+      reader.readAsDataURL(file);
     });
 
   const handleGenerate = async () => {
@@ -79,15 +89,25 @@ export default function WBSPlanner() {
     setAccepted(false);
 
     try {
+      const imageFiles = files.filter(isImageFile);
+      const textFiles = files.filter((f) => !isImageFile(f));
+
       const documentTexts = await Promise.all(
-        files.map(async (f) => {
+        textFiles.map(async (f) => {
           const text = await readFileAsText(f);
           return `--- ${f.name} ---\n${text}`;
         })
       );
 
+      const images = await Promise.all(
+        imageFiles.map(async (f) => ({
+          name: f.name,
+          dataUrl: await readFileAsDataUrl(f),
+        }))
+      );
+
       const { data, error } = await supabase.functions.invoke("generate-wbs", {
-        body: { documentTexts, additionalContext: additionalContext.trim() },
+        body: { documentTexts, images, additionalContext: additionalContext.trim() },
       });
 
       if (error) throw error;
@@ -279,16 +299,27 @@ export default function WBSPlanner() {
     if (!wbs || !iteratePrompt.trim()) return;
     setIterating(true);
     try {
+      const imageFiles = files.filter(isImageFile);
+      const textFiles = files.filter((f) => !isImageFile(f));
+
       const documentTexts = await Promise.all(
-        files.map(async (f) => {
+        textFiles.map(async (f) => {
           const text = await readFileAsText(f);
           return `--- ${f.name} ---\n${text}`;
         })
       );
 
+      const images = await Promise.all(
+        imageFiles.map(async (f) => ({
+          name: f.name,
+          dataUrl: await readFileAsDataUrl(f),
+        }))
+      );
+
       const { data, error } = await supabase.functions.invoke("generate-wbs", {
         body: {
           documentTexts,
+          images,
           additionalContext: additionalContext.trim(),
           currentWbs: wbs,
           iteratePrompt: iteratePrompt.trim(),
@@ -343,7 +374,7 @@ export default function WBSPlanner() {
                   <Button variant="outline" size="sm" asChild>
                     <span>Choose Files</span>
                   </Button>
-                  <input type="file" multiple accept=".txt,.md,.csv,.json,.xml,.doc,.docx,.rtf,.pdf" className="hidden" onChange={handleFileAdd} />
+                  <input type="file" multiple accept=".txt,.md,.csv,.json,.xml,.doc,.docx,.rtf,.pdf,.png,.jpg,.jpeg,.gif,.webp,.bmp" className="hidden" onChange={handleFileAdd} />
                 </label>
               </div>
               {files.length > 0 && (

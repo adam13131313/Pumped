@@ -177,14 +177,13 @@ export default function Dashboard() {
                   </div>
                 </div>
                 {viewMode === "gathered" && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+                  <button
                     onClick={() => removeToday(id)}
+                    className="h-7 w-7 flex items-center justify-center rounded-md bg-primary text-primary-foreground transition-colors hover:bg-primary/80"
+                    title="Remove from today"
                   >
-                    <X className="h-4 w-4" />
-                  </Button>
+                    <Target className="h-3.5 w-3.5" />
+                  </button>
                 )}
               </div>
             );

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { WaitingItem, WaitingStatus } from "@/lib/types";
+import { useAppStore } from "@/lib/store";
 import { LinkRenderer } from "@/components/LinkRenderer";
 import { TaskAttachments } from "@/components/TaskAttachments";
 
@@ -22,15 +23,108 @@ const statuses: WaitingStatus[] = ["Pending", "Received", "Overdue"];
 
 export function WaitingDialog({ open, onOpenChange, item, onSave, onDelete, onTakeBack }: WaitingDialogProps) {
   const isEdit = !!item;
+  const programmes = useAppStore((s) => s.programmes);
+  const projects = useAppStore((s) => s.projects);
+  const workPackages = useAppStore((s) => s.workPackages);
+
   const [form, setForm] = useState<Partial<WaitingItem>>(
     item ?? { description: "", fromWhom: "", projectWP: "", askedOn: "", dueBy: "", status: "Pending", notes: "" }
   );
+  const [selectedProgrammeId, setSelectedProgrammeId] = useState("");
+  const [selectedProjectId, setSelectedProjectId] = useState("");
+  const [selectedWPId, setSelectedWPId] = useState("");
 
   useEffect(() => {
     if (open) {
       setForm(item ?? { description: "", fromWhom: "", projectWP: "", askedOn: "", dueBy: "", status: "Pending", notes: "" });
+
+      if (item?.projectWP) {
+        // Try to parse "Project / WP" format
+        const parts = item.projectWP.split(" / ");
+        const projName = parts[0]?.trim();
+        const wpName = parts[1]?.trim();
+        const proj = projects.find((p) => p.name === projName);
+        const wp = wpName ? workPackages.find((w) => w.workPackage === wpName) : undefined;
+        setSelectedProjectId(proj?.id ?? "");
+        setSelectedProgrammeId(proj?.programmeId ?? "");
+        setSelectedWPId(wp?.id ?? "");
+      } else {
+        setSelectedProgrammeId("");
+        setSelectedProjectId("");
+        setSelectedWPId("");
+      }
     }
   }, [open, item]);
+
+  const filteredProjects = useMemo(() => {
+    if (!selectedProgrammeId) return projects;
+    return projects.filter((p) => p.programmeId === selectedProgrammeId);
+  }, [projects, selectedProgrammeId]);
+
+  const filteredWPs = useMemo(() => {
+    if (!selectedProjectId) return workPackages;
+    const proj = projects.find((p) => p.id === selectedProjectId);
+    if (!proj) return workPackages;
+    return workPackages.filter((wp) => wp.project === proj.name);
+  }, [workPackages, selectedProjectId, projects]);
+
+  // Build projectWP string from selections
+  const buildProjectWP = (projId: string, wpId: string): string => {
+    const proj = projects.find((p) => p.id === projId);
+    const wp = workPackages.find((w) => w.id === wpId);
+    if (proj && wp) return `${proj.name} / ${wp.workPackage}`;
+    if (proj) return proj.name;
+    return "";
+  };
+
+  const handleProgrammeChange = (val: string) => {
+    const id = val === "__none__" ? "" : val;
+    setSelectedProgrammeId(id);
+    if (id) {
+      const proj = projects.find((p) => p.id === selectedProjectId);
+      if (proj && proj.programmeId !== id) {
+        setSelectedProjectId("");
+        setSelectedWPId("");
+        setForm((f) => ({ ...f, projectWP: "" }));
+      }
+    }
+  };
+
+  const handleProjectChange = (val: string) => {
+    if (val === "__none__") {
+      setSelectedProjectId("");
+      setSelectedWPId("");
+      setForm((f) => ({ ...f, projectWP: "" }));
+    } else {
+      setSelectedProjectId(val);
+      setSelectedWPId("");
+      const proj = projects.find((p) => p.id === val);
+      setForm((f) => ({ ...f, projectWP: proj?.name ?? "" }));
+      if (proj?.programmeId && !selectedProgrammeId) {
+        setSelectedProgrammeId(proj.programmeId);
+      }
+    }
+  };
+
+  const handleWPChange = (val: string) => {
+    if (val === "__none__") {
+      setSelectedWPId("");
+      setForm((f) => ({ ...f, projectWP: buildProjectWP(selectedProjectId, "") }));
+    } else {
+      setSelectedWPId(val);
+      const wp = workPackages.find((w) => w.id === val);
+      if (wp) {
+        const proj = projects.find((p) => p.name === wp.project);
+        if (proj) {
+          setSelectedProjectId(proj.id);
+          if (proj.programmeId && !selectedProgrammeId) {
+            setSelectedProgrammeId(proj.programmeId);
+          }
+        }
+        setForm((f) => ({ ...f, projectWP: buildProjectWP(proj?.id ?? selectedProjectId, val) }));
+      }
+    }
+  };
 
   const handleSave = () => {
     if (!form.description?.trim()) return;
@@ -58,16 +152,53 @@ export function WaitingDialog({ open, onOpenChange, item, onSave, onDelete, onTa
             <Label htmlFor="desc">What I'm waiting for *</Label>
             <Textarea id="desc" value={form.description ?? ""} onChange={(e) => setForm({ ...form, description: e.target.value })} className="mt-1" rows={2} maxLength={500} />
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="from">From whom</Label>
-              <Input id="from" value={form.fromWhom ?? ""} onChange={(e) => setForm({ ...form, fromWhom: e.target.value })} className="mt-1" maxLength={100} />
-            </div>
-            <div>
-              <Label htmlFor="proj">Project / WP</Label>
-              <Input id="proj" value={form.projectWP ?? ""} onChange={(e) => setForm({ ...form, projectWP: e.target.value })} className="mt-1" maxLength={100} />
-            </div>
+          <div>
+            <Label htmlFor="from">From whom</Label>
+            <Input id="from" value={form.fromWhom ?? ""} onChange={(e) => setForm({ ...form, fromWhom: e.target.value })} className="mt-1" maxLength={100} />
           </div>
+
+          {/* Hierarchy selectors */}
+          {programmes.length > 0 && (
+            <div>
+              <Label>Programme</Label>
+              <Select value={selectedProgrammeId || "__none__"} onValueChange={handleProgrammeChange}>
+                <SelectTrigger className="mt-1"><SelectValue placeholder="All programmes" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">None</SelectItem>
+                  {programmes.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          <div>
+            <Label>Project</Label>
+            <Select value={selectedProjectId || "__none__"} onValueChange={handleProjectChange}>
+              <SelectTrigger className="mt-1"><SelectValue placeholder="None" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">None</SelectItem>
+                {filteredProjects.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
+            <Label>Work Package</Label>
+            <Select value={selectedWPId || "__none__"} onValueChange={handleWPChange}>
+              <SelectTrigger className="mt-1"><SelectValue placeholder="None" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">None</SelectItem>
+                {filteredWPs.map((wp) => (
+                  <SelectItem key={wp.id} value={wp.id}>{wp.workPackage}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           <div className="grid grid-cols-3 gap-4">
             <div>
               <Label htmlFor="asked">Asked on</Label>

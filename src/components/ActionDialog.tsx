@@ -26,38 +26,103 @@ export function ActionDialog({ open, onOpenChange, action, onSave, onDelete, onD
   const isEdit = !!action;
   const [showDelegate, setShowDelegate] = useState(false);
   const [delegateTo, setDelegateTo] = useState("");
+  const programmes = useAppStore((s) => s.programmes);
+  const projects = useAppStore((s) => s.projects);
   const workPackages = useAppStore((s) => s.workPackages);
+
   const emptyForm: Partial<Action> = { task: "", project: "", workPackage: "", startDate: "", dueDate: "", priority: "Medium", status: "Not Started", notes: "" };
   const [form, setForm] = useState<Partial<Action>>(action ?? emptyForm);
+  const [selectedProgrammeId, setSelectedProgrammeId] = useState("");
+  const [selectedProjectId, setSelectedProjectId] = useState("");
 
+  // Derive initial programme/project IDs from the action's project/workPackage names
   useEffect(() => {
     if (open) {
       setForm(action ?? emptyForm);
       setShowDelegate(false);
       setDelegateTo("");
+
+      if (action) {
+        // Find the project by name
+        const proj = projects.find((p) => p.name === action.project);
+        if (proj) {
+          setSelectedProjectId(proj.id);
+          setSelectedProgrammeId(proj.programmeId || "");
+        } else {
+          setSelectedProjectId("");
+          setSelectedProgrammeId("");
+        }
+      } else {
+        setSelectedProgrammeId("");
+        setSelectedProjectId("");
+      }
     }
   }, [open, action]);
 
-  // Build WP options grouped by project
-  const wpOptions = useMemo(() => {
-    const grouped: Record<string, string[]> = {};
-    workPackages.forEach((wp) => {
-      if (!grouped[wp.project]) grouped[wp.project] = [];
-      grouped[wp.project].push(wp.workPackage);
-    });
-    return grouped;
-  }, [workPackages]);
+  // Filtered projects based on selected programme
+  const filteredProjects = useMemo(() => {
+    if (!selectedProgrammeId) return projects;
+    return projects.filter((p) => p.programmeId === selectedProgrammeId);
+  }, [projects, selectedProgrammeId]);
 
-  // Derive project from selected WP
-  const selectedProject = useMemo(() => {
-    if (!form.workPackage) return form.project ?? "";
-    const wp = workPackages.find((w) => w.workPackage === form.workPackage);
-    return wp?.project ?? form.project ?? "";
-  }, [form.workPackage, form.project, workPackages]);
+  // Filtered work packages based on selected project
+  const filteredWPs = useMemo(() => {
+    if (!selectedProjectId) return workPackages;
+    const proj = projects.find((p) => p.id === selectedProjectId);
+    if (!proj) return workPackages;
+    return workPackages.filter((wp) => wp.project === proj.name);
+  }, [workPackages, selectedProjectId, projects]);
+
+  const handleProgrammeChange = (val: string) => {
+    const id = val === "__none__" ? "" : val;
+    setSelectedProgrammeId(id);
+    // Reset project & WP if they don't belong to the new programme
+    if (id) {
+      const proj = projects.find((p) => p.id === selectedProjectId);
+      if (proj && proj.programmeId !== id) {
+        setSelectedProjectId("");
+        setForm((f) => ({ ...f, project: "", workPackage: "" }));
+      }
+    }
+  };
+
+  const handleProjectChange = (val: string) => {
+    if (val === "__none__") {
+      setSelectedProjectId("");
+      setForm((f) => ({ ...f, project: "", workPackage: "" }));
+    } else {
+      const proj = projects.find((p) => p.id === val);
+      setSelectedProjectId(val);
+      setForm((f) => ({ ...f, project: proj?.name ?? "", workPackage: "" }));
+      // Auto-set programme if not set
+      if (proj?.programmeId && !selectedProgrammeId) {
+        setSelectedProgrammeId(proj.programmeId);
+      }
+    }
+  };
+
+  const handleWPChange = (val: string) => {
+    if (val === "__none__") {
+      setForm((f) => ({ ...f, workPackage: "" }));
+    } else {
+      const wp = workPackages.find((w) => w.id === val);
+      if (wp) {
+        setForm((f) => ({ ...f, workPackage: wp.workPackage, project: wp.project }));
+        // Auto-set project selection
+        const proj = projects.find((p) => p.name === wp.project);
+        if (proj) {
+          setSelectedProjectId(proj.id);
+          if (proj.programmeId && !selectedProgrammeId) {
+            setSelectedProgrammeId(proj.programmeId);
+          }
+        }
+      }
+    }
+  };
 
   const handleOpen = (o: boolean) => {
     if (o && action) setForm(action);
-    else if (o) setForm({ task: "", project: "", workPackage: "", startDate: "", dueDate: "", priority: "Medium", status: "Not Started", notes: "" });
+    else if (o) setForm(emptyForm);
     setShowDelegate(false);
     setDelegateTo("");
     onOpenChange(o);
@@ -68,7 +133,7 @@ export function ActionDialog({ open, onOpenChange, action, onSave, onDelete, onD
     onSave({
       id: action?.id ?? crypto.randomUUID(),
       task: form.task?.trim() ?? "",
-      project: selectedProject,
+      project: form.project?.trim() ?? "",
       workPackage: form.workPackage?.trim() ?? "",
       startDate: form.startDate ?? "",
       dueDate: form.dueDate ?? "",
@@ -79,14 +144,12 @@ export function ActionDialog({ open, onOpenChange, action, onSave, onDelete, onD
     onOpenChange(false);
   };
 
-  const handleWPChange = (val: string) => {
-    if (val === "__none__") {
-      setForm({ ...form, workPackage: "", project: "" });
-    } else {
-      const wp = workPackages.find((w) => w.workPackage === val);
-      setForm({ ...form, workPackage: val, project: wp?.project ?? form.project ?? "" });
-    }
-  };
+  // Find current WP id for the select value
+  const currentWPId = useMemo(() => {
+    if (!form.workPackage) return "__none__";
+    const wp = workPackages.find((w) => w.workPackage === form.workPackage);
+    return wp?.id ?? "__none__";
+  }, [form.workPackage, workPackages]);
 
   return (
     <Dialog open={open} onOpenChange={handleOpen}>
@@ -99,26 +162,49 @@ export function ActionDialog({ open, onOpenChange, action, onSave, onDelete, onD
             <Label htmlFor="task">Task *</Label>
             <Textarea id="task" value={form.task ?? ""} onChange={(e) => setForm({ ...form, task: e.target.value })} className="mt-1" rows={2} maxLength={500} />
           </div>
+
+          {/* Hierarchy selectors */}
+          {programmes.length > 0 && (
+            <div>
+              <Label>Programme</Label>
+              <Select value={selectedProgrammeId || "__none__"} onValueChange={handleProgrammeChange}>
+                <SelectTrigger className="mt-1"><SelectValue placeholder="All programmes" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">None</SelectItem>
+                  {programmes.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
           <div>
-            <Label>Work Package</Label>
-            <Select value={form.workPackage || "__none__"} onValueChange={handleWPChange}>
+            <Label>Project</Label>
+            <Select value={selectedProjectId || "__none__"} onValueChange={handleProjectChange}>
               <SelectTrigger className="mt-1"><SelectValue placeholder="None" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="__none__">None</SelectItem>
-                {Object.entries(wpOptions).map(([project, wps]) => (
-                  <div key={project}>
-                    <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{project}</div>
-                    {wps.map((wp) => (
-                      <SelectItem key={wp} value={wp}>{wp}</SelectItem>
-                    ))}
-                  </div>
+                {filteredProjects.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            {selectedProject && (
-              <p className="text-xs text-muted-foreground mt-1">Project: {selectedProject}</p>
-            )}
           </div>
+
+          <div>
+            <Label>Work Package</Label>
+            <Select value={currentWPId} onValueChange={handleWPChange}>
+              <SelectTrigger className="mt-1"><SelectValue placeholder="None" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">None</SelectItem>
+                {filteredWPs.map((wp) => (
+                  <SelectItem key={wp.id} value={wp.id}>{wp.workPackage}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label htmlFor="start">Start Date</Label>

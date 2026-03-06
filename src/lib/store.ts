@@ -92,19 +92,79 @@ async function getUserId(): Promise<string> {
   return user.id;
 }
 
+// Persist today's focus data to localStorage (keyed by date so it resets daily)
+const TODAY_KEY = () => `p3m-today-${new Date().toISOString().slice(0, 10)}`;
+
+function saveTodayState(todayIds: Set<string>, scheduleMap: Record<string, number>, durationMap: Record<string, number>) {
+  try {
+    localStorage.setItem(TODAY_KEY(), JSON.stringify({
+      ids: Array.from(todayIds),
+      schedule: scheduleMap,
+      durations: durationMap,
+    }));
+  } catch {}
+}
+
+function loadTodayState(): { todayIds: Set<string>; scheduleMap: Record<string, number>; durationMap: Record<string, number> } {
+  try {
+    const raw = localStorage.getItem(TODAY_KEY());
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return {
+        todayIds: new Set<string>(parsed.ids || []),
+        scheduleMap: parsed.schedule || {},
+        durationMap: parsed.durations || {},
+      };
+    }
+  } catch {}
+  return { todayIds: new Set(), scheduleMap: {}, durationMap: {} };
+}
+
+const initialToday = loadTodayState();
+
 export const useAppStore = create<AppState>()((set, get) => ({
   dataLoaded: false,
   
-  todayIds: new Set<string>(),
-  addToday: (id) => set((s) => { const n = new Set(s.todayIds); n.add(id); return { todayIds: n }; }),
-  removeToday: (id) => set((s) => { const n = new Set(s.todayIds); n.delete(id); return { todayIds: n }; }),
-  clearToday: () => set({ todayIds: new Set(), scheduleMap: {}, durationMap: {} }),
-  scheduleMap: {},
-  durationMap: {},
-  scheduleTask: (id, slot) => set((s) => ({ scheduleMap: { ...s.scheduleMap, [id]: slot } })),
-  setTaskDuration: (id, duration) => set((s) => ({ durationMap: { ...s.durationMap, [id]: duration } })),
-  unscheduleTask: (id) => set((s) => { const m = { ...s.scheduleMap }; delete m[id]; const d = { ...s.durationMap }; delete d[id]; return { scheduleMap: m, durationMap: d }; }),
-  clearSchedule: () => set({ scheduleMap: {}, durationMap: {} }),
+  todayIds: initialToday.todayIds,
+  addToday: (id) => set((s) => {
+    const n = new Set(s.todayIds); n.add(id);
+    saveTodayState(n, s.scheduleMap, s.durationMap);
+    return { todayIds: n };
+  }),
+  removeToday: (id) => set((s) => {
+    const n = new Set(s.todayIds); n.delete(id);
+    const sm = { ...s.scheduleMap }; delete sm[id];
+    const dm = { ...s.durationMap }; delete dm[id];
+    saveTodayState(n, sm, dm);
+    return { todayIds: n, scheduleMap: sm, durationMap: dm };
+  }),
+  clearToday: () => {
+    saveTodayState(new Set(), {}, {});
+    return set({ todayIds: new Set(), scheduleMap: {}, durationMap: {} });
+  },
+  scheduleMap: initialToday.scheduleMap,
+  durationMap: initialToday.durationMap,
+  scheduleTask: (id, slot) => set((s) => {
+    const sm = { ...s.scheduleMap, [id]: slot };
+    saveTodayState(s.todayIds, sm, s.durationMap);
+    return { scheduleMap: sm };
+  }),
+  setTaskDuration: (id, duration) => set((s) => {
+    const dm = { ...s.durationMap, [id]: duration };
+    saveTodayState(s.todayIds, s.scheduleMap, dm);
+    return { durationMap: dm };
+  }),
+  unscheduleTask: (id) => set((s) => {
+    const m = { ...s.scheduleMap }; delete m[id];
+    const d = { ...s.durationMap }; delete d[id];
+    saveTodayState(s.todayIds, m, d);
+    return { scheduleMap: m, durationMap: d };
+  }),
+  clearSchedule: () => {
+    const s = get();
+    saveTodayState(s.todayIds, {}, {});
+    return set({ scheduleMap: {}, durationMap: {} });
+  },
 
   globalFilter: defaultGlobalFilter,
   setGlobalFilter: (filter) => set({ globalFilter: filter }),

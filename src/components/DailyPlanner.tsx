@@ -241,53 +241,98 @@ function TaskCard({
   const a = isAction ? (item.data as Action) : null;
   const w = !isAction ? (item.data as WaitingItem) : null;
 
+  // For scheduled blocks: determine if we're in a tiny slot
+  const isSmall = !compact && height !== undefined && height < SLOT_HEIGHT * 2;
+  const isTiny = !compact && height !== undefined && height <= SLOT_HEIGHT;
+
   return (
     <div
       draggable
       onDragStart={(e) => onDragStart(e, item.data.id)}
       className={cn(
-        "rounded-md border bg-card cursor-grab active:cursor-grabbing shadow-sm hover:shadow-md transition-shadow group relative overflow-hidden",
+        "rounded-md border bg-card cursor-grab active:cursor-grabbing shadow-sm hover:shadow-md transition-shadow group relative",
         isAction ? "border-primary/20 bg-primary/5" : "border-rag-amber/20 bg-rag-amber/5",
-        compact ? "px-2.5 py-1.5" : "px-2.5 pt-1.5 pb-0"
+        compact ? "px-2.5 py-1.5" : isTiny ? "px-1.5 py-0.5" : isSmall ? "px-2 py-1" : "px-2.5 pt-1.5 pb-0",
+        !compact && height ? "overflow-hidden" : ""
       )}
       style={!compact && height ? { height } : undefined}
     >
-      <div className="flex items-start gap-1.5">
-        <GripVertical className="h-3.5 w-3.5 text-muted-foreground/40 mt-0.5 shrink-0" />
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5">
-            {isAction ? (
-              <CheckCircle2 className="h-3 w-3 text-primary shrink-0" />
-            ) : (
-              <Clock className="h-3 w-3 text-rag-amber shrink-0" />
-            )}
-            <span className="text-xs font-medium truncate">
-              {isAction ? a!.task : w!.description}
-            </span>
-          </div>
-          {!compact && (
-            <div className="flex items-center gap-2 mt-0.5">
-              {time && (
-                <span className="text-[10px] font-mono text-muted-foreground">{time}</span>
-              )}
-              {duration && (
-                <span className="text-[10px] text-muted-foreground">({durationLabel(duration)})</span>
-              )}
-              {a?.project && (
-                <span className="text-[10px] text-muted-foreground truncate">{a.project}</span>
-              )}
-              {a?.priority && (
-                <Badge variant="outline" className={cn(
-                  "text-[10px] px-1 py-0 h-4",
-                  a.priority === "High" ? "text-rag-red border-rag-red/30" : ""
-                )}>
-                  {a.priority}
-                </Badge>
-              )}
-            </div>
+      {isTiny ? (
+        /* Tiny: single-line with all info squeezed horizontally */
+        <div className="flex items-center gap-1 h-full min-w-0">
+          <GripVertical className="h-3 w-3 text-muted-foreground/40 shrink-0" />
+          {isAction ? (
+            <CheckCircle2 className="h-2.5 w-2.5 text-primary shrink-0" />
+          ) : (
+            <Clock className="h-2.5 w-2.5 text-rag-amber shrink-0" />
+          )}
+          <span className="text-[10px] font-medium truncate flex-1">
+            {isAction ? a!.task : w!.description}
+          </span>
+          {duration && (
+            <span className="text-[9px] text-muted-foreground shrink-0">{durationLabel(duration)}</span>
           )}
         </div>
-      </div>
+      ) : isSmall ? (
+        /* Small: two compact lines */
+        <div className="flex items-start gap-1 min-w-0">
+          <GripVertical className="h-3 w-3 text-muted-foreground/40 mt-0.5 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1">
+              {isAction ? (
+                <CheckCircle2 className="h-2.5 w-2.5 text-primary shrink-0" />
+              ) : (
+                <Clock className="h-2.5 w-2.5 text-rag-amber shrink-0" />
+              )}
+              <span className="text-[11px] font-medium truncate">
+                {isAction ? a!.task : w!.description}
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              {time && <span className="text-[9px] font-mono text-muted-foreground">{time}</span>}
+              {duration && <span className="text-[9px] text-muted-foreground">({durationLabel(duration)})</span>}
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* Normal: full layout */
+        <div className="flex items-start gap-1.5">
+          <GripVertical className="h-3.5 w-3.5 text-muted-foreground/40 mt-0.5 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5">
+              {isAction ? (
+                <CheckCircle2 className="h-3 w-3 text-primary shrink-0" />
+              ) : (
+                <Clock className="h-3 w-3 text-rag-amber shrink-0" />
+              )}
+              <span className="text-xs font-medium truncate">
+                {isAction ? a!.task : w!.description}
+              </span>
+            </div>
+            {!compact && (
+              <div className="flex items-center gap-2 mt-0.5">
+                {time && (
+                  <span className="text-[10px] font-mono text-muted-foreground">{time}</span>
+                )}
+                {duration && (
+                  <span className="text-[10px] text-muted-foreground">({durationLabel(duration)})</span>
+                )}
+                {a?.project && (
+                  <span className="text-[10px] text-muted-foreground truncate">{a.project}</span>
+                )}
+                {a?.priority && (
+                  <Badge variant="outline" className={cn(
+                    "text-[10px] px-1 py-0 h-4",
+                    a.priority === "High" ? "text-rag-red border-rag-red/30" : ""
+                  )}>
+                    {a.priority}
+                  </Badge>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Resize handle */}
       {onResizeStart && (

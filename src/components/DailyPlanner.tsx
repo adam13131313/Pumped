@@ -10,12 +10,12 @@ type TodayItem =
   | { kind: "action"; data: Action }
   | { kind: "waiting"; data: WaitingItem };
 
-// 7:00 AM to 7:00 PM, 30-min slots = 24 slots
 const START_HOUR = 7;
 const END_HOUR = 24;
-const SLOT_MINUTES = 15;
+const SLOT_MINUTES = 30;
 const TOTAL_SLOTS = ((END_HOUR - START_HOUR) * 60) / SLOT_MINUTES;
-const SLOT_HEIGHT = 56; // px per slot
+const SLOT_HEIGHT = 40; // px per slot
+const DEFAULT_DURATION = 2; // 2 slots = 1 hour
 
 function slotToTime(slot: number): string {
   const totalMinutes = START_HOUR * 60 + slot * SLOT_MINUTES;
@@ -36,33 +36,44 @@ function timeLabel(slot: number): string {
   return `${h12} ${ampm}`;
 }
 
+function durationLabel(slots: number): string {
+  const mins = slots * SLOT_MINUTES;
+  if (mins < 60) return `${mins}m`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return m ? `${h}h ${m}m` : `${h}h`;
+}
+
 export default function DailyPlanner() {
   const { actions, waitingItems } = useFilteredData();
   const todayIds = useAppStore((s) => s.todayIds);
   const scheduleMap = useAppStore((s) => s.scheduleMap);
+  const durationMap = useAppStore((s) => s.durationMap);
   const scheduleTask = useAppStore((s) => s.scheduleTask);
+  const setTaskDuration = useAppStore((s) => s.setTaskDuration);
   const unscheduleTask = useAppStore((s) => s.unscheduleTask);
 
   const [dragId, setDragId] = useState<string | null>(null);
+  const [resizingId, setResizingId] = useState<string | null>(null);
+  const resizeStartY = useRef(0);
+  const resizeStartDuration = useRef(0);
   const gridRef = useRef<HTMLDivElement>(null);
 
-  // All gathered items
   const gatheredItems: TodayItem[] = useMemo(() => [
     ...actions.filter((a) => todayIds.has(a.id)).map((a) => ({ kind: "action" as const, data: a })),
     ...waitingItems.filter((w) => todayIds.has(w.id)).map((w) => ({ kind: "waiting" as const, data: w })),
   ], [actions, waitingItems, todayIds]);
 
-  // Scheduled vs unscheduled
   const scheduledItems = useMemo(() => {
-    const items: (TodayItem & { slot: number })[] = [];
+    const items: (TodayItem & { slot: number; duration: number })[] = [];
     gatheredItems.forEach((item) => {
       const slot = scheduleMap[item.data.id];
       if (slot !== undefined) {
-        items.push({ ...item, slot });
+        items.push({ ...item, slot, duration: durationMap[item.data.id] ?? DEFAULT_DURATION });
       }
     });
     return items.sort((a, b) => a.slot - b.slot);
-  }, [gatheredItems, scheduleMap]);
+  }, [gatheredItems, scheduleMap, durationMap]);
 
   const unscheduledItems = useMemo(
     () => gatheredItems.filter((item) => scheduleMap[item.data.id] === undefined),
@@ -83,20 +94,42 @@ export default function DailyPlanner() {
   const handleDropOnSlot = useCallback((e: React.DragEvent, slot: number) => {
     e.preventDefault();
     const id = e.dataTransfer.getData("text/plain") || dragId;
-    if (id) {
-      scheduleTask(id, slot);
-    }
+    if (id) scheduleTask(id, slot);
     setDragId(null);
   }, [dragId, scheduleTask]);
 
   const handleDropOnPool = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     const id = e.dataTransfer.getData("text/plain") || dragId;
-    if (id) {
-      unscheduleTask(id);
-    }
+    if (id) unscheduleTask(id);
     setDragId(null);
   }, [dragId, unscheduleTask]);
+
+  // Resize handlers
+  const handleResizeStart = useCallback((e: React.MouseEvent, id: string, currentDuration: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setResizingId(id);
+    resizeStartY.current = e.clientY;
+    resizeStartDuration.current = currentDuration;
+
+    const onMouseMove = (ev: MouseEvent) => {
+      const deltaY = ev.clientY - resizeStartY.current;
+      const deltaSlots = Math.round(deltaY / SLOT_HEIGHT);
+      const newDuration = Math.max(1, resizeStartDuration.current + deltaSlots);
+      const maxDuration = TOTAL_SLOTS - (scheduleMap[id] ?? 0);
+      setTaskDuration(id, Math.min(newDuration, maxDuration));
+    };
+
+    const onMouseUp = () => {
+      setResizingId(null);
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+  }, [scheduleMap, setTaskDuration]);
 
   if (gatheredItems.length === 0) return null;
 
@@ -158,20 +191,29 @@ export default function DailyPlanner() {
           })}
 
           {/* Scheduled task cards overlaid */}
-          {scheduledItems.map((item) => (
-            <div
-              key={item.data.id}
-              className="absolute left-16 right-2"
-              style={{ top: item.slot * SLOT_HEIGHT + 2 }}
-            >
-              <TaskCard
-                item={item}
-                onDragStart={handleDragStart}
-                timeLabel={slotToTime(item.slot)}
-                onRemove={() => unscheduleTask(item.data.id)}
-              />
-            </div>
-          ))}
+          {scheduledItems.map((item) => {
+            const height = item.duration * SLOT_HEIGHT - 4;
+            return (
+              <div
+                key={item.data.id}
+                className="absolute left-16 right-2"
+                style={{
+                  top: item.slot * SLOT_HEIGHT + 2,
+                  height,
+                  zIndex: resizingId === item.data.id ? 20 : 10,
+                }}
+              >
+                <TaskCard
+                  item={item}
+                  onDragStart={handleDragStart}
+                  timeLabel={`${slotToTime(item.slot)} – ${slotToTime(item.slot + item.duration)}`}
+                  duration={item.duration}
+                  height={height}
+                  onResizeStart={(e) => handleResizeStart(e, item.data.id, item.duration)}
+                />
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
@@ -183,13 +225,17 @@ function TaskCard({
   onDragStart,
   compact,
   timeLabel: time,
-  onRemove,
+  duration,
+  height,
+  onResizeStart,
 }: {
   item: TodayItem;
   onDragStart: (e: React.DragEvent, id: string) => void;
   compact?: boolean;
   timeLabel?: string;
-  onRemove?: () => void;
+  duration?: number;
+  height?: number;
+  onResizeStart?: (e: React.MouseEvent) => void;
 }) {
   const isAction = item.kind === "action";
   const a = isAction ? (item.data as Action) : null;
@@ -200,9 +246,11 @@ function TaskCard({
       draggable
       onDragStart={(e) => onDragStart(e, item.data.id)}
       className={cn(
-        "rounded-md border bg-card px-2.5 py-1.5 cursor-grab active:cursor-grabbing shadow-sm hover:shadow-md transition-shadow group",
-        isAction ? "border-primary/20" : "border-rag-amber/20"
+        "rounded-md border bg-card cursor-grab active:cursor-grabbing shadow-sm hover:shadow-md transition-shadow group relative overflow-hidden",
+        isAction ? "border-primary/20 bg-primary/5" : "border-rag-amber/20 bg-rag-amber/5",
+        compact ? "px-2.5 py-1.5" : "px-2.5 pt-1.5 pb-0"
       )}
+      style={!compact && height ? { height } : undefined}
     >
       <div className="flex items-start gap-1.5">
         <GripVertical className="h-3.5 w-3.5 text-muted-foreground/40 mt-0.5 shrink-0" />
@@ -222,6 +270,9 @@ function TaskCard({
               {time && (
                 <span className="text-[10px] font-mono text-muted-foreground">{time}</span>
               )}
+              {duration && (
+                <span className="text-[10px] text-muted-foreground">({durationLabel(duration)})</span>
+              )}
               {a?.project && (
                 <span className="text-[10px] text-muted-foreground truncate">{a.project}</span>
               )}
@@ -237,6 +288,16 @@ function TaskCard({
           )}
         </div>
       </div>
+
+      {/* Resize handle */}
+      {onResizeStart && (
+        <div
+          className="absolute bottom-0 left-0 right-0 h-2 cursor-s-resize flex items-center justify-center hover:bg-muted/60 transition-colors"
+          onMouseDown={onResizeStart}
+        >
+          <div className="w-8 h-0.5 rounded-full bg-muted-foreground/30" />
+        </div>
+      )}
     </div>
   );
 }

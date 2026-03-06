@@ -10,7 +10,7 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { text, sourceType } = await req.json();
+    const { text, sourceType, existingProjects } = await req.json();
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
@@ -22,6 +22,14 @@ serve(async (req) => {
       });
     }
 
+    const projectList = Array.isArray(existingProjects) && existingProjects.length > 0
+      ? existingProjects.join(", ")
+      : null;
+
+    const projectRule = projectList
+      ? `- The user already has these projects: [${projectList}]. If a task clearly belongs to one of these projects, set "project" to that exact project name. If it does not clearly match any existing project, set "project" to an empty string. NEVER invent or fabricate project names.`
+      : `- Set "project" to an empty string for every task. Do NOT invent project names.`;
+
     const systemPrompt = `You are a task extraction assistant. Analyze the provided text (which may be meeting notes, voice memo transcripts, emails, spreadsheet data, or free-form notes) and extract actionable tasks.
 
 Return a JSON object with this structure:
@@ -32,7 +40,7 @@ Return a JSON object with this structure:
       "task": "string - clear, specific, actionable task description",
       "priority": "High" | "Medium" | "Low",
       "dueDate": "string - YYYY-MM-DD if mentioned or inferrable, otherwise empty string",
-      "project": "string - suggested project name if identifiable, otherwise empty string",
+      "project": "string - existing project name if clearly matching, otherwise empty string",
       "notes": "string - any relevant context from the source, or empty string"
     }
   ]
@@ -44,7 +52,7 @@ Rules:
 - If people are mentioned as responsible, note that in the task or notes
 - If deadlines are mentioned (even relative like "by Friday"), convert to dates where possible
 - Prioritize based on urgency cues in the text (ASAP/urgent = High, routine = Medium, nice-to-have = Low)
-- Group related tasks under the same project if a project name is apparent
+${projectRule}
 - Return ONLY the JSON, no markdown fences
 - Source type: ${sourceType || "unknown"}`;
 

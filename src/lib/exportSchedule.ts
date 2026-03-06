@@ -156,7 +156,7 @@ export function exportSchedulePDF(
       doc.setFont("helvetica", "normal");
       doc.setTextColor(0, 0, 0);
       const label = `${typeIcon} ${entry.label}`;
-      const lines = doc.splitTextToSize(label, pageWidth - margin * 2);
+      const lines = doc.splitTextToSize(label, contentWidth);
       doc.text(lines, margin + 2, y);
       y += lines.length * 4.5;
 

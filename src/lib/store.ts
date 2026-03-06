@@ -34,7 +34,9 @@ interface AppState {
   removeToday: (id: string) => void;
   clearToday: () => void;
   scheduleMap: Record<string, number>; // taskId -> slot index
+  durationMap: Record<string, number>; // taskId -> duration in slots
   scheduleTask: (id: string, slot: number) => void;
+  setTaskDuration: (id: string, duration: number) => void;
   unscheduleTask: (id: string) => void;
   clearSchedule: () => void;
   globalFilter: GlobalFilter;
@@ -96,11 +98,13 @@ export const useAppStore = create<AppState>()((set, get) => ({
   todayIds: new Set<string>(),
   addToday: (id) => set((s) => { const n = new Set(s.todayIds); n.add(id); return { todayIds: n }; }),
   removeToday: (id) => set((s) => { const n = new Set(s.todayIds); n.delete(id); return { todayIds: n }; }),
-  clearToday: () => set({ todayIds: new Set(), scheduleMap: {} }),
+  clearToday: () => set({ todayIds: new Set(), scheduleMap: {}, durationMap: {} }),
   scheduleMap: {},
+  durationMap: {},
   scheduleTask: (id, slot) => set((s) => ({ scheduleMap: { ...s.scheduleMap, [id]: slot } })),
-  unscheduleTask: (id) => set((s) => { const m = { ...s.scheduleMap }; delete m[id]; return { scheduleMap: m }; }),
-  clearSchedule: () => set({ scheduleMap: {} }),
+  setTaskDuration: (id, duration) => set((s) => ({ durationMap: { ...s.durationMap, [id]: duration } })),
+  unscheduleTask: (id) => set((s) => { const m = { ...s.scheduleMap }; delete m[id]; const d = { ...s.durationMap }; delete d[id]; return { scheduleMap: m, durationMap: d }; }),
+  clearSchedule: () => set({ scheduleMap: {}, durationMap: {} }),
 
   globalFilter: defaultGlobalFilter,
   setGlobalFilter: (filter) => set({ globalFilter: filter }),

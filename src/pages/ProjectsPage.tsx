@@ -219,7 +219,7 @@ function ProjectCard({ proj, workPackages, onEditProject, onDeleteProject, onEdi
 export default function ProjectsPage() {
   const navigate = useNavigate();
   const store = useAppStore();
-  const { programmes, projects, workPackages } = store;
+  const { programmes, projects, workPackages, actions } = store;
 
   const [progDialogOpen, setProgDialogOpen] = useState(false);
   const [editProgramme, setEditProgramme] = useState<Programme | null>(null);

@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useAppStore } from "@/lib/store";
 import { useFilteredData } from "@/hooks/useFilteredData";
 import { Action, WaitingItem } from "@/lib/types";
@@ -8,9 +8,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Target, Plus, X, CheckCircle2, Clock, ListChecks, CalendarCheck } from "lucide-react";
+import { Target, Plus, X, CheckCircle2, Clock, ListChecks, CalendarCheck, FileDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import DailyPlanner from "@/components/DailyPlanner";
+import { exportSchedulePDF } from "@/lib/exportSchedule";
 
 type TodayItem =
   | { kind: "action"; data: Action }
@@ -24,6 +25,8 @@ export default function Dashboard() {
   const addToday = useAppStore((s) => s.addToday);
   const removeToday = useAppStore((s) => s.removeToday);
   const clearToday = useAppStore((s) => s.clearToday);
+  const scheduleMap = useAppStore((s) => s.scheduleMap);
+  const durationMap = useAppStore((s) => s.durationMap);
 
   const [pickerOpen, setPickerOpen] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("gathered");
@@ -71,6 +74,15 @@ export default function Dashboard() {
           </p>
         </div>
         <div className="flex gap-2">
+          {viewMode === "gathered" && gatheredItems.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => exportSchedulePDF(actions, waitingItems, todayIds, scheduleMap, durationMap)}
+            >
+              <FileDown className="h-4 w-4 mr-1" /> PDF
+            </Button>
+          )}
           {viewMode === "gathered" && todayItems.length > 0 && (
             <Button variant="outline" size="sm" onClick={clearToday}>
               Clear All

@@ -34,7 +34,9 @@ interface AppState {
   removeToday: (id: string) => void;
   clearToday: () => void;
   scheduleMap: Record<string, number>; // taskId -> slot index
+  durationMap: Record<string, number>; // taskId -> duration in slots
   scheduleTask: (id: string, slot: number) => void;
+  setTaskDuration: (id: string, duration: number) => void;
   unscheduleTask: (id: string) => void;
   clearSchedule: () => void;
   globalFilter: GlobalFilter;

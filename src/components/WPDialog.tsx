@@ -97,8 +97,9 @@ export function WPDialog({ open, onOpenChange, wp, onSave, onDelete }: WPDialogP
             <Label>Attachments</Label>
             <div className="mt-1">
               <TaskAttachments itemId={isEdit ? wp?.id : undefined} itemType="work_package" isNew={!isEdit} />
-            </div>
           </div>
+          <TaskComments itemId={isEdit ? wp?.id : undefined} itemType="work_package" />
+        </div>
         </div>
         <DialogFooter className="flex justify-between">
           {isEdit && onDelete && (

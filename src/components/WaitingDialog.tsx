@@ -254,8 +254,9 @@ export function WaitingDialog({ open, onOpenChange, item, onSave, onDelete, onTa
             <Label>Attachments</Label>
             <div className="mt-1">
               <TaskAttachments itemId={isEdit ? item?.id : undefined} itemType="waiting_item" isNew={!isEdit} />
-            </div>
           </div>
+          <TaskComments itemId={isEdit ? item?.id : undefined} itemType="waiting_item" />
+        </div>
         </div>
         <DialogFooter className="flex justify-between">
           <div className="flex gap-2">

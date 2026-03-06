@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useAppStore } from "@/lib/store";
 import { useFilteredData } from "@/hooks/useFilteredData";
 import { Action, WaitingItem } from "@/lib/types";
@@ -8,9 +8,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Target, Plus, X, CheckCircle2, Clock, ListChecks, CalendarCheck } from "lucide-react";
+import { Target, Plus, X, CheckCircle2, Clock, ListChecks, CalendarCheck, FileDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import DailyPlanner from "@/components/DailyPlanner";
+import { exportSchedulePDF } from "@/lib/exportSchedule";
 
 type TodayItem =
   | { kind: "action"; data: Action }

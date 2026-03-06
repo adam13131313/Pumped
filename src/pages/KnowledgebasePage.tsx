@@ -31,7 +31,42 @@ const sections = [
     id: "planner",
     icon: Sparkles,
     title: "WBS Planner",
-    content: `The WBS (Work Breakdown Structure) Planner uses AI to generate a structured breakdown of work packages from a project description.\n\n**How to use it:**\n1. Enter your project name and a brief description.\n2. Click "Generate WBS" to produce a suggested breakdown.\n3. Review, edit, and import the work packages into your project.\n\nThis saves hours of manual planning and ensures nothing is missed.`,
+    content: `The WBS (Work Breakdown Structure) Planner uses AI to automatically generate a full project management hierarchy — Programmes, Projects, Work Packages, and Actions — from documents you upload or context you type.
+
+**What it generates:**
+The AI produces a multi-level structure:
+• **Programmes** — top-level groupings (e.g. "Digital Transformation Programme")
+• **Projects** — individual projects within each programme
+• **Work Packages** — deliverable chunks within each project, each with a suggested lead and due date
+• **Actions** — specific tasks within each work package, with priority (High / Medium / Low) and due dates
+
+**Supported inputs:**
+• **Text documents** — .txt, .md, .csv, .json, .xml, .doc, .docx, .rtf, .pdf
+• **Images** — .png, .jpg, .jpeg, .gif, .webp, .bmp (e.g. photos of whiteboards, screenshots of project plans)
+• **Free-text context** — type or paste project descriptions, goals, constraints, team info, or rough ideas directly into the text box
+• You can combine multiple files and text input in a single generation
+
+**How to use it:**
+1. Navigate to the WBS Planner page.
+2. Upload one or more documents by dragging & dropping or clicking "Choose Files". Optionally add free-text context.
+3. Click **"Generate WBS"** — the AI analyses your inputs and returns a suggested breakdown.
+4. **Review & edit** the result inline: rename programmes, projects, work packages, or actions; change due dates, priorities, and WP leads; add or remove any item at any level.
+5. **Refine with follow-up prompts** — use the "Refine this WBS" text box to give the AI further instructions (e.g. "split the first project into two", "add more detail to testing work packages", "add a data migration project"). The AI will adjust the existing structure accordingly.
+6. When satisfied, click **"Accept & Create"** to import everything into your live project data — programmes, projects, work packages, and actions are all created automatically.
+7. Use **"Start Over"** at any time to discard the suggestion and begin again.
+
+**Key capabilities:**
+• **Multimodal AI** — the planner can read both text and images, so you can photograph a handwritten plan or screenshot a spreadsheet and it will extract structure from it.
+• **Iterative refinement** — you're not locked into the first suggestion. Refine as many times as needed before accepting.
+• **Full inline editing** — every field in the generated structure is editable. Add new programmes, projects, work packages, or actions manually alongside the AI suggestions.
+• **Bulk creation** — accepting the WBS creates all entities in one go, saving significant manual data entry.
+• **Strict adherence** — the AI is prompted to use the names and structures you provide rather than inventing its own, reducing hallucination.
+
+**Tips for best results:**
+• Provide clear, specific project descriptions — the more detail you give, the better the breakdown.
+• Upload existing project documentation (scope documents, plans, requirement lists) for the most accurate results.
+• Use the refine prompt to iterate — treat it as a conversation with the AI about your project structure.
+• Review suggested due dates and WP leads carefully — these are estimates and should be adjusted to your reality.`,
   },
   {
     id: "sop",

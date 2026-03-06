@@ -72,6 +72,15 @@ export default function Dashboard() {
           </p>
         </div>
         <div className="flex gap-2">
+          {viewMode === "gathered" && gatheredItems.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => exportSchedulePDF(actions, waitingItems, todayIds, scheduleMap, durationMap)}
+            >
+              <FileDown className="h-4 w-4 mr-1" /> PDF
+            </Button>
+          )}
           {viewMode === "gathered" && todayItems.length > 0 && (
             <Button variant="outline" size="sm" onClick={clearToday}>
               Clear All

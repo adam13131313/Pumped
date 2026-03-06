@@ -25,6 +25,8 @@ export default function Dashboard() {
   const addToday = useAppStore((s) => s.addToday);
   const removeToday = useAppStore((s) => s.removeToday);
   const clearToday = useAppStore((s) => s.clearToday);
+  const scheduleMap = useAppStore((s) => s.scheduleMap);
+  const durationMap = useAppStore((s) => s.durationMap);
 
   const [pickerOpen, setPickerOpen] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("gathered");

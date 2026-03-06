@@ -268,6 +268,12 @@ export default function ProjectsPage() {
           <p className="text-muted-foreground text-sm mt-1">Configure your programme hierarchy</p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => {
+            exportWBStoCSV(programmes, projects, workPackages, actions);
+            toast.success("WBS exported as CSV");
+          }}>
+            <Download className="h-4 w-4 mr-2" /> Export CSV
+          </Button>
           <Button variant="outline" onClick={() => { setEditProgramme(null); setProgDialogOpen(true); }}>
             <Layers className="h-4 w-4 mr-2" /> New Programme
           </Button>

@@ -10,6 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Target, Plus, X, CheckCircle2, Clock, ListChecks, CalendarCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
+import DailyPlanner from "@/components/DailyPlanner";
 
 type TodayItem =
   | { kind: "action"; data: Action }
@@ -122,73 +123,70 @@ export default function Dashboard() {
       </div>
 
       {/* Today's items */}
-      {todayItems.length === 0 ? (
-        <Card>
-          <CardContent className="py-16 text-center text-muted-foreground">
-            {viewMode === "gathered" ? (
-              <>
-                <ListChecks className="h-12 w-12 mx-auto mb-4 opacity-30" />
-                <p className="text-base font-medium mb-1">No tasks gathered yet</p>
-                <p className="text-sm">Click "Gather Tasks" to pick what you'll focus on today.</p>
-              </>
-            ) : (
-              <>
-                <CalendarCheck className="h-12 w-12 mx-auto mb-4 opacity-30" />
-                <p className="text-base font-medium mb-1">Nothing due today</p>
-                <p className="text-sm">No actions or waiting items have today's date as their due date.</p>
-              </>
-            )}
-          </CardContent>
-        </Card>
+      {viewMode === "gathered" ? (
+        gatheredItems.length === 0 ? (
+          <Card>
+            <CardContent className="py-16 text-center text-muted-foreground">
+              <ListChecks className="h-12 w-12 mx-auto mb-4 opacity-30" />
+              <p className="text-base font-medium mb-1">No tasks gathered yet</p>
+              <p className="text-sm">Click "Gather Tasks" to pick what you'll focus on today.</p>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="h-[calc(100vh-14rem)]">
+            <DailyPlanner />
+          </div>
+        )
       ) : (
-        <div className="space-y-2">
-          {todayItems.map((item) => {
-            const id = item.data.id;
-            const isAction = item.kind === "action";
-            const a = isAction ? (item.data as Action) : null;
-            const w = !isAction ? (item.data as WaitingItem) : null;
+        dueTodayItems.length === 0 ? (
+          <Card>
+            <CardContent className="py-16 text-center text-muted-foreground">
+              <CalendarCheck className="h-12 w-12 mx-auto mb-4 opacity-30" />
+              <p className="text-base font-medium mb-1">Nothing due today</p>
+              <p className="text-sm">No actions or waiting items have today's date as their due date.</p>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-2">
+            {dueTodayItems.map((item) => {
+              const id = item.data.id;
+              const isAction = item.kind === "action";
+              const a = isAction ? (item.data as Action) : null;
+              const w = !isAction ? (item.data as WaitingItem) : null;
 
-            return (
-              <div
-                key={id}
-                className="flex items-start gap-3 rounded-lg border bg-card p-4 group hover:border-primary/30 transition-colors"
-              >
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Badge variant="outline" className={isAction ? "bg-primary/10 text-primary border-primary/20" : "bg-rag-amber/10 text-rag-amber border-rag-amber/20"}>
-                      {isAction ? <><CheckCircle2 className="h-3 w-3 mr-1" />My Action</> : <><Clock className="h-3 w-3 mr-1" />Waiting For</>}
-                    </Badge>
-                    {a?.priority && (
-                      <Badge variant="outline" className={
-                        a.priority === "High" ? "bg-rag-red/10 text-rag-red border-rag-red/20" :
-                        a.priority === "Medium" ? "bg-rag-amber/10 text-rag-amber border-rag-amber/20" :
-                        "bg-muted text-muted-foreground"
-                      }>{a.priority}</Badge>
-                    )}
-                    {a?.status && <Badge variant="secondary" className="text-xs">{a.status}</Badge>}
-                    {w?.status && <Badge variant="secondary" className="text-xs">{w.status}</Badge>}
-                  </div>
-                  <p className="font-medium text-sm">{isAction ? a!.task : w!.description}</p>
-                  <div className="flex gap-4 mt-1 text-xs text-muted-foreground">
-                    {isAction && a!.project && <span>{a!.project}</span>}
-                    {isAction && a!.dueDate && <span className="font-mono">Due: {a!.dueDate}</span>}
-                    {!isAction && w!.fromWhom && <span>From: {w!.fromWhom}</span>}
-                    {!isAction && w!.dueBy && <span className="font-mono">Due: {w!.dueBy}</span>}
+              return (
+                <div
+                  key={id}
+                  className="flex items-start gap-3 rounded-lg border bg-card p-4 group hover:border-primary/30 transition-colors"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Badge variant="outline" className={isAction ? "bg-primary/10 text-primary border-primary/20" : "bg-rag-amber/10 text-rag-amber border-rag-amber/20"}>
+                        {isAction ? <><CheckCircle2 className="h-3 w-3 mr-1" />My Action</> : <><Clock className="h-3 w-3 mr-1" />Waiting For</>}
+                      </Badge>
+                      {a?.priority && (
+                        <Badge variant="outline" className={
+                          a.priority === "High" ? "bg-rag-red/10 text-rag-red border-rag-red/20" :
+                          a.priority === "Medium" ? "bg-rag-amber/10 text-rag-amber border-rag-amber/20" :
+                          "bg-muted text-muted-foreground"
+                        }>{a.priority}</Badge>
+                      )}
+                      {a?.status && <Badge variant="secondary" className="text-xs">{a.status}</Badge>}
+                      {w?.status && <Badge variant="secondary" className="text-xs">{w.status}</Badge>}
+                    </div>
+                    <p className="font-medium text-sm">{isAction ? a!.task : w!.description}</p>
+                    <div className="flex gap-4 mt-1 text-xs text-muted-foreground">
+                      {isAction && a!.project && <span>{a!.project}</span>}
+                      {isAction && a!.dueDate && <span className="font-mono">Due: {a!.dueDate}</span>}
+                      {!isAction && w!.fromWhom && <span>From: {w!.fromWhom}</span>}
+                      {!isAction && w!.dueBy && <span className="font-mono">Due: {w!.dueBy}</span>}
+                    </div>
                   </div>
                 </div>
-                {viewMode === "gathered" && (
-                  <button
-                    onClick={() => removeToday(id)}
-                    className="h-7 w-7 flex items-center justify-center rounded-md bg-primary text-primary-foreground transition-colors hover:bg-primary/80"
-                    title="Remove from today"
-                  >
-                    <Target className="h-3.5 w-3.5" />
-                  </button>
-                )}
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )
       )}
 
       {/* Picker Dialog */}

@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { WorkPackage, RAGStatus } from "@/lib/types";
 import { LinkRenderer } from "@/components/LinkRenderer";
 import { TaskAttachments } from "@/components/TaskAttachments";
+import { TaskComments } from "@/components/TaskComments";
 
 interface WPDialogProps {
   open: boolean;

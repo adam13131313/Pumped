@@ -9,6 +9,7 @@ import { Action, Priority, TaskStatus } from "@/lib/types";
 import { useAppStore } from "@/lib/store";
 import { LinkRenderer } from "@/components/LinkRenderer";
 import { TaskAttachments } from "@/components/TaskAttachments";
+import { TaskComments } from "@/components/TaskComments";
 
 interface ActionDialogProps {
   open: boolean;

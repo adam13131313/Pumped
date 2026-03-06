@@ -33,6 +33,10 @@ interface AppState {
   addToday: (id: string) => void;
   removeToday: (id: string) => void;
   clearToday: () => void;
+  scheduleMap: Record<string, number>; // taskId -> slot index
+  scheduleTask: (id: string, slot: number) => void;
+  unscheduleTask: (id: string) => void;
+  clearSchedule: () => void;
   globalFilter: GlobalFilter;
   setGlobalFilter: (filter: GlobalFilter) => void;
   clearGlobalFilter: () => void;
@@ -92,7 +96,11 @@ export const useAppStore = create<AppState>()((set, get) => ({
   todayIds: new Set<string>(),
   addToday: (id) => set((s) => { const n = new Set(s.todayIds); n.add(id); return { todayIds: n }; }),
   removeToday: (id) => set((s) => { const n = new Set(s.todayIds); n.delete(id); return { todayIds: n }; }),
-  clearToday: () => set({ todayIds: new Set() }),
+  clearToday: () => set({ todayIds: new Set(), scheduleMap: {} }),
+  scheduleMap: {},
+  scheduleTask: (id, slot) => set((s) => ({ scheduleMap: { ...s.scheduleMap, [id]: slot } })),
+  unscheduleTask: (id) => set((s) => { const m = { ...s.scheduleMap }; delete m[id]; return { scheduleMap: m }; }),
+  clearSchedule: () => set({ scheduleMap: {} }),
 
   globalFilter: defaultGlobalFilter,
   setGlobalFilter: (filter) => set({ globalFilter: filter }),

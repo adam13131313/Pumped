@@ -9,6 +9,7 @@ import { Action, Priority, TaskStatus } from "@/lib/types";
 import { useAppStore } from "@/lib/store";
 import { LinkRenderer } from "@/components/LinkRenderer";
 import { TaskAttachments } from "@/components/TaskAttachments";
+import { TaskComments } from "@/components/TaskComments";
 
 interface ActionDialogProps {
   open: boolean;
@@ -263,8 +264,9 @@ export function ActionDialog({ open, onOpenChange, action, onSave, onDelete, onD
             <Label>Attachments</Label>
             <div className="mt-1">
               <TaskAttachments itemId={isEdit ? action?.id : undefined} itemType="action" isNew={!isEdit} />
-            </div>
           </div>
+          <TaskComments itemId={isEdit ? action?.id : undefined} itemType="action" />
+        </div>
         </div>
         <DialogFooter className="flex justify-between">
           <div className="flex gap-2">

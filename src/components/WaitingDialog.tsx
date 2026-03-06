@@ -9,6 +9,7 @@ import { WaitingItem, WaitingStatus } from "@/lib/types";
 import { useAppStore } from "@/lib/store";
 import { LinkRenderer } from "@/components/LinkRenderer";
 import { TaskAttachments } from "@/components/TaskAttachments";
+import { TaskComments } from "@/components/TaskComments";
 
 interface WaitingDialogProps {
   open: boolean;
@@ -253,8 +254,9 @@ export function WaitingDialog({ open, onOpenChange, item, onSave, onDelete, onTa
             <Label>Attachments</Label>
             <div className="mt-1">
               <TaskAttachments itemId={isEdit ? item?.id : undefined} itemType="waiting_item" isNew={!isEdit} />
-            </div>
           </div>
+          <TaskComments itemId={isEdit ? item?.id : undefined} itemType="waiting_item" />
+        </div>
         </div>
         <DialogFooter className="flex justify-between">
           <div className="flex gap-2">

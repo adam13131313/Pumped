@@ -37,6 +37,11 @@ export default function InboxPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [isDragging, setIsDragging] = useState(false);
 
+  // Bulk edit state
+  const [bulkEditMode, setBulkEditMode] = useState(false);
+  const [bulkPriority, setBulkPriority] = useState<string>("");
+  const [bulkProject, setBulkProject] = useState<string>("");
+
   // Voice recording state
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
@@ -47,6 +52,8 @@ export default function InboxPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragCounterRef = useRef(0);
 
+  const projectNames = projects.map((p) => p.name).filter(Boolean);
+
   const extractTasks = useCallback(async (text: string, source: string) => {
     if (!text.trim()) {
       toast.error("Please enter some text first");
@@ -56,7 +63,7 @@ export default function InboxPage() {
     setSourceLabel(source);
     try {
       const { data, error } = await supabase.functions.invoke("extract-tasks", {
-        body: { text, sourceType: source },
+        body: { text, sourceType: source, existingProjects: projectNames },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
@@ -68,7 +75,7 @@ export default function InboxPage() {
     } finally {
       setIsExtracting(false);
     }
-  }, []);
+  }, [projectNames]);
 
   const readFileContent = async (file: File) => {
     try {
@@ -143,7 +150,7 @@ export default function InboxPage() {
         const blob = new Blob(chunksRef.current, { type: recorder.mimeType });
         await transcribeAudio(blob);
       };
-      recorder.start(1000); // collect data every second for reliability
+      recorder.start(1000);
       mediaRecorderRef.current = recorder;
       setIsRecording(true);
     } catch (err) {
@@ -167,7 +174,6 @@ export default function InboxPage() {
     try {
       const formData = new FormData();
       formData.append("audio", blob, "recording.webm");
-      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
       const resp = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/transcribe-audio`,
         {
@@ -240,6 +246,22 @@ export default function InboxPage() {
     bulkDeleteInboxItems(ids);
     setSelected(new Set());
     toast.success(`${ids.length} items deleted`);
+  };
+
+  const applyBulkEdit = () => {
+    const ids = Array.from(selected);
+    ids.forEach((id) => {
+      const updates: Partial<InboxItem> = {};
+      if (bulkPriority) updates.priority = bulkPriority as Priority;
+      if (bulkProject) updates.project = bulkProject === "__none__" ? "" : bulkProject;
+      if (Object.keys(updates).length > 0) {
+        updateInboxItem(id, updates);
+      }
+    });
+    toast.success(`${ids.length} items updated`);
+    setBulkEditMode(false);
+    setBulkPriority("");
+    setBulkProject("");
   };
 
   const priorityColor = (p: Priority) =>
@@ -389,7 +411,15 @@ export default function InboxPage() {
                       </SelectContent>
                     </Select>
                     <Input type="date" value={t.dueDate} onChange={(e) => updateProposed(i, { dueDate: e.target.value })} className="w-40 h-8" />
-                    <Input placeholder="Project" value={t.project} onChange={(e) => updateProposed(i, { project: e.target.value })} className="w-40 h-8" />
+                    <Select value={t.project || "__none__"} onValueChange={(v) => updateProposed(i, { project: v === "__none__" ? "" : v })}>
+                      <SelectTrigger className="w-44 h-8"><SelectValue placeholder="No project" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">No project</SelectItem>
+                        {projectNames.map((name) => (
+                          <SelectItem key={name} value={name}>{name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   {t.notes && <p className="text-xs text-muted-foreground">{t.notes}</p>}
                 </div>
@@ -415,13 +445,49 @@ export default function InboxPage() {
               </div>
             </div>
             {selected.size > 0 && (
-              <div className="flex gap-2 items-center pt-2">
+              <div className="flex gap-2 items-center pt-2 flex-wrap">
                 <span className="text-sm text-muted-foreground">{selected.size} selected</span>
+                <Button size="sm" variant="outline" onClick={() => { setBulkEditMode(!bulkEditMode); setBulkPriority(""); setBulkProject(""); }}>
+                  <PenLine className="h-4 w-4 mr-1" />Bulk Edit
+                </Button>
                 <Button size="sm" onClick={promoteSelected}>
                   <ArrowRight className="h-4 w-4 mr-1" />Move to Actions
                 </Button>
                 <Button size="sm" variant="destructive" onClick={deleteSelected}>
                   <Trash2 className="h-4 w-4 mr-1" />Delete
+                </Button>
+              </div>
+            )}
+            {bulkEditMode && selected.size > 0 && (
+              <div className="flex gap-2 items-end pt-2 flex-wrap rounded-md border border-border p-3 bg-muted/30">
+                <div className="space-y-1">
+                  <span className="text-xs text-muted-foreground">Priority</span>
+                  <Select value={bulkPriority} onValueChange={setBulkPriority}>
+                    <SelectTrigger className="w-28 h-8"><SelectValue placeholder="No change" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="High">High</SelectItem>
+                      <SelectItem value="Medium">Medium</SelectItem>
+                      <SelectItem value="Low">Low</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <span className="text-xs text-muted-foreground">Project</span>
+                  <Select value={bulkProject} onValueChange={setBulkProject}>
+                    <SelectTrigger className="w-44 h-8"><SelectValue placeholder="No change" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">No project</SelectItem>
+                      {projectNames.map((name) => (
+                        <SelectItem key={name} value={name}>{name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button size="sm" onClick={applyBulkEdit} disabled={!bulkPriority && !bulkProject}>
+                  <Check className="h-4 w-4 mr-1" />Apply
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setBulkEditMode(false)}>
+                  <X className="h-4 w-4" />
                 </Button>
               </div>
             )}

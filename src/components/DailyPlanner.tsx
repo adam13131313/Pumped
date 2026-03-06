@@ -12,7 +12,7 @@ type TodayItem =
 
 // 7:00 AM to 7:00 PM, 30-min slots = 24 slots
 const START_HOUR = 7;
-const END_HOUR = 19;
+const END_HOUR = 24;
 const SLOT_MINUTES = 30;
 const TOTAL_SLOTS = ((END_HOUR - START_HOUR) * 60) / SLOT_MINUTES;
 const SLOT_HEIGHT = 56; // px per slot

@@ -10,7 +10,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { RAGBadge } from "@/components/RAGBadge";
 import { WPDialog } from "@/components/WPDialog";
-import { Plus, Pencil, Trash2, FolderOpen, ChevronDown, ChevronRight, Layers, ExternalLink } from "lucide-react";
+import { Plus, Pencil, Trash2, FolderOpen, ChevronDown, ChevronRight, Layers, ExternalLink, Download } from "lucide-react";
+import { exportWBStoCSV } from "@/lib/exportWBS";
+import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 
 /* ── Programme Dialog ── */

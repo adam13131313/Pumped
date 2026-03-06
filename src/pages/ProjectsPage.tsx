@@ -10,7 +10,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { RAGBadge } from "@/components/RAGBadge";
 import { WPDialog } from "@/components/WPDialog";
-import { Plus, Pencil, Trash2, FolderOpen, ChevronDown, ChevronRight, Layers, ExternalLink } from "lucide-react";
+import { Plus, Pencil, Trash2, FolderOpen, ChevronDown, ChevronRight, Layers, ExternalLink, Download } from "lucide-react";
+import { exportWBStoCSV } from "@/lib/exportWBS";
+import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 
 /* ── Programme Dialog ── */
@@ -217,7 +219,7 @@ function ProjectCard({ proj, workPackages, onEditProject, onDeleteProject, onEdi
 export default function ProjectsPage() {
   const navigate = useNavigate();
   const store = useAppStore();
-  const { programmes, projects, workPackages } = store;
+  const { programmes, projects, workPackages, actions } = store;
 
   const [progDialogOpen, setProgDialogOpen] = useState(false);
   const [editProgramme, setEditProgramme] = useState<Programme | null>(null);
@@ -266,6 +268,12 @@ export default function ProjectsPage() {
           <p className="text-muted-foreground text-sm mt-1">Configure your programme hierarchy</p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => {
+            exportWBStoCSV(programmes, projects, workPackages, actions);
+            toast.success("WBS exported as CSV");
+          }}>
+            <Download className="h-4 w-4 mr-2" /> Export CSV
+          </Button>
           <Button variant="outline" onClick={() => { setEditProgramme(null); setProgDialogOpen(true); }}>
             <Layers className="h-4 w-4 mr-2" /> New Programme
           </Button>

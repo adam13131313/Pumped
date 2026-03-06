@@ -73,6 +73,7 @@ export function exportSchedulePDF(
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
   const margin = 15;
+  const contentWidth = pageWidth - margin * 2 - 2; // account for indent
   let y = margin;
 
   // Title
@@ -118,7 +119,7 @@ export function exportSchedulePDF(
       doc.setFont("helvetica", "normal");
       doc.setTextColor(0, 0, 0);
       const label = `${typeIcon} ${entry.label}`;
-      const lines = doc.splitTextToSize(label, pageWidth - margin * 2);
+      const lines = doc.splitTextToSize(label, contentWidth);
       doc.text(lines, margin + 2, y);
       y += lines.length * 4.5;
 
@@ -155,7 +156,7 @@ export function exportSchedulePDF(
       doc.setFont("helvetica", "normal");
       doc.setTextColor(0, 0, 0);
       const label = `${typeIcon} ${entry.label}`;
-      const lines = doc.splitTextToSize(label, pageWidth - margin * 2);
+      const lines = doc.splitTextToSize(label, contentWidth);
       doc.text(lines, margin + 2, y);
       y += lines.length * 4.5;
 

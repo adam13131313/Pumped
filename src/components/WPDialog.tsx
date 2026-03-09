@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
-import { WorkPackage, RAGStatus } from "@/lib/types";
+import { WorkPackage, RAGStatus, Dependency, DependencyType } from "@/lib/types";
 import { LinkRenderer } from "@/components/LinkRenderer";
 import { TaskAttachments } from "@/components/TaskAttachments";
 import { TaskComments } from "@/components/TaskComments";

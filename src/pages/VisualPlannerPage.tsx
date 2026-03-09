@@ -21,22 +21,22 @@ const MAX_DAY_WIDTH = 24;
 const ZOOM_STEPS = [3, 5, 8, 12, 18, 24];
 
 const RAG_COLORS: Record<string, string> = {
-  Green: "hsl(var(--chart-2))",
-  Amber: "hsl(var(--chart-4))",
-  Red: "hsl(var(--chart-5))",
+  Green: "hsl(var(--rag-green))",
+  Amber: "hsl(var(--rag-amber))",
+  Red: "hsl(var(--rag-red))",
 };
 
 const RAG_BG: Record<string, string> = {
-  Green: "hsl(var(--chart-2) / 0.15)",
-  Amber: "hsl(var(--chart-4) / 0.15)",
-  Red: "hsl(var(--chart-5) / 0.15)",
+  Green: "hsl(var(--rag-green-bg))",
+  Amber: "hsl(var(--rag-amber-bg))",
+  Red: "hsl(var(--rag-red-bg))",
 };
 
 const DEP_COLORS = [
-  "hsl(var(--chart-1))",
-  "hsl(var(--chart-3))",
-  "hsl(var(--chart-5))",
   "hsl(var(--primary))",
+  "hsl(var(--rag-amber))",
+  "hsl(var(--rag-red))",
+  "hsl(var(--rag-green))",
 ];
 
 // ── Helpers ──
@@ -644,9 +644,9 @@ export default function VisualPlannerPage() {
                       d={path}
                       fill="none"
                       stroke={a.color}
-                      strokeWidth={2}
+                      strokeWidth={2.5}
                       markerEnd={`url(#arrow-${colorIdx >= 0 ? colorIdx : 0})`}
-                      opacity={0.7}
+                      opacity={1}
                     />
                   );
                 })}
@@ -681,7 +681,7 @@ export default function VisualPlannerPage() {
                   <div
                     key={row.wp.id}
                     className={cn(
-                      "absolute rounded-md shadow-sm border transition-shadow z-10 group",
+                      "absolute rounded-md shadow-md border border-black/20 transition-shadow z-10 group",
                       isDragging && "shadow-lg z-30 opacity-90",
                       linkingFrom && linkingFrom !== "__awaiting_source__" && "cursor-crosshair",
                       isLinkSource && "ring-2 ring-primary ring-offset-1"

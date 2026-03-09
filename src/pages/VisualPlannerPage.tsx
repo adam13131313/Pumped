@@ -1,4 +1,5 @@
-import { useState, useRef, useCallback, useMemo, useEffect } from "react";
+import { useState, useRef, useCallback, useMemo } from "react";
+import { useFilteredData } from "@/hooks/useFilteredData";
 import { useAppStore } from "@/lib/store";
 import { WorkPackage, Programme, Project } from "@/lib/types";
 import { Button } from "@/components/ui/button";

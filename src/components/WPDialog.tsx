@@ -119,18 +119,27 @@ export function WPDialog({ open, onOpenChange, wp, onSave, onDelete }: WPDialogP
               <Input id="wpname" value={form.workPackage ?? ""} onChange={(e) => setForm({ ...form, workPackage: e.target.value })} className="mt-1" maxLength={100} />
             </div>
           </div>
-          <div className="grid grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 gap-4">
             <div>
               <Label htmlFor="lead">WP Lead</Label>
               <Input id="lead" value={form.wpLead ?? ""} onChange={(e) => setForm({ ...form, wpLead: e.target.value })} className="mt-1" maxLength={100} />
             </div>
             <div>
+              <Label>RAG Status</Label>
+              <Select value={form.ragStatus} onValueChange={(v) => setForm({ ...form, ragStatus: v as RAGStatus })}>
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>{ragStatuses.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
               <Label>Start Date</Label>
               <Popover>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" className={cn("w-full mt-1 justify-start text-left font-normal", !form.startDate && "text-muted-foreground")}>
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {form.startDate ? format(parseISO(form.startDate), "PPP") : "Pick date"}
+                  <Button variant="outline" className={cn("w-full mt-1 justify-start text-left font-normal text-sm h-10", !form.startDate && "text-muted-foreground")}>
+                    <CalendarIcon className="mr-2 h-4 w-4 flex-shrink-0" />
+                    <span className="truncate">{form.startDate ? format(parseISO(form.startDate), "d MMM yyyy") : "Pick date"}</span>
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="start">
@@ -148,9 +157,9 @@ export function WPDialog({ open, onOpenChange, wp, onSave, onDelete }: WPDialogP
               <Label>Due Date</Label>
               <Popover>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" className={cn("w-full mt-1 justify-start text-left font-normal", !form.dueDate && "text-muted-foreground")}>
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {form.dueDate ? format(parseISO(form.dueDate), "PPP") : "Pick date"}
+                  <Button variant="outline" className={cn("w-full mt-1 justify-start text-left font-normal text-sm h-10", !form.dueDate && "text-muted-foreground")}>
+                    <CalendarIcon className="mr-2 h-4 w-4 flex-shrink-0" />
+                    <span className="truncate">{form.dueDate ? format(parseISO(form.dueDate), "d MMM yyyy") : "Pick date"}</span>
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="start">
@@ -163,13 +172,6 @@ export function WPDialog({ open, onOpenChange, wp, onSave, onDelete }: WPDialogP
                   />
                 </PopoverContent>
               </Popover>
-            </div>
-            <div>
-              <Label>RAG Status</Label>
-              <Select value={form.ragStatus} onValueChange={(v) => setForm({ ...form, ragStatus: v as RAGStatus })}>
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                <SelectContent>{ragStatuses.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
-              </Select>
             </div>
           </div>
           <div>

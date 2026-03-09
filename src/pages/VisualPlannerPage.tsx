@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useMemo } from "react";
 import { useFilteredData } from "@/hooks/useFilteredData";
 import { useAppStore } from "@/lib/store";
-import { WorkPackage, Programme, Project } from "@/lib/types";
+import { WorkPackage, Programme, Project, DependencyType } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
@@ -79,6 +79,7 @@ export default function VisualPlannerPage() {
   const dayWidth = ZOOM_STEPS[zoomIdx];
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [linkingFrom, setLinkingFrom] = useState<string | null>(null);
+  const [linkType, setLinkType] = useState<DependencyType>("FS");
   const [dragState, setDragState] = useState<DragState | null>(null);
   const [dragDelta, setDragDelta] = useState(0);
   const [wpDialogOpen, setWpDialogOpen] = useState(false);
@@ -268,22 +269,22 @@ export default function VisualPlannerPage() {
         setLinkingFrom(null);
         return;
       }
-      // Create FS dependency: linkingFrom → wpId
+      // Create dependency: linkingFrom → wpId
       const targetWP = workPackages.find((wp) => wp.id === wpId);
       if (!targetWP) return;
       const existing = targetWP.dependencies || [];
-      if (existing.some((d) => d.targetId === linkingFrom)) {
+      if (existing.some((d) => d.targetId === linkingFrom && d.type === linkType)) {
         toast.info("Dependency already exists");
         setLinkingFrom(null);
         return;
       }
       updateWorkPackage(wpId, {
-        dependencies: [...existing, { targetId: linkingFrom, type: "FS" as const }],
+        dependencies: [...existing, { targetId: linkingFrom, type: linkType }],
       });
-      toast.success("Dependency created");
+      toast.success(`${linkType} dependency created`);
       setLinkingFrom(null);
     },
-    [linkingFrom, workPackages, updateWorkPackage]
+    [linkingFrom, linkType, workPackages, updateWorkPackage]
   );
 
   // ── Dependency arrows ──
@@ -408,6 +409,7 @@ export default function VisualPlannerPage() {
       fromX: number; fromY: number;
       toX: number; toY: number;
       color: string;
+      label: string;
     }[] = [];
     let colorIdx = 0;
 
@@ -425,12 +427,22 @@ export default function VisualPlannerPage() {
         const targetPos = getBarPosition(row.wp);
         if (!sourcePos || !targetPos) continue;
 
+        const type = dep.type || "FS";
+        // FS: finish → start, SS: start → start, FF: finish → finish, SF: start → finish
+        const fromX = (type === "FS" || type === "FF")
+          ? sourcePos.left + sourcePos.width
+          : sourcePos.left;
+        const toX = (type === "FS" || type === "SS")
+          ? targetPos.left
+          : targetPos.left + targetPos.width;
+
         arrows.push({
-          fromX: sourcePos.left + sourcePos.width,
+          fromX,
           fromY: sourceVisIdx * ROW_HEIGHT + ROW_HEIGHT / 2,
-          toX: targetPos.left,
+          toX,
           toY: targetVisIdx * ROW_HEIGHT + ROW_HEIGHT / 2,
           color: DEP_COLORS[colorIdx % DEP_COLORS.length],
+          label: type,
         });
         colorIdx++;
       }
@@ -449,6 +461,17 @@ export default function VisualPlannerPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Select value={linkType} onValueChange={(v) => setLinkType(v as DependencyType)}>
+            <SelectTrigger className="w-[100px] h-8 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="FS">FS (Finish→Start)</SelectItem>
+              <SelectItem value="SS">SS (Start→Start)</SelectItem>
+              <SelectItem value="FF">FF (Finish→Finish)</SelectItem>
+              <SelectItem value="SF">SF (Start→Finish)</SelectItem>
+            </SelectContent>
+          </Select>
           <Button
             variant={linkingFrom ? "default" : "outline"}
             size="sm"
@@ -456,7 +479,7 @@ export default function VisualPlannerPage() {
               if (linkingFrom) {
                 setLinkingFrom(null);
               } else {
-                toast.info("Click a source WP bar, then click the target WP to link them");
+                toast.info(`Click a source WP, then the target to create a ${linkType} link`);
                 setLinkingFrom("__awaiting_source__");
               }
             }}
@@ -638,23 +661,37 @@ export default function VisualPlannerPage() {
                   if (a.fromY === a.toY) {
                     path = `M ${a.fromX} ${a.fromY} L ${a.toX} ${a.toY}`;
                   } else {
-                    // Always route: right stub → vertical to target row → horizontal into target
-                    // Use the midpoint between source end and target start if there's space,
-                    // otherwise use a fixed stub off the source end
-                    const midX = a.fromX + GAP;
-                    path = `M ${a.fromX} ${a.fromY} L ${midX} ${a.fromY} L ${midX} ${a.toY} L ${a.toX} ${a.toY}`;
+                    // Determine stub direction based on whether we exit from finish (right) or start (left)
+                    const exitsRight = a.fromX <= a.toX;
+                    const stubX = exitsRight ? a.fromX + GAP : a.fromX - GAP;
+                    path = `M ${a.fromX} ${a.fromY} L ${stubX} ${a.fromY} L ${stubX} ${a.toY} L ${a.toX} ${a.toY}`;
                   }
 
+                  const midY = (a.fromY + a.toY) / 2;
+                  const labelX = a.fromX + (a.fromX <= a.toX ? GAP + 4 : -GAP - 4);
+
                   return (
-                    <path
-                      key={i}
-                      d={path}
-                      fill="none"
-                      stroke={a.color}
-                      strokeWidth={2}
-                      strokeLinejoin="round"
-                      markerEnd={`url(#arrow-${colorIdx >= 0 ? colorIdx : 0})`}
-                    />
+                    <g key={i}>
+                      <path
+                        d={path}
+                        fill="none"
+                        stroke={a.color}
+                        strokeWidth={2}
+                        strokeLinejoin="round"
+                        markerEnd={`url(#arrow-${colorIdx >= 0 ? colorIdx : 0})`}
+                      />
+                      {a.label !== "FS" && (
+                        <text
+                          x={labelX}
+                          y={midY - 4}
+                          fontSize={9}
+                          fontWeight={600}
+                          fill={a.color}
+                        >
+                          {a.label}
+                        </text>
+                      )}
+                    </g>
                   );
                 })}
               </svg>

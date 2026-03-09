@@ -269,22 +269,22 @@ export default function VisualPlannerPage() {
         setLinkingFrom(null);
         return;
       }
-      // Create FS dependency: linkingFrom → wpId
+      // Create dependency: linkingFrom → wpId
       const targetWP = workPackages.find((wp) => wp.id === wpId);
       if (!targetWP) return;
       const existing = targetWP.dependencies || [];
-      if (existing.some((d) => d.targetId === linkingFrom)) {
+      if (existing.some((d) => d.targetId === linkingFrom && d.type === linkType)) {
         toast.info("Dependency already exists");
         setLinkingFrom(null);
         return;
       }
       updateWorkPackage(wpId, {
-        dependencies: [...existing, { targetId: linkingFrom, type: "FS" as const }],
+        dependencies: [...existing, { targetId: linkingFrom, type: linkType }],
       });
-      toast.success("Dependency created");
+      toast.success(`${linkType} dependency created`);
       setLinkingFrom(null);
     },
-    [linkingFrom, workPackages, updateWorkPackage]
+    [linkingFrom, linkType, workPackages, updateWorkPackage]
   );
 
   // ── Dependency arrows ──

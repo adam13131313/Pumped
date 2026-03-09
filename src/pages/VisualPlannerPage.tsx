@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Plus, Link2, ZoomIn, ZoomOut, ChevronRight, ChevronDown } from "lucide-react";
+import { Plus, Link2, ZoomIn, ZoomOut, ChevronRight, ChevronDown, Pencil } from "lucide-react";
 import { addDays, differenceInDays, startOfWeek, endOfWeek, startOfMonth, format, parseISO, isValid, addWeeks, addMonths, isBefore, isAfter } from "date-fns";
 import { cn } from "@/lib/utils";
 import { WPDialog } from "@/components/WPDialog";

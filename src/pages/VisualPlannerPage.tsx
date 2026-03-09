@@ -409,6 +409,7 @@ export default function VisualPlannerPage() {
       fromX: number; fromY: number;
       toX: number; toY: number;
       color: string;
+      label: string;
     }[] = [];
     let colorIdx = 0;
 
@@ -426,12 +427,22 @@ export default function VisualPlannerPage() {
         const targetPos = getBarPosition(row.wp);
         if (!sourcePos || !targetPos) continue;
 
+        const type = dep.type || "FS";
+        // FS: finish → start, SS: start → start, FF: finish → finish, SF: start → finish
+        const fromX = (type === "FS" || type === "FF")
+          ? sourcePos.left + sourcePos.width
+          : sourcePos.left;
+        const toX = (type === "FS" || type === "SS")
+          ? targetPos.left
+          : targetPos.left + targetPos.width;
+
         arrows.push({
-          fromX: sourcePos.left + sourcePos.width,
+          fromX,
           fromY: sourceVisIdx * ROW_HEIGHT + ROW_HEIGHT / 2,
-          toX: targetPos.left,
+          toX,
           toY: targetVisIdx * ROW_HEIGHT + ROW_HEIGHT / 2,
           color: DEP_COLORS[colorIdx % DEP_COLORS.length],
+          label: type,
         });
         colorIdx++;
       }

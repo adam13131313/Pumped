@@ -25,7 +25,7 @@ const queryClient = new QueryClient();
 
 const isDevEnvironment = () => {
   const host = window.location.hostname;
-  return host === 'localhost' || host.includes('preview') || host.includes('lovable.app');
+  return host === 'localhost' || host.includes('preview--');
 };
 
 function ProtectedRoutes() {

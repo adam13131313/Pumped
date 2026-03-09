@@ -22,10 +22,12 @@ interface WPDialogProps {
 const ragStatuses: RAGStatus[] = ["Green", "Amber", "Red"];
 
 export function WPDialog({ open, onOpenChange, wp, onSave, onDelete }: WPDialogProps) {
-  const isEdit = !!wp;
+  const projects = useAppStore((s) => s.projects);
   const [form, setForm] = useState<Partial<WorkPackage>>(
     wp ?? { project: "", workPackage: "", wpLead: "", startDate: "", dueDate: "", ragStatus: "Green", blockers: "", dependencies: [] }
   );
+  const [showNewProject, setShowNewProject] = useState(false);
+  const [newProjectName, setNewProjectName] = useState("");
 
   const handleOpen = (o: boolean) => {
     if (o && wp) setForm(wp);

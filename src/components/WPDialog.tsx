@@ -9,6 +9,7 @@ import { WorkPackage, RAGStatus } from "@/lib/types";
 import { LinkRenderer } from "@/components/LinkRenderer";
 import { TaskAttachments } from "@/components/TaskAttachments";
 import { TaskComments } from "@/components/TaskComments";
+import { useAppStore } from "@/lib/store";
 
 interface WPDialogProps {
   open: boolean;

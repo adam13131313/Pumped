@@ -632,21 +632,36 @@ export default function VisualPlannerPage() {
                 </defs>
                 {visualArrows.map((a, i) => {
                   const colorIdx = DEP_COLORS.indexOf(a.color);
-                  const midX = a.fromX + (a.toX - a.fromX) / 2;
-                  // Curved path
-                  const path =
-                    a.fromY === a.toY
-                      ? `M ${a.fromX} ${a.fromY} L ${a.toX} ${a.toY}`
-                      : `M ${a.fromX} ${a.fromY} C ${midX} ${a.fromY}, ${midX} ${a.toY}, ${a.toX} ${a.toY}`;
+                  const GAP = 12; // horizontal gap from bar edge
+                  const stubOut = a.fromX + GAP;
+                  const stubIn = a.toX - GAP;
+
+                  let path: string;
+                  if (a.fromY === a.toY) {
+                    // Same row — straight line
+                    path = `M ${a.fromX} ${a.fromY} L ${a.toX} ${a.toY}`;
+                  } else if (stubOut < stubIn) {
+                    // Enough horizontal space — S-step elbow
+                    const midX = (stubOut + stubIn) / 2;
+                    path = `M ${a.fromX} ${a.fromY} L ${midX} ${a.fromY} L ${midX} ${a.toY} L ${a.toX} ${a.toY}`;
+                  } else {
+                    // Overlapping bars — route around: go right, then down/up outside, then left into target
+                    const detourX = a.fromX + GAP;
+                    const detourY = a.fromY < a.toY
+                      ? Math.max(a.fromY, a.toY) + ROW_HEIGHT * 0.6
+                      : Math.min(a.fromY, a.toY) - ROW_HEIGHT * 0.6;
+                    path = `M ${a.fromX} ${a.fromY} L ${detourX} ${a.fromY} L ${detourX} ${detourY} L ${a.toX - GAP} ${detourY} L ${a.toX - GAP} ${a.toY} L ${a.toX} ${a.toY}`;
+                  }
+
                   return (
                     <path
                       key={i}
                       d={path}
                       fill="none"
                       stroke={a.color}
-                      strokeWidth={2.5}
+                      strokeWidth={2}
+                      strokeLinejoin="round"
                       markerEnd={`url(#arrow-${colorIdx >= 0 ? colorIdx : 0})`}
-                      opacity={1}
                     />
                   );
                 })}

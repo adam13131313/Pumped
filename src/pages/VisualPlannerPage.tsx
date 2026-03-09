@@ -120,9 +120,12 @@ export default function VisualPlannerPage() {
       }
     };
 
+    // Only iterate programmes that have filtered projects
+    const filteredProgIds = new Set(progProjects.keys());
     for (const prog of programmes) {
+      if (!filteredProgIds.has(prog.id)) continue;
       if (collapsed[`prog-${prog.id}`]) {
-        idx++; // reserve space for collapsed header
+        idx++;
         continue;
       }
       const projs = progProjects.get(prog.id) || [];
@@ -356,7 +359,10 @@ export default function VisualPlannerPage() {
       }
     }
 
+    // Only show programmes that have filtered projects
+    const filteredProgIds = new Set(progProjects.keys());
     for (const prog of programmes) {
+      if (!filteredProgIds.has(prog.id)) continue;
       result.push({ type: "programme", prog, level: 0 });
       if (!collapsed[`prog-${prog.id}`]) {
         const projs = progProjects.get(prog.id) || [];

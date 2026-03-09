@@ -21,22 +21,22 @@ const MAX_DAY_WIDTH = 24;
 const ZOOM_STEPS = [3, 5, 8, 12, 18, 24];
 
 const RAG_COLORS: Record<string, string> = {
-  Green: "hsl(var(--chart-2))",
-  Amber: "hsl(var(--chart-4))",
-  Red: "hsl(var(--chart-5))",
+  Green: "hsl(var(--rag-green))",
+  Amber: "hsl(var(--rag-amber))",
+  Red: "hsl(var(--rag-red))",
 };
 
 const RAG_BG: Record<string, string> = {
-  Green: "hsl(var(--chart-2) / 0.15)",
-  Amber: "hsl(var(--chart-4) / 0.15)",
-  Red: "hsl(var(--chart-5) / 0.15)",
+  Green: "hsl(var(--rag-green-bg))",
+  Amber: "hsl(var(--rag-amber-bg))",
+  Red: "hsl(var(--rag-red-bg))",
 };
 
 const DEP_COLORS = [
-  "hsl(var(--chart-1))",
-  "hsl(var(--chart-3))",
-  "hsl(var(--chart-5))",
   "hsl(var(--primary))",
+  "hsl(var(--rag-amber))",
+  "hsl(var(--rag-red))",
+  "hsl(var(--rag-green))",
 ];
 
 // ── Helpers ──

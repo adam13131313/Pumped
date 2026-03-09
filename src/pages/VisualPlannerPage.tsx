@@ -632,25 +632,17 @@ export default function VisualPlannerPage() {
                 </defs>
                 {visualArrows.map((a, i) => {
                   const colorIdx = DEP_COLORS.indexOf(a.color);
-                  const GAP = 12; // horizontal gap from bar edge
-                  const stubOut = a.fromX + GAP;
-                  const stubIn = a.toX - GAP;
+                  const GAP = 14;
 
                   let path: string;
                   if (a.fromY === a.toY) {
-                    // Same row — straight line
                     path = `M ${a.fromX} ${a.fromY} L ${a.toX} ${a.toY}`;
-                  } else if (stubOut < stubIn) {
-                    // Enough horizontal space — S-step elbow
-                    const midX = (stubOut + stubIn) / 2;
-                    path = `M ${a.fromX} ${a.fromY} L ${midX} ${a.fromY} L ${midX} ${a.toY} L ${a.toX} ${a.toY}`;
                   } else {
-                    // Overlapping bars — route around: go right, then down/up outside, then left into target
-                    const detourX = a.fromX + GAP;
-                    const detourY = a.fromY < a.toY
-                      ? Math.max(a.fromY, a.toY) + ROW_HEIGHT * 0.6
-                      : Math.min(a.fromY, a.toY) - ROW_HEIGHT * 0.6;
-                    path = `M ${a.fromX} ${a.fromY} L ${detourX} ${a.fromY} L ${detourX} ${detourY} L ${a.toX - GAP} ${detourY} L ${a.toX - GAP} ${a.toY} L ${a.toX} ${a.toY}`;
+                    // Always route: right stub → vertical to target row → horizontal into target
+                    // Use the midpoint between source end and target start if there's space,
+                    // otherwise use a fixed stub off the source end
+                    const midX = a.fromX + GAP;
+                    path = `M ${a.fromX} ${a.fromY} L ${midX} ${a.fromY} L ${midX} ${a.toY} L ${a.toX} ${a.toY}`;
                   }
 
                   return (

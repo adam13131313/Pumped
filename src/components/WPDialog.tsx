@@ -9,6 +9,7 @@ import { WorkPackage, RAGStatus } from "@/lib/types";
 import { LinkRenderer } from "@/components/LinkRenderer";
 import { TaskAttachments } from "@/components/TaskAttachments";
 import { TaskComments } from "@/components/TaskComments";
+import { useAppStore } from "@/lib/store";
 
 interface WPDialogProps {
   open: boolean;
@@ -22,13 +23,16 @@ const ragStatuses: RAGStatus[] = ["Green", "Amber", "Red"];
 
 export function WPDialog({ open, onOpenChange, wp, onSave, onDelete }: WPDialogProps) {
   const isEdit = !!wp;
+  const projects = useAppStore((s) => s.projects);
   const [form, setForm] = useState<Partial<WorkPackage>>(
     wp ?? { project: "", workPackage: "", wpLead: "", startDate: "", dueDate: "", ragStatus: "Green", blockers: "", dependencies: [] }
   );
+  const [showNewProject, setShowNewProject] = useState(false);
+  const [newProjectName, setNewProjectName] = useState("");
 
   const handleOpen = (o: boolean) => {
-    if (o && wp) setForm(wp);
-    else if (o) setForm({ project: "", workPackage: "", wpLead: "", startDate: "", dueDate: "", ragStatus: "Green", blockers: "", dependencies: [] });
+    if (o && wp) { setForm(wp); setShowNewProject(false); }
+    else if (o) { setForm({ project: "", workPackage: "", wpLead: "", startDate: "", dueDate: "", ragStatus: "Green", blockers: "", dependencies: [] }); setShowNewProject(false); setNewProjectName(""); }
     onOpenChange(o);
   };
 
@@ -58,7 +62,52 @@ export function WPDialog({ open, onOpenChange, wp, onSave, onDelete }: WPDialogP
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label htmlFor="proj">Project *</Label>
-              <Input id="proj" value={form.project ?? ""} onChange={(e) => setForm({ ...form, project: e.target.value })} className="mt-1" maxLength={100} />
+              {showNewProject ? (
+                <div className="flex gap-1 mt-1">
+                  <Input
+                    value={newProjectName}
+                    onChange={(e) => setNewProjectName(e.target.value)}
+                    placeholder="New project name"
+                    maxLength={100}
+                    autoFocus
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      if (newProjectName.trim()) {
+                        setForm({ ...form, project: newProjectName.trim() });
+                      }
+                      setShowNewProject(false);
+                    }}
+                  >
+                    OK
+                  </Button>
+                </div>
+              ) : (
+                <Select
+                  value={form.project || "__none__"}
+                  onValueChange={(v) => {
+                    if (v === "__new__") {
+                      setShowNewProject(true);
+                      setNewProjectName("");
+                    } else if (v === "__none__") {
+                      setForm({ ...form, project: "" });
+                    } else {
+                      setForm({ ...form, project: v });
+                    }
+                  }}
+                >
+                  <SelectTrigger className="mt-1"><SelectValue placeholder="Select project" /></SelectTrigger>
+                  <SelectContent>
+                    {projects.map((p) => (
+                      <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>
+                    ))}
+                    <SelectItem value="__new__">+ Add new project</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
             </div>
             <div>
               <Label htmlFor="wpname">Work Package *</Label>

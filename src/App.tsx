@@ -23,11 +23,17 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
+const isDevEnvironment = () => {
+  const host = window.location.hostname;
+  return host === 'localhost' || host.includes('preview--');
+};
+
 function ProtectedRoutes() {
   const { session, loading } = useAuth();
   const dataLoaded = useAppStore((s) => s.dataLoaded);
+  const isDev = isDevEnvironment();
 
-  if (loading || (session && !dataLoaded)) {
+  if (!isDev && (loading || (session && !dataLoaded))) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
@@ -35,7 +41,7 @@ function ProtectedRoutes() {
     );
   }
 
-  if (!session) {
+  if (!isDev && !session) {
     return <Navigate to="/auth" replace />;
   }
 
@@ -61,6 +67,7 @@ function ProtectedRoutes() {
 
 function AuthRoute() {
   const { session, loading } = useAuth();
+  if (isDevEnvironment()) return <Navigate to="/" replace />;
   if (loading) return null;
   if (session) return <Navigate to="/" replace />;
   return <AuthPage />;

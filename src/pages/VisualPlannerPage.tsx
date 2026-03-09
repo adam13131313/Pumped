@@ -661,23 +661,37 @@ export default function VisualPlannerPage() {
                   if (a.fromY === a.toY) {
                     path = `M ${a.fromX} ${a.fromY} L ${a.toX} ${a.toY}`;
                   } else {
-                    // Always route: right stub → vertical to target row → horizontal into target
-                    // Use the midpoint between source end and target start if there's space,
-                    // otherwise use a fixed stub off the source end
-                    const midX = a.fromX + GAP;
-                    path = `M ${a.fromX} ${a.fromY} L ${midX} ${a.fromY} L ${midX} ${a.toY} L ${a.toX} ${a.toY}`;
+                    // Determine stub direction based on whether we exit from finish (right) or start (left)
+                    const exitsRight = a.fromX <= a.toX;
+                    const stubX = exitsRight ? a.fromX + GAP : a.fromX - GAP;
+                    path = `M ${a.fromX} ${a.fromY} L ${stubX} ${a.fromY} L ${stubX} ${a.toY} L ${a.toX} ${a.toY}`;
                   }
 
+                  const midY = (a.fromY + a.toY) / 2;
+                  const labelX = a.fromX + (a.fromX <= a.toX ? GAP + 4 : -GAP - 4);
+
                   return (
-                    <path
-                      key={i}
-                      d={path}
-                      fill="none"
-                      stroke={a.color}
-                      strokeWidth={2}
-                      strokeLinejoin="round"
-                      markerEnd={`url(#arrow-${colorIdx >= 0 ? colorIdx : 0})`}
-                    />
+                    <g key={i}>
+                      <path
+                        d={path}
+                        fill="none"
+                        stroke={a.color}
+                        strokeWidth={2}
+                        strokeLinejoin="round"
+                        markerEnd={`url(#arrow-${colorIdx >= 0 ? colorIdx : 0})`}
+                      />
+                      {a.label !== "FS" && (
+                        <text
+                          x={labelX}
+                          y={midY - 4}
+                          fontSize={9}
+                          fontWeight={600}
+                          fill={a.color}
+                        >
+                          {a.label}
+                        </text>
+                      )}
+                    </g>
                   );
                 })}
               </svg>

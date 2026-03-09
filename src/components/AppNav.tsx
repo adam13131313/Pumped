@@ -2,7 +2,7 @@ import { NavLink as RouterNavLink } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, CheckSquare, Clock, BookOpen, FolderKanban,
-  Sparkles, Library, Inbox, LucideIcon, PanelLeftClose, PanelLeft,
+  Sparkles, Library, Inbox, LucideIcon, PanelLeftClose, PanelLeft, GanttChart,
 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";

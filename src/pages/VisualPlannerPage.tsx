@@ -461,6 +461,17 @@ export default function VisualPlannerPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Select value={linkType} onValueChange={(v) => setLinkType(v as DependencyType)}>
+            <SelectTrigger className="w-[100px] h-8 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="FS">FS (Finish→Start)</SelectItem>
+              <SelectItem value="SS">SS (Start→Start)</SelectItem>
+              <SelectItem value="FF">FF (Finish→Finish)</SelectItem>
+              <SelectItem value="SF">SF (Start→Finish)</SelectItem>
+            </SelectContent>
+          </Select>
           <Button
             variant={linkingFrom ? "default" : "outline"}
             size="sm"
@@ -468,7 +479,7 @@ export default function VisualPlannerPage() {
               if (linkingFrom) {
                 setLinkingFrom(null);
               } else {
-                toast.info("Click a source WP bar, then click the target WP to link them");
+                toast.info(`Click a source WP, then the target to create a ${linkType} link`);
                 setLinkingFrom("__awaiting_source__");
               }
             }}

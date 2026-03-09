@@ -71,7 +71,8 @@ interface DragState {
 }
 
 export default function VisualPlannerPage() {
-  const { programmes, projects, workPackages, updateWorkPackage, addWorkPackage } = useAppStore();
+  const { programmes, updateWorkPackage, addWorkPackage } = useAppStore();
+  const { projects, workPackages } = useFilteredData();
 
   const [zoomIdx, setZoomIdx] = useState(2);
   const dayWidth = ZOOM_STEPS[zoomIdx];

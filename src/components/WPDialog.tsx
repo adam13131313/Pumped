@@ -30,8 +30,8 @@ export function WPDialog({ open, onOpenChange, wp, onSave, onDelete }: WPDialogP
   const [newProjectName, setNewProjectName] = useState("");
 
   const handleOpen = (o: boolean) => {
-    if (o && wp) setForm(wp);
-    else if (o) setForm({ project: "", workPackage: "", wpLead: "", startDate: "", dueDate: "", ragStatus: "Green", blockers: "", dependencies: [] });
+    if (o && wp) { setForm(wp); setShowNewProject(false); }
+    else if (o) { setForm({ project: "", workPackage: "", wpLead: "", startDate: "", dueDate: "", ragStatus: "Green", blockers: "", dependencies: [] }); setShowNewProject(false); setNewProjectName(""); }
     onOpenChange(o);
   };
 

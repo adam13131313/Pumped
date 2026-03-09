@@ -67,6 +67,7 @@ function ProtectedRoutes() {
 
 function AuthRoute() {
   const { session, loading } = useAuth();
+  if (isDevEnvironment()) return <Navigate to="/" replace />;
   if (loading) return null;
   if (session) return <Navigate to="/" replace />;
   return <AuthPage />;

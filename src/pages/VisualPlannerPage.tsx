@@ -79,6 +79,7 @@ export default function VisualPlannerPage() {
   const dayWidth = ZOOM_STEPS[zoomIdx];
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [linkingFrom, setLinkingFrom] = useState<string | null>(null);
+  const [linkType, setLinkType] = useState<DependencyType>("FS");
   const [dragState, setDragState] = useState<DragState | null>(null);
   const [dragDelta, setDragDelta] = useState(0);
   const [wpDialogOpen, setWpDialogOpen] = useState(false);

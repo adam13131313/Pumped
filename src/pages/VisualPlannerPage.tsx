@@ -681,7 +681,7 @@ export default function VisualPlannerPage() {
                   <div
                     key={row.wp.id}
                     className={cn(
-                      "absolute rounded-md shadow-sm border transition-shadow z-10 group",
+                      "absolute rounded-md shadow-md border border-black/20 transition-shadow z-10 group",
                       isDragging && "shadow-lg z-30 opacity-90",
                       linkingFrom && linkingFrom !== "__awaiting_source__" && "cursor-crosshair",
                       isLinkSource && "ring-2 ring-primary ring-offset-1"

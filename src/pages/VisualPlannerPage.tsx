@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Plus, Link2, ZoomIn, ZoomOut, ChevronRight, ChevronDown } from "lucide-react";
+import { Plus, Link2, ZoomIn, ZoomOut, ChevronRight, ChevronDown, Pencil } from "lucide-react";
 import { addDays, differenceInDays, startOfWeek, endOfWeek, startOfMonth, format, parseISO, isValid, addWeeks, addMonths, isBefore, isAfter } from "date-fns";
 import { cn } from "@/lib/utils";
 import { WPDialog } from "@/components/WPDialog";
@@ -481,19 +481,18 @@ export default function VisualPlannerPage() {
         <div className="flex" style={{ height: `calc(100vh - 200px)` }}>
           {/* Left panel (WBS tree) */}
           <div
-            ref={leftPanelRef}
-            className="flex-shrink-0 border-r bg-muted/30 overflow-hidden"
+            className="flex-shrink-0 border-r bg-muted/30 flex flex-col"
             style={{ width: LEFT_PANEL_WIDTH }}
           >
             {/* Left header */}
             <div
-              className="border-b bg-muted/50 px-3 flex items-center text-xs font-semibold text-muted-foreground uppercase tracking-wider"
+              className="border-b bg-muted/50 px-3 flex items-center text-xs font-semibold text-muted-foreground uppercase tracking-wider flex-shrink-0"
               style={{ height: HEADER_HEIGHT }}
             >
               Work Breakdown Structure
             </div>
             {/* Left rows */}
-            <div className="overflow-hidden" style={{ height: `calc(100% - ${HEADER_HEIGHT}px)` }}>
+            <div ref={leftPanelRef} className="overflow-y-auto flex-1">
               {leftPanelRows.map((row, idx) => {
                 if (row.type === "programme") {
                   const isCollapsed = collapsed[`prog-${row.prog.id}`];
@@ -527,7 +526,7 @@ export default function VisualPlannerPage() {
                 return (
                   <div
                     key={`wp-${row.wp.id}`}
-                    className="flex items-center gap-1.5 px-2 border-b text-xs hover:bg-muted/50 cursor-pointer"
+                    className="flex items-center gap-1.5 px-2 border-b text-xs hover:bg-accent/60 cursor-pointer group/wp transition-colors"
                     style={{ height: ROW_HEIGHT, paddingLeft: 8 + row.level * 16 }}
                     onClick={() => { setEditingWP(row.wp); setWpDialogOpen(true); }}
                   >
@@ -541,6 +540,7 @@ export default function VisualPlannerPage() {
                         <Link2 className="h-2.5 w-2.5" />
                       </Badge>
                     )}
+                    <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover/wp:opacity-100 transition-opacity flex-shrink-0 ml-auto" />
                   </div>
                 );
               })}

@@ -25,7 +25,19 @@ const sections = [
     id: "projects",
     icon: FolderKanban,
     title: "Projects & Work Packages",
-    content: `Projects organise your work into logical groups. Each project can contain multiple Work Packages (WPs) — smaller deliverables with their own leads, due dates, and RAG statuses.\n\n**RAG statuses:**\n- 🟢 **Green** — On track, no issues.\n- 🟡 **Amber** — Some risk or delay, being managed.\n- 🔴 **Red** — Off track, needs escalation.\n\nProjects can also be grouped under a Programme for portfolio-level visibility.`,
+    content: `Projects organise your work into logical groups. Each project can contain multiple Work Packages (WPs) — smaller deliverables with their own leads, due dates, and RAG statuses.\n\n**RAG statuses:**\n- 🟢 **Green** — On track, no issues.\n- 🟡 **Amber** — Some risk or delay, being managed.\n- 🔴 **Red** — Off track, needs escalation.\n\nProjects can also be grouped under a Programme for portfolio-level visibility.\n\n**Export:** Use the "Export CSV" button on the Projects page to download the entire WBS hierarchy as a spreadsheet (Programme → Project → Work Package → Action).`,
+  },
+  {
+    id: "visual-planner",
+    icon: GanttChart,
+    title: "Visual Planner",
+    content: `The Visual Planner is a Gantt chart view of your entire Work Breakdown Structure, letting you sequence and schedule work packages visually over time.\n\n**Key features:**\n- **Drag to move** — grab a work package bar and drag it horizontally to reschedule it.\n- **Resize edges** — drag the left or right edge of a bar to shorten or lengthen its duration.\n- **Dependency linking** — click "Link WPs", select a source bar then a target bar to create a finish-to-start dependency. Dependencies are shown as coloured arrows between bars, with link badges on connected WPs.\n- **Zoom controls** — 6 zoom levels from a high-level month overview down to a detailed week view.\n- **Today line** — a vertical marker showing the current date.\n- **Collapsible hierarchy** — the left panel shows Programme → Project → Work Package; click to expand or collapse groups.\n- **Add/edit WPs** — create or edit work packages directly from the planner using the WP dialog.\n\n**How to use it:**\n1. Navigate to Visual Planner from the sidebar.\n2. Your existing programmes, projects, and work packages appear automatically.\n3. Ensure work packages have start and due dates — bars without dates won't appear on the timeline.\n4. Drag bars to move them in time. Drag edges to adjust duration.\n5. Use "Link WPs" to create dependencies, then click source → target.\n6. All changes are saved to the database immediately.`,
+  },
+  {
+    id: "inbox",
+    icon: Inbox,
+    title: "Rapid Capture (Inbox)",
+    content: `Rapid Capture is your quick-entry inbox for capturing tasks from any source — meeting notes, emails, voice memos, or raw text.\n\n**AI-powered extraction:**\n- Paste or type raw text into the capture box and click "Extract Tasks".\n- The AI analyses the text and suggests structured tasks with project assignments, priorities, and due dates.\n- Tasks are matched to your existing projects from the WBS — the AI will never invent project names.\n\n**Inbox management:**\n- Review extracted tasks in the inbox list.\n- Use the project dropdown to assign or reassign tasks to the correct project.\n- **Bulk edit** — select multiple items and batch-update priority or project.\n- **Promote to Actions** — move selected inbox items to My Actions in one click.\n- **Bulk delete** — remove multiple items at once.`,
   },
   {
     id: "planner",

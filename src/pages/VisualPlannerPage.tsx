@@ -10,8 +10,6 @@ import { addDays, differenceInDays, startOfWeek, endOfWeek, startOfMonth, format
 import { cn } from "@/lib/utils";
 import { WPDialog } from "@/components/WPDialog";
 import { toast } from "sonner";
-import { WPDialog } from "@/components/WPDialog";
-import { toast } from "sonner";
 
 // ── Constants ──
 const ROW_HEIGHT = 40;

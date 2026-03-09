@@ -644,9 +644,9 @@ export default function VisualPlannerPage() {
                       d={path}
                       fill="none"
                       stroke={a.color}
-                      strokeWidth={2}
+                      strokeWidth={2.5}
                       markerEnd={`url(#arrow-${colorIdx >= 0 ? colorIdx : 0})`}
-                      opacity={0.7}
+                      opacity={1}
                     />
                   );
                 })}

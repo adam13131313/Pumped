@@ -526,7 +526,7 @@ export default function VisualPlannerPage() {
                 return (
                   <div
                     key={`wp-${row.wp.id}`}
-                    className="flex items-center gap-1.5 px-2 border-b text-xs hover:bg-muted/50 cursor-pointer"
+                    className="flex items-center gap-1.5 px-2 border-b text-xs hover:bg-accent/60 cursor-pointer group/wp transition-colors"
                     style={{ height: ROW_HEIGHT, paddingLeft: 8 + row.level * 16 }}
                     onClick={() => { setEditingWP(row.wp); setWpDialogOpen(true); }}
                   >
@@ -540,6 +540,7 @@ export default function VisualPlannerPage() {
                         <Link2 className="h-2.5 w-2.5" />
                       </Badge>
                     )}
+                    <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover/wp:opacity-100 transition-opacity flex-shrink-0 ml-auto" />
                   </div>
                 );
               })}

@@ -13,6 +13,7 @@ import SOPPage from "@/pages/SOPPage";
 import ProjectsPage from "@/pages/ProjectsPage";
 import ProjectDetailPage from "@/pages/ProjectDetailPage";
 import WBSPlanner from "@/pages/WBSPlanner";
+import VisualPlannerPage from "@/pages/VisualPlannerPage";
 import KnowledgebasePage from "@/pages/KnowledgebasePage";
 import InboxPage from "@/pages/InboxPage";
 

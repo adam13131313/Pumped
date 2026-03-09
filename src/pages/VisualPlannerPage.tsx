@@ -740,7 +740,19 @@ export default function VisualPlannerPage() {
       <WPDialog
         open={wpDialogOpen}
         onOpenChange={setWpDialogOpen}
-        editingWP={editingWP}
+        wp={editingWP}
+        onSave={(wp) => {
+          if (editingWP) {
+            updateWorkPackage(wp.id, wp);
+          } else {
+            addWorkPackage(wp);
+          }
+          setWpDialogOpen(false);
+        }}
+        onDelete={(id) => {
+          useAppStore.getState().deleteWorkPackage(id);
+          setWpDialogOpen(false);
+        }}
       />
     </div>
   );

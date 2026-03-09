@@ -49,6 +49,7 @@ function ProtectedRoutes() {
         <Route path="/actions" element={<MyActions />} />
         
         <Route path="/waiting" element={<WaitingFor />} />
+        <Route path="/visual-planner" element={<VisualPlannerPage />} />
         <Route path="/planner" element={<WBSPlanner />} />
         <Route path="/sop" element={<SOPPage />} />
         <Route path="/knowledgebase" element={<KnowledgebasePage />} />

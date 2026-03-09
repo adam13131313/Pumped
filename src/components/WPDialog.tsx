@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { format, parseISO, isValid } from "date-fns";
-import { CalendarIcon } from "lucide-react";
+import { CalendarIcon, X } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
-import { WorkPackage, RAGStatus } from "@/lib/types";
+import { WorkPackage, RAGStatus, Dependency, DependencyType } from "@/lib/types";
 import { LinkRenderer } from "@/components/LinkRenderer";
 import { TaskAttachments } from "@/components/TaskAttachments";
 import { TaskComments } from "@/components/TaskComments";
@@ -29,6 +29,7 @@ const ragStatuses: RAGStatus[] = ["Green", "Amber", "Red"];
 export function WPDialog({ open, onOpenChange, wp, onSave, onDelete }: WPDialogProps) {
   const isEdit = !!wp;
   const projects = useAppStore((s) => s.projects);
+  const workPackages = useAppStore((s) => s.workPackages);
   const [form, setForm] = useState<Partial<WorkPackage>>(
     wp ?? { project: "", workPackage: "", wpLead: "", startDate: "", dueDate: "", ragStatus: "Green", blockers: "", dependencies: [] }
   );
@@ -185,9 +186,38 @@ export function WPDialog({ open, onOpenChange, wp, onSave, onDelete }: WPDialogP
             <Label>Attachments</Label>
             <div className="mt-1">
               <TaskAttachments itemId={isEdit ? wp?.id : undefined} itemType="work_package" isNew={!isEdit} />
+            </div>
+            <TaskComments itemId={isEdit ? wp?.id : undefined} itemType="work_package" />
           </div>
-          <TaskComments itemId={isEdit ? wp?.id : undefined} itemType="work_package" />
-        </div>
+          {/* Dependencies section */}
+          {(form.dependencies?.length ?? 0) > 0 && (
+            <div>
+              <Label>Dependencies</Label>
+              <div className="mt-1 space-y-1">
+                {form.dependencies!.map((dep, idx) => {
+                  const targetWP = workPackages.find((w) => w.id === dep.targetId);
+                  return (
+                    <div key={idx} className="flex items-center gap-2 text-sm bg-muted rounded px-2 py-1">
+                      <span className="font-medium text-muted-foreground">{dep.type}</span>
+                      <span className="truncate flex-1">{targetWP ? `${targetWP.project} – ${targetWP.workPackage}` : dep.targetId}</span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-5 w-5 shrink-0"
+                        onClick={() => {
+                          const updated = form.dependencies!.filter((_, i) => i !== idx);
+                          setForm({ ...form, dependencies: updated });
+                        }}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
         <DialogFooter className="flex justify-between">
           {isEdit && onDelete && (

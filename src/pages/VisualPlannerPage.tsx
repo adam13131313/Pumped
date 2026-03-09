@@ -481,19 +481,18 @@ export default function VisualPlannerPage() {
         <div className="flex" style={{ height: `calc(100vh - 200px)` }}>
           {/* Left panel (WBS tree) */}
           <div
-            ref={leftPanelRef}
-            className="flex-shrink-0 border-r bg-muted/30 overflow-hidden"
+            className="flex-shrink-0 border-r bg-muted/30 flex flex-col"
             style={{ width: LEFT_PANEL_WIDTH }}
           >
             {/* Left header */}
             <div
-              className="border-b bg-muted/50 px-3 flex items-center text-xs font-semibold text-muted-foreground uppercase tracking-wider"
+              className="border-b bg-muted/50 px-3 flex items-center text-xs font-semibold text-muted-foreground uppercase tracking-wider flex-shrink-0"
               style={{ height: HEADER_HEIGHT }}
             >
               Work Breakdown Structure
             </div>
             {/* Left rows */}
-            <div className="overflow-hidden" style={{ height: `calc(100% - ${HEADER_HEIGHT}px)` }}>
+            <div ref={leftPanelRef} className="overflow-y-auto flex-1">
               {leftPanelRows.map((row, idx) => {
                 if (row.type === "programme") {
                   const isCollapsed = collapsed[`prog-${row.prog.id}`];

@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useMemo } from "react";
 import { useFilteredData } from "@/hooks/useFilteredData";
 import { useAppStore } from "@/lib/store";
-import { WorkPackage, Programme, Project } from "@/lib/types";
+import { WorkPackage, Programme, Project, DependencyType } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";

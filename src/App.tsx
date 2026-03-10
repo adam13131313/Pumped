@@ -16,6 +16,7 @@ import WBSPlanner from "@/pages/WBSPlanner";
 import VisualPlannerPage from "@/pages/VisualPlannerPage";
 import KnowledgebasePage from "@/pages/KnowledgebasePage";
 import InboxPage from "@/pages/InboxPage";
+import SettingsPage from "@/pages/SettingsPage";
 
 import AuthPage from "@/pages/AuthPage";
 import ResetPasswordPage from "@/pages/ResetPasswordPage";

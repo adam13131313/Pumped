@@ -18,6 +18,7 @@ const links: { to: string; label: string; icon: LucideIcon }[] = [
   { to: "/planner", label: "WBS Planner", icon: Sparkles },
   { to: "/sop", label: "SOP", icon: BookOpen },
   { to: "/knowledgebase", label: "Knowledgebase", icon: Library },
+  { to: "/settings", label: "Settings", icon: Settings },
 ];
 
 export function AppNav({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {

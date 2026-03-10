@@ -60,6 +60,7 @@ function ProtectedRoutes() {
         <Route path="/planner" element={<WBSPlanner />} />
         <Route path="/sop" element={<SOPPage />} />
         <Route path="/knowledgebase" element={<KnowledgebasePage />} />
+        <Route path="/settings" element={<SettingsPage />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </AppShell>

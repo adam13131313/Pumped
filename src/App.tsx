@@ -16,6 +16,7 @@ import WBSPlanner from "@/pages/WBSPlanner";
 import VisualPlannerPage from "@/pages/VisualPlannerPage";
 import KnowledgebasePage from "@/pages/KnowledgebasePage";
 import InboxPage from "@/pages/InboxPage";
+import SettingsPage from "@/pages/SettingsPage";
 
 import AuthPage from "@/pages/AuthPage";
 import ResetPasswordPage from "@/pages/ResetPasswordPage";
@@ -59,6 +60,7 @@ function ProtectedRoutes() {
         <Route path="/planner" element={<WBSPlanner />} />
         <Route path="/sop" element={<SOPPage />} />
         <Route path="/knowledgebase" element={<KnowledgebasePage />} />
+        <Route path="/settings" element={<SettingsPage />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </AppShell>

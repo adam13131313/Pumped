@@ -4,7 +4,6 @@ import {
   LayoutDashboard, CheckSquare, Clock, BookOpen, FolderKanban,
   Sparkles, Library, Inbox, LucideIcon, PanelLeftClose, PanelLeft, GanttChart, Settings,
 } from "lucide-react";
-import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
@@ -21,7 +20,15 @@ const links: { to: string; label: string; icon: LucideIcon }[] = [
   { to: "/settings", label: "Settings", icon: Settings },
 ];
 
-export function AppNav({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
+export function AppNav({
+  collapsed,
+  onToggle,
+  onNavigate,
+}: {
+  collapsed: boolean;
+  onToggle: () => void;
+  onNavigate?: () => void;
+}) {
   return (
     <nav
       className={cn(
@@ -43,6 +50,7 @@ export function AppNav({ collapsed, onToggle }: { collapsed: boolean; onToggle: 
             key={to}
             to={to}
             end
+            onClick={onNavigate}
             className={({ isActive }) =>
               cn(
                 "flex items-center gap-2.5 rounded-md text-sm font-medium transition-colors",

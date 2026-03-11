@@ -13,12 +13,10 @@ export function GlobalFilter() {
 
   const hasFilter = globalFilter.programmeId || globalFilter.projectId || globalFilter.workPackageId;
 
-  // Filter projects based on selected programme
   const filteredProjects = globalFilter.programmeId
     ? projects.filter((p) => p.programmeId === globalFilter.programmeId)
     : projects;
 
-  // Filter WPs based on selected project
   const selectedProject = globalFilter.projectId
     ? projects.find((p) => p.id === globalFilter.projectId)
     : null;
@@ -32,8 +30,8 @@ export function GlobalFilter() {
       : workPackages;
 
   return (
-    <div className="flex items-center gap-2">
-      <Filter className="h-3.5 w-3.5 text-muted-foreground" />
+    <div className="flex flex-wrap items-center gap-2">
+      <Filter className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
       <Select
         value={globalFilter.programmeId || "__all__"}
         onValueChange={(v) => setGlobalFilter({
@@ -42,7 +40,7 @@ export function GlobalFilter() {
           workPackageId: "",
         })}
       >
-        <SelectTrigger className="h-8 w-[150px] text-xs">
+        <SelectTrigger className="h-8 w-[130px] sm:w-[150px] text-xs">
           <SelectValue placeholder="All Programmes" />
         </SelectTrigger>
         <SelectContent>
@@ -61,7 +59,7 @@ export function GlobalFilter() {
           workPackageId: "",
         })}
       >
-        <SelectTrigger className="h-8 w-[150px] text-xs">
+        <SelectTrigger className="h-8 w-[130px] sm:w-[150px] text-xs">
           <SelectValue placeholder="All Projects" />
         </SelectTrigger>
         <SelectContent>
@@ -79,7 +77,7 @@ export function GlobalFilter() {
           workPackageId: v === "__all__" ? "" : v,
         })}
       >
-        <SelectTrigger className="h-8 w-[150px] text-xs">
+        <SelectTrigger className="h-8 w-[130px] sm:w-[150px] text-xs">
           <SelectValue placeholder="All Work Packages" />
         </SelectTrigger>
         <SelectContent>

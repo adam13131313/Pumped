@@ -310,64 +310,110 @@ function ListView({ actions, onEdit, selected, onToggle, onToggleAll }: { action
   const allSelected = actions.length > 0 && selected.size === actions.length;
 
   return (
-    <div className="overflow-hidden rounded-lg border bg-card">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b bg-muted/50">
-            <th className="w-10 px-2 py-2.5">
-              <Checkbox checked={allSelected} onCheckedChange={onToggleAll} aria-label="Select all" />
-            </th>
-            <th className="w-10" />
-            <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Task</th>
-            <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Project</th>
-            <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Due</th>
-            <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Priority</th>
-            <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Status</th>
-            <th className="w-10" />
-          </tr>
-        </thead>
-        <tbody>
-          {actions.map((a) => {
-            const gathered = todayIds.has(a.id);
-            const isSelected = selected.has(a.id);
-            return (
-              <tr key={a.id} className={cn("border-b last:border-0 hover:bg-muted/30 transition-colors group cursor-pointer", isSelected && "bg-accent/40")} onClick={() => onEdit(a)}>
-                <td className="px-2 py-3" onClick={(e) => e.stopPropagation()}>
+    <>
+      {/* Desktop table view */}
+      <div className="hidden sm:block overflow-hidden rounded-lg border bg-card">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b bg-muted/50">
+              <th className="w-10 px-2 py-2.5">
+                <Checkbox checked={allSelected} onCheckedChange={onToggleAll} aria-label="Select all" />
+              </th>
+              <th className="w-10" />
+              <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Task</th>
+              <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Project</th>
+              <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Due</th>
+              <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Priority</th>
+              <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Status</th>
+              <th className="w-10" />
+            </tr>
+          </thead>
+          <tbody>
+            {actions.map((a) => {
+              const gathered = todayIds.has(a.id);
+              const isSelected = selected.has(a.id);
+              return (
+                <tr key={a.id} className={cn("border-b last:border-0 hover:bg-muted/30 transition-colors group cursor-pointer", isSelected && "bg-accent/40")} onClick={() => onEdit(a)}>
+                  <td className="px-2 py-3" onClick={(e) => e.stopPropagation()}>
+                    <Checkbox checked={isSelected} onCheckedChange={() => onToggle(a.id)} aria-label={`Select ${a.task}`} />
+                  </td>
+                  <td className="px-2 py-3" onClick={(e) => e.stopPropagation()}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={() => gathered ? removeToday(a.id) : addToday(a.id)}
+                          className={cn(
+                            "h-7 w-7 flex items-center justify-center rounded-md transition-colors",
+                            gathered ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
+                          )}
+                        >
+                          <Target className="h-3.5 w-3.5" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="right">{gathered ? "Remove from today" : "Gather for today"}</TooltipContent>
+                    </Tooltip>
+                  </td>
+                  <td className="max-w-md px-4 py-3">
+                    <p className="font-medium truncate">{a.task}</p>
+                    {a.workPackage && <p className="text-xs text-muted-foreground mt-0.5">{a.workPackage}</p>}
+                  </td>
+                  <td className="px-4 py-3 text-muted-foreground text-xs">{a.project || "—"}</td>
+                  <td className="px-4 py-3 text-muted-foreground font-mono text-xs">{a.dueDate || "—"}</td>
+                  <td className="px-4 py-3"><PriorityBadge priority={a.priority} /></td>
+                  <td className="px-4 py-3"><StatusBadge status={a.status} /></td>
+                  <td className="px-2 py-3">
+                    <Pencil className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Mobile card view */}
+      <div className="sm:hidden space-y-2">
+        {actions.map((a) => {
+          const gathered = todayIds.has(a.id);
+          const isSelected = selected.has(a.id);
+          return (
+            <div
+              key={a.id}
+              onClick={() => onEdit(a)}
+              className={cn(
+                "rounded-lg border bg-card p-3 transition-colors active:bg-muted/30 cursor-pointer",
+                isSelected && "bg-accent/40 border-primary/30"
+              )}
+            >
+              <div className="flex items-start gap-2.5">
+                <div className="flex flex-col items-center gap-1.5 pt-0.5" onClick={(e) => e.stopPropagation()}>
                   <Checkbox checked={isSelected} onCheckedChange={() => onToggle(a.id)} aria-label={`Select ${a.task}`} />
-                </td>
-                <td className="px-2 py-3" onClick={(e) => e.stopPropagation()}>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        onClick={() => gathered ? removeToday(a.id) : addToday(a.id)}
-                        className={cn(
-                          "h-7 w-7 flex items-center justify-center rounded-md transition-colors",
-                          gathered ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
-                        )}
-                      >
-                        <Target className="h-3.5 w-3.5" />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent side="right">{gathered ? "Remove from today" : "Gather for today"}</TooltipContent>
-                  </Tooltip>
-                </td>
-                <td className="max-w-md px-4 py-3">
-                  <p className="font-medium truncate">{a.task}</p>
+                  <button
+                    onClick={() => gathered ? removeToday(a.id) : addToday(a.id)}
+                    className={cn(
+                      "h-6 w-6 flex items-center justify-center rounded-md transition-colors",
+                      gathered ? "bg-primary text-primary-foreground" : "text-muted-foreground"
+                    )}
+                  >
+                    <Target className="h-3 w-3" />
+                  </button>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-sm leading-snug">{a.task}</p>
                   {a.workPackage && <p className="text-xs text-muted-foreground mt-0.5">{a.workPackage}</p>}
-                </td>
-                <td className="px-4 py-3 text-muted-foreground text-xs">{a.project || "—"}</td>
-                <td className="px-4 py-3 text-muted-foreground font-mono text-xs">{a.dueDate || "—"}</td>
-                <td className="px-4 py-3"><PriorityBadge priority={a.priority} /></td>
-                <td className="px-4 py-3"><StatusBadge status={a.status} /></td>
-                <td className="px-2 py-3">
-                  <Pencil className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+                  <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                    <PriorityBadge priority={a.priority} />
+                    <StatusBadge status={a.status} />
+                    {a.project && <span className="text-[10px] text-muted-foreground truncate max-w-[120px]">{a.project}</span>}
+                    {a.dueDate && <span className="text-[10px] text-muted-foreground font-mono">{a.dueDate}</span>}
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </>
   );
 }
 

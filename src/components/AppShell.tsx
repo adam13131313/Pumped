@@ -79,12 +79,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <GlobalFilter />
           </div>
         </header>
-        <main className="flex-1 px-3 py-4 sm:px-6 sm:py-6 animate-fade-in">
+        <main className={cn("flex-1 px-3 py-4 sm:px-6 sm:py-6 animate-fade-in", isMobile && "pb-20")}>
           <div className="mx-auto max-w-7xl">
             {children}
           </div>
         </main>
       </div>
+
+      {isMobile && <MobileBottomNav />}
     </div>
   );
 }

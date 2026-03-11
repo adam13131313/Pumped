@@ -7,6 +7,7 @@ import { LogOut, Menu } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { MobileBottomNav } from "./MobileBottomNav";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { signOut, user } = useAuth();
@@ -78,12 +79,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <GlobalFilter />
           </div>
         </header>
-        <main className="flex-1 px-3 py-4 sm:px-6 sm:py-6 animate-fade-in">
+        <main className={cn("flex-1 px-3 py-4 sm:px-6 sm:py-6 animate-fade-in", isMobile && "pb-20")}>
           <div className="mx-auto max-w-7xl">
             {children}
           </div>
         </main>
       </div>
+
+      {isMobile && <MobileBottomNav />}
     </div>
   );
 }

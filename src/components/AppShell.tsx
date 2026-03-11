@@ -7,6 +7,7 @@ import { LogOut, Menu } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { MobileBottomNav } from "./MobileBottomNav";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { signOut, user } = useAuth();

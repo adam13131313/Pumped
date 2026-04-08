@@ -24,6 +24,7 @@ function TaskCard({
   item,
   onRemove,
   onSetDueToday,
+  onEdit,
   draggable = false,
   dragHandlers,
   isDragOver,
@@ -31,6 +32,7 @@ function TaskCard({
   item: TodayItem;
   onRemove?: (id: string) => void;
   onSetDueToday?: (item: TodayItem) => void;
+  onEdit?: (item: TodayItem) => void;
   draggable?: boolean;
   dragHandlers?: {
     onDragStart: () => void;

@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo } from "react";
 import { useAppStore } from "@/lib/store";
 import { useFilteredData } from "@/hooks/useFilteredData";
 import { Action, WaitingItem } from "@/lib/types";
@@ -8,10 +8,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Target, Plus, X, CheckCircle2, Clock, ListChecks, CalendarCheck, FileDown } from "lucide-react";
+import { Target, Plus, X, CheckCircle2, Clock, ListChecks, CalendarCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
-import DailyPlanner from "@/components/DailyPlanner";
-import { exportSchedulePDF } from "@/lib/exportSchedule";
 
 type TodayItem =
   | { kind: "action"; data: Action }
@@ -25,22 +23,17 @@ export default function Dashboard() {
   const addToday = useAppStore((s) => s.addToday);
   const removeToday = useAppStore((s) => s.removeToday);
   const clearToday = useAppStore((s) => s.clearToday);
-  const scheduleMap = useAppStore((s) => s.scheduleMap);
-  const durationMap = useAppStore((s) => s.durationMap);
 
   const [pickerOpen, setPickerOpen] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("gathered");
 
-  // Today's date as YYYY-MM-DD for comparison
   const todayStr = new Date().toISOString().slice(0, 10);
 
-  // Gathered items
   const gatheredItems: TodayItem[] = [
     ...actions.filter((a) => todayIds.has(a.id)).map((a) => ({ kind: "action" as const, data: a })),
     ...waitingItems.filter((w) => todayIds.has(w.id)).map((w) => ({ kind: "waiting" as const, data: w })),
   ];
 
-  // Due-today items
   const dueTodayItems: TodayItem[] = useMemo(() => {
     const dueActions = actions
       .filter((a) => a.status !== "Complete" && a.dueDate && a.dueDate.slice(0, 10) === todayStr)
@@ -53,9 +46,54 @@ export default function Dashboard() {
 
   const todayItems = viewMode === "gathered" ? gatheredItems : dueTodayItems;
 
-  // Available to pick (not already gathered)
   const availableActions = actions.filter((a) => !todayIds.has(a.id) && a.status !== "Complete");
   const availableWaiting = waitingItems.filter((w) => !todayIds.has(w.id) && w.status !== "Received");
+
+  const renderItemCard = (item: TodayItem, showRemove: boolean) => {
+    const id = item.data.id;
+    const isAction = item.kind === "action";
+    const a = isAction ? (item.data as Action) : null;
+    const w = !isAction ? (item.data as WaitingItem) : null;
+
+    return (
+      <div
+        key={id}
+        className="flex items-start gap-3 rounded-lg border bg-card p-4 group hover:border-primary/30 transition-colors"
+      >
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1">
+            <Badge variant="outline" className={isAction ? "bg-primary/10 text-primary border-primary/20" : "bg-rag-amber/10 text-rag-amber border-rag-amber/20"}>
+              {isAction ? <><CheckCircle2 className="h-3 w-3 mr-1" />My Action</> : <><Clock className="h-3 w-3 mr-1" />Waiting For</>}
+            </Badge>
+            {a?.priority && (
+              <Badge variant="outline" className={
+                a.priority === "High" ? "bg-rag-red/10 text-rag-red border-rag-red/20" :
+                a.priority === "Medium" ? "bg-rag-amber/10 text-rag-amber border-rag-amber/20" :
+                "bg-muted text-muted-foreground"
+              }>{a.priority}</Badge>
+            )}
+            {a?.status && <Badge variant="secondary" className="text-xs">{a.status}</Badge>}
+            {w?.status && <Badge variant="secondary" className="text-xs">{w.status}</Badge>}
+          </div>
+          <p className="font-medium text-sm">{isAction ? a!.task : w!.description}</p>
+          <div className="flex gap-4 mt-1 text-xs text-muted-foreground">
+            {isAction && a!.project && <span>{a!.project}</span>}
+            {isAction && a!.dueDate && <span className="font-mono">Due: {a!.dueDate}</span>}
+            {!isAction && w!.fromWhom && <span>From: {w!.fromWhom}</span>}
+            {!isAction && w!.dueBy && <span className="font-mono">Due: {w!.dueBy}</span>}
+          </div>
+        </div>
+        {showRemove && (
+          <button
+            onClick={() => removeToday(id)}
+            className="shrink-0 p-1 rounded hover:bg-muted text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-6">
@@ -74,15 +112,6 @@ export default function Dashboard() {
           </p>
         </div>
         <div className="flex gap-2">
-          {viewMode === "gathered" && gatheredItems.length > 0 && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => exportSchedulePDF(actions, waitingItems, todayIds, scheduleMap, durationMap)}
-            >
-              <FileDown className="h-4 w-4 mr-1" /> PDF
-            </Button>
-          )}
           {viewMode === "gathered" && todayItems.length > 0 && (
             <Button variant="outline" size="sm" onClick={clearToday}>
               Clear All
@@ -145,8 +174,8 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         ) : (
-          <div className="h-[calc(100vh-14rem)]">
-            <DailyPlanner />
+          <div className="space-y-2">
+            {gatheredItems.map((item) => renderItemCard(item, true))}
           </div>
         )
       ) : (
@@ -160,43 +189,7 @@ export default function Dashboard() {
           </Card>
         ) : (
           <div className="space-y-2">
-            {dueTodayItems.map((item) => {
-              const id = item.data.id;
-              const isAction = item.kind === "action";
-              const a = isAction ? (item.data as Action) : null;
-              const w = !isAction ? (item.data as WaitingItem) : null;
-
-              return (
-                <div
-                  key={id}
-                  className="flex items-start gap-3 rounded-lg border bg-card p-4 group hover:border-primary/30 transition-colors"
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Badge variant="outline" className={isAction ? "bg-primary/10 text-primary border-primary/20" : "bg-rag-amber/10 text-rag-amber border-rag-amber/20"}>
-                        {isAction ? <><CheckCircle2 className="h-3 w-3 mr-1" />My Action</> : <><Clock className="h-3 w-3 mr-1" />Waiting For</>}
-                      </Badge>
-                      {a?.priority && (
-                        <Badge variant="outline" className={
-                          a.priority === "High" ? "bg-rag-red/10 text-rag-red border-rag-red/20" :
-                          a.priority === "Medium" ? "bg-rag-amber/10 text-rag-amber border-rag-amber/20" :
-                          "bg-muted text-muted-foreground"
-                        }>{a.priority}</Badge>
-                      )}
-                      {a?.status && <Badge variant="secondary" className="text-xs">{a.status}</Badge>}
-                      {w?.status && <Badge variant="secondary" className="text-xs">{w.status}</Badge>}
-                    </div>
-                    <p className="font-medium text-sm">{isAction ? a!.task : w!.description}</p>
-                    <div className="flex gap-4 mt-1 text-xs text-muted-foreground">
-                      {isAction && a!.project && <span>{a!.project}</span>}
-                      {isAction && a!.dueDate && <span className="font-mono">Due: {a!.dueDate}</span>}
-                      {!isAction && w!.fromWhom && <span>From: {w!.fromWhom}</span>}
-                      {!isAction && w!.dueBy && <span className="font-mono">Due: {w!.dueBy}</span>}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+            {dueTodayItems.map((item) => renderItemCard(item, false))}
           </div>
         )
       )}

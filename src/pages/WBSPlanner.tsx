@@ -308,6 +308,7 @@ export default function WBSPlanner() {
               priority: action.priority || "Medium",
               status: "Not Started",
               notes: "",
+              labels: [],
             });
           });
         });

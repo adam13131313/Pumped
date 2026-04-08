@@ -1,0 +1,1 @@
+ALTER TABLE public.actions ADD COLUMN labels text[] NOT NULL DEFAULT '{}'::text[];

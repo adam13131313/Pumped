@@ -215,7 +215,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
     const mapProgramme = (r: any): Programme => ({ id: r.id, name: r.name, description: r.description });
     const mapProject = (r: any): Project => ({ id: r.id, name: r.name, description: r.description, programmeId: r.programme_id, status: r.status });
     const mapWP = (r: any): WorkPackage => ({ id: r.id, project: r.project, workPackage: r.work_package, wpLead: r.wp_lead, startDate: r.start_date, dueDate: r.due_date, ragStatus: r.rag_status, blockers: r.blockers, dependencies: r.dependencies || [] });
-    const mapAction = (r: any): Action => ({ id: r.id, task: r.task, project: r.project, workPackage: r.work_package, startDate: r.start_date, dueDate: r.due_date, priority: r.priority, status: r.status, notes: r.notes, completedAt: r.completed_at || undefined });
+    const mapAction = (r: any): Action => ({ id: r.id, task: r.task, project: r.project, workPackage: r.work_package, startDate: r.start_date, dueDate: r.due_date, priority: r.priority, status: r.status, notes: r.notes, completedAt: r.completed_at || undefined, labels: r.labels || [] });
     const mapWaiting = (r: any): WaitingItem => ({ id: r.id, description: r.description, fromWhom: r.from_whom, projectWP: r.project_wp, askedOn: r.asked_on, dueBy: r.due_by, status: r.status, notes: r.notes });
     const mapInbox = (r: any): InboxItem => ({ id: r.id, task: r.task, priority: r.priority, dueDate: r.due_date, project: r.project, notes: r.notes, source: r.source, createdAt: r.created_at });
     const mapSOP = (r: any): SOPItem => ({ id: r.id, when: r.trigger_when, instruction: r.instruction });
@@ -294,7 +294,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
   // --- Actions ---
   addAction: (action) => {
     set((s) => ({ actions: [...s.actions, action] }));
-    getUserId().then((uid) => supabase.from("actions").insert({ id: action.id, user_id: uid, task: action.task, project: action.project, work_package: action.workPackage, start_date: action.startDate, due_date: action.dueDate, priority: action.priority, status: action.status, notes: action.notes }).then());
+    getUserId().then((uid) => supabase.from("actions").insert({ id: action.id, user_id: uid, task: action.task, project: action.project, work_package: action.workPackage, start_date: action.startDate, due_date: action.dueDate, priority: action.priority, status: action.status, notes: action.notes, labels: action.labels || [] }).then());
   },
   updateAction: (id, updates) => {
     // Track completed_at when status changes to Complete
@@ -314,6 +314,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
     if (updates.priority !== undefined) dbUpdates.priority = updates.priority;
     if (updates.status !== undefined) dbUpdates.status = updates.status;
     if (updates.notes !== undefined) dbUpdates.notes = updates.notes;
+    if (updates.labels !== undefined) dbUpdates.labels = updates.labels;
     if ((updates as any).completedAt !== undefined) dbUpdates.completed_at = (updates as any).completedAt;
     supabase.from("actions").update(dbUpdates).eq("id", id).then();
   },
@@ -428,6 +429,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
       priority: i.priority,
       status: "Not Started" as const,
       notes: i.notes,
+      labels: [],
     }));
     set({
       inboxItems: s.inboxItems.filter((i) => !ids.includes(i.id)),
@@ -495,6 +497,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
       priority: "Medium",
       status: "Not Started",
       notes: item.notes,
+      labels: [],
     };
     set({
       waitingItems: s.waitingItems.filter((w) => w.id !== id),

@@ -21,6 +21,7 @@ export type Database = {
           created_at: string
           due_date: string
           id: string
+          labels: string[]
           notes: string
           priority: string
           project: string
@@ -36,6 +37,7 @@ export type Database = {
           created_at?: string
           due_date?: string
           id?: string
+          labels?: string[]
           notes?: string
           priority?: string
           project?: string
@@ -51,6 +53,7 @@ export type Database = {
           created_at?: string
           due_date?: string
           id?: string
+          labels?: string[]
           notes?: string
           priority?: string
           project?: string

@@ -9,7 +9,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { LayoutList, Columns3, Plus, Pencil, Target, Trash2, X, CheckSquare, Filter } from "lucide-react";
+import { LayoutList, Columns3, Plus, Pencil, Target, Trash2, X, CheckSquare, Filter, Tag } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -355,7 +356,12 @@ function ListView({ actions, onEdit, selected, onToggle, onToggleAll }: { action
                   </td>
                   <td className="max-w-md px-4 py-3">
                     <p className="font-medium truncate">{a.task}</p>
-                    {a.workPackage && <p className="text-xs text-muted-foreground mt-0.5">{a.workPackage}</p>}
+                    <div className="flex items-center gap-1 mt-0.5">
+                      {a.workPackage && <span className="text-xs text-muted-foreground">{a.workPackage}</span>}
+                      {(a.labels?.length ?? 0) > 0 && a.labels.map((l) => (
+                        <Badge key={l} variant="outline" className="text-[10px] px-1.5 py-0 h-4 font-normal">{l}</Badge>
+                      ))}
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-muted-foreground text-xs">{a.project || "—"}</td>
                   <td className="px-4 py-3 text-muted-foreground font-mono text-xs">{a.dueDate || "—"}</td>
@@ -404,6 +410,9 @@ function ListView({ actions, onEdit, selected, onToggle, onToggleAll }: { action
                   <div className="flex flex-wrap items-center gap-1.5 mt-2">
                     <PriorityBadge priority={a.priority} />
                     <StatusBadge status={a.status} />
+                    {(a.labels?.length ?? 0) > 0 && a.labels.map((l) => (
+                      <Badge key={l} variant="outline" className="text-[10px] px-1.5 py-0 h-4 font-normal">{l}</Badge>
+                    ))}
                     {a.project && <span className="text-[10px] text-muted-foreground truncate max-w-[120px]">{a.project}</span>}
                     {a.dueDate && <span className="text-[10px] text-muted-foreground font-mono">{a.dueDate}</span>}
                   </div>
@@ -547,6 +556,13 @@ function KanbanView({
                             {a.dueDate && <span className="text-xs text-muted-foreground font-mono">{a.dueDate}</span>}
                           </div>
                           {a.project && <p className="mt-1 text-xs text-muted-foreground">{a.project}</p>}
+                          {(a.labels?.length ?? 0) > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {a.labels.map((l) => (
+                                <Badge key={l} variant="outline" className="text-[10px] px-1.5 py-0 h-4 font-normal">{l}</Badge>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>

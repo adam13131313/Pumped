@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+import { X, Tag } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,6 +11,7 @@ import { useAppStore } from "@/lib/store";
 import { LinkRenderer } from "@/components/LinkRenderer";
 import { TaskAttachments } from "@/components/TaskAttachments";
 import { TaskComments } from "@/components/TaskComments";
+import { Badge } from "@/components/ui/badge";
 
 interface ActionDialogProps {
   open: boolean;
@@ -32,7 +34,8 @@ export function ActionDialog({ open, onOpenChange, action, onSave, onDelete, onD
   const workPackages = useAppStore((s) => s.workPackages);
   const globalFilter = useAppStore((s) => s.globalFilter);
 
-  const emptyForm: Partial<Action> = { task: "", project: "", workPackage: "", startDate: "", dueDate: "", priority: "Medium", status: "Not Started", notes: "" };
+  const emptyForm: Partial<Action> = { task: "", project: "", workPackage: "", startDate: "", dueDate: "", priority: "Medium", status: "Not Started", notes: "", labels: [] };
+  const [labelInput, setLabelInput] = useState("");
   const [form, setForm] = useState<Partial<Action>>(action ?? emptyForm);
   const [selectedProgrammeId, setSelectedProgrammeId] = useState("");
   const [selectedProjectId, setSelectedProjectId] = useState("");
@@ -162,8 +165,21 @@ export function ActionDialog({ open, onOpenChange, action, onSave, onDelete, onD
       priority: form.priority ?? "Medium",
       status: form.status ?? "Not Started",
       notes: form.notes?.trim() ?? "",
+      labels: form.labels ?? [],
     });
     onOpenChange(false);
+  };
+
+  const addLabel = () => {
+    const label = labelInput.trim();
+    if (label && !(form.labels ?? []).includes(label)) {
+      setForm({ ...form, labels: [...(form.labels ?? []), label] });
+    }
+    setLabelInput("");
+  };
+
+  const removeLabel = (label: string) => {
+    setForm({ ...form, labels: (form.labels ?? []).filter((l) => l !== label) });
   };
 
   // Find current WP id for the select value
@@ -259,6 +275,32 @@ export function ActionDialog({ open, onOpenChange, action, onSave, onDelete, onD
             {form.notes && /(https?:\/\/[^\s]+)/.test(form.notes) && (
               <div className="mt-1.5 text-sm"><LinkRenderer text={form.notes} /></div>
             )}
+          </div>
+          <div>
+            <Label className="flex items-center gap-1.5"><Tag className="h-3.5 w-3.5" /> Labels</Label>
+            <div className="flex flex-wrap gap-1.5 mt-1.5">
+              {(form.labels ?? []).map((label) => (
+                <Badge key={label} variant="secondary" className="gap-1 pr-1">
+                  {label}
+                  <button type="button" onClick={() => removeLabel(label)} className="rounded-full hover:bg-muted-foreground/20 p-0.5">
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              ))}
+            </div>
+            <div className="flex gap-1.5 mt-1.5">
+              <Input
+                value={labelInput}
+                onChange={(e) => setLabelInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addLabel(); } }}
+                placeholder="Type a label and press Enter"
+                className="h-8 text-sm"
+                maxLength={30}
+              />
+              <Button type="button" variant="outline" size="sm" className="h-8 shrink-0" onClick={addLabel} disabled={!labelInput.trim()}>
+                Add
+              </Button>
+            </div>
           </div>
           <div>
             <Label>Attachments</Label>

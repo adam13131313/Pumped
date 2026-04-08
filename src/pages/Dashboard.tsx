@@ -592,6 +592,60 @@ export default function Dashboard() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Edit Action Dialog */}
+      <ActionDialog
+        open={actionDialogOpen}
+        onOpenChange={(open) => {
+          setActionDialogOpen(open);
+          if (!open) setEditingAction(null);
+        }}
+        action={editingAction}
+        onSave={(action) => {
+          updateAction(action.id, action);
+          setEditingAction(null);
+          setActionDialogOpen(false);
+        }}
+        onDelete={(id) => {
+          deleteAction(id);
+          removeToday(id);
+          setEditingAction(null);
+          setActionDialogOpen(false);
+        }}
+        onDelegate={(id, toWhom) => {
+          delegateAction(id, toWhom);
+          removeToday(id);
+          setEditingAction(null);
+          setActionDialogOpen(false);
+        }}
+      />
+
+      {/* Edit Waiting Dialog */}
+      <WaitingDialog
+        open={waitingDialogOpen}
+        onOpenChange={(open) => {
+          setWaitingDialogOpen(open);
+          if (!open) setEditingWaiting(null);
+        }}
+        item={editingWaiting}
+        onSave={(item) => {
+          updateWaitingItem(item.id, item);
+          setEditingWaiting(null);
+          setWaitingDialogOpen(false);
+        }}
+        onDelete={(id) => {
+          deleteWaitingItem(id);
+          removeToday(id);
+          setEditingWaiting(null);
+          setWaitingDialogOpen(false);
+        }}
+        onTakeBack={(id) => {
+          takeBackWaiting(id);
+          removeToday(id);
+          setEditingWaiting(null);
+          setWaitingDialogOpen(false);
+        }}
+      />
     </div>
   );
 }

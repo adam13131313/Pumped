@@ -362,6 +362,7 @@ function ListView({ actions, onEdit, selected, onToggle, onToggleAll }: { action
                         <Badge key={l} variant="outline" className="text-[10px] px-1.5 py-0 h-4 font-normal">{l}</Badge>
                       ))}
                     </div>
+                  </td>
                   <td className="px-4 py-3 text-muted-foreground text-xs">{a.project || "—"}</td>
                   <td className="px-4 py-3 text-muted-foreground font-mono text-xs">{a.dueDate || "—"}</td>
                   <td className="px-4 py-3"><PriorityBadge priority={a.priority} /></td>

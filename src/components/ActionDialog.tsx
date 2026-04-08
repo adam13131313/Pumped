@@ -277,6 +277,32 @@ export function ActionDialog({ open, onOpenChange, action, onSave, onDelete, onD
             )}
           </div>
           <div>
+            <Label className="flex items-center gap-1.5"><Tag className="h-3.5 w-3.5" /> Labels</Label>
+            <div className="flex flex-wrap gap-1.5 mt-1.5">
+              {(form.labels ?? []).map((label) => (
+                <Badge key={label} variant="secondary" className="gap-1 pr-1">
+                  {label}
+                  <button type="button" onClick={() => removeLabel(label)} className="rounded-full hover:bg-muted-foreground/20 p-0.5">
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              ))}
+            </div>
+            <div className="flex gap-1.5 mt-1.5">
+              <Input
+                value={labelInput}
+                onChange={(e) => setLabelInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addLabel(); } }}
+                placeholder="Type a label and press Enter"
+                className="h-8 text-sm"
+                maxLength={30}
+              />
+              <Button type="button" variant="outline" size="sm" className="h-8 shrink-0" onClick={addLabel} disabled={!labelInput.trim()}>
+                Add
+              </Button>
+            </div>
+          </div>
+          <div>
             <Label>Attachments</Label>
             <div className="mt-1">
               <TaskAttachments itemId={isEdit ? action?.id : undefined} itemType="action" isNew={!isEdit} />

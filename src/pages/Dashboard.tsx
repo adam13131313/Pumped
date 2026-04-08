@@ -279,6 +279,7 @@ function DraggableSection({
             item={item}
             onRemove={onRemove}
             onSetDueToday={onSetDueToday}
+            onEdit={onEdit}
             draggable
             dragHandlers={{
               onDragStart: () => handleDragStart(index),

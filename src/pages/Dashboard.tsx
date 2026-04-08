@@ -303,10 +303,18 @@ export default function Dashboard() {
   const clearToday = useAppStore((s) => s.clearToday);
   const reorderToday = useAppStore((s) => s.reorderToday);
   const updateAction = useAppStore((s) => s.updateAction);
+  const deleteAction = useAppStore((s) => s.deleteAction);
+  const delegateAction = useAppStore((s) => s.delegateAction);
   const updateWaitingItem = useAppStore((s) => s.updateWaitingItem);
+  const deleteWaitingItem = useAppStore((s) => s.deleteWaitingItem);
+  const takeBackWaiting = useAppStore((s) => s.takeBackWaiting);
 
   const [pickerOpen, setPickerOpen] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("gathered");
+  const [editingAction, setEditingAction] = useState<Action | null>(null);
+  const [editingWaiting, setEditingWaiting] = useState<WaitingItem | null>(null);
+  const [actionDialogOpen, setActionDialogOpen] = useState(false);
+  const [waitingDialogOpen, setWaitingDialogOpen] = useState(false);
 
   const todayStr = new Date().toISOString().slice(0, 10);
 

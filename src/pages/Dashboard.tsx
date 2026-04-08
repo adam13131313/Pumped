@@ -88,7 +88,13 @@ function TaskCard({
                   <Badge key={label} variant="outline" className="text-xs bg-accent/50">{label}</Badge>
                 ))}
               </div>
-              <p className="font-medium text-sm">{isAction ? a!.task : w!.description}</p>
+              <p
+                className="font-medium text-sm cursor-pointer hover:text-primary hover:underline transition-colors"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEdit?.(item);
+                }}
+              >{isAction ? a!.task : w!.description}</p>
               <div className="flex gap-4 mt-1 text-xs text-muted-foreground">
                 {isAction && a!.project && <span>{a!.project}</span>}
                 {isAction && a!.dueDate && <span className="font-mono">Due: {a!.dueDate}</span>}

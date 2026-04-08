@@ -229,6 +229,7 @@ function DraggableSection({
   onRemove,
   onReorder,
   onSetDueToday,
+  onEdit,
   colorClass,
 }: {
   title: string;
@@ -237,6 +238,7 @@ function DraggableSection({
   onRemove: (id: string) => void;
   onReorder: (fromIndex: number, toIndex: number) => void;
   onSetDueToday: (item: TodayItem) => void;
+  onEdit: (item: TodayItem) => void;
   colorClass: string;
 }) {
   const dragItem = useRef<number | null>(null);

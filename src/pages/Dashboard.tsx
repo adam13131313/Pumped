@@ -103,6 +103,18 @@ function TaskCard({
               </div>
             </div>
             <div className="flex items-center gap-1 shrink-0">
+              {onEdit && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onEdit(item);
+                  }}
+                  title="Edit task"
+                  className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-primary transition-colors"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </button>
+              )}
               {onSetDueToday && !hasDueToday && (
                 <button
                   onClick={(e) => {

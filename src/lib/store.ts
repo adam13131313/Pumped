@@ -30,9 +30,11 @@ interface AppState {
   dataLoaded: boolean;
   
   todayIds: Set<string>;
+  todayOrder: string[]; // ordered list of gathered task ids
   addToday: (id: string) => void;
   removeToday: (id: string) => void;
   clearToday: () => void;
+  reorderToday: (orderedIds: string[]) => void;
   scheduleMap: Record<string, number>; // taskId -> slot index
   durationMap: Record<string, number>; // taskId -> duration in slots
   scheduleTask: (id: string, slot: number) => void;
@@ -95,17 +97,18 @@ async function getUserId(): Promise<string> {
 // Persist today's focus data to localStorage (keyed by date so it resets daily)
 const TODAY_KEY = () => `p3m-today-${new Date().toISOString().slice(0, 10)}`;
 
-function saveTodayState(todayIds: Set<string>, scheduleMap: Record<string, number>, durationMap: Record<string, number>) {
+function saveTodayState(todayIds: Set<string>, scheduleMap: Record<string, number>, durationMap: Record<string, number>, todayOrder: string[]) {
   try {
     localStorage.setItem(TODAY_KEY(), JSON.stringify({
       ids: Array.from(todayIds),
       schedule: scheduleMap,
       durations: durationMap,
+      order: todayOrder,
     }));
   } catch {}
 }
 
-function loadTodayState(): { todayIds: Set<string>; scheduleMap: Record<string, number>; durationMap: Record<string, number> } {
+function loadTodayState(): { todayIds: Set<string>; scheduleMap: Record<string, number>; durationMap: Record<string, number>; todayOrder: string[] } {
   try {
     const raw = localStorage.getItem(TODAY_KEY());
     if (raw) {
@@ -114,10 +117,11 @@ function loadTodayState(): { todayIds: Set<string>; scheduleMap: Record<string, 
         todayIds: new Set<string>(parsed.ids || []),
         scheduleMap: parsed.schedule || {},
         durationMap: parsed.durations || {},
+        todayOrder: parsed.order || parsed.ids || [],
       };
     }
   } catch {}
-  return { todayIds: new Set(), scheduleMap: {}, durationMap: {} };
+  return { todayIds: new Set(), scheduleMap: {}, durationMap: {}, todayOrder: [] };
 }
 
 const initialToday = loadTodayState();

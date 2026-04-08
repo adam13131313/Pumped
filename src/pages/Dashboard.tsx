@@ -9,7 +9,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Target, Plus, X, CheckCircle2, Clock, ListChecks, CalendarCheck, GripVertical, ChevronDown, CalendarPlus } from "lucide-react";
+import { ActionDialog } from "@/components/ActionDialog";
+import { WaitingDialog } from "@/components/WaitingDialog";
+import { Target, Plus, X, CheckCircle2, Clock, ListChecks, CalendarCheck, GripVertical, ChevronDown, CalendarPlus, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type TodayItem =

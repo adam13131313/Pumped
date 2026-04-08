@@ -9,7 +9,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Target, Plus, X, CheckCircle2, Clock, ListChecks, CalendarCheck, GripVertical, ChevronDown, CalendarPlus } from "lucide-react";
+import { ActionDialog } from "@/components/ActionDialog";
+import { WaitingDialog } from "@/components/WaitingDialog";
+import { Target, Plus, X, CheckCircle2, Clock, ListChecks, CalendarCheck, GripVertical, ChevronDown, CalendarPlus, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type TodayItem =
@@ -22,6 +24,7 @@ function TaskCard({
   item,
   onRemove,
   onSetDueToday,
+  onEdit,
   draggable = false,
   dragHandlers,
   isDragOver,
@@ -29,6 +32,7 @@ function TaskCard({
   item: TodayItem;
   onRemove?: (id: string) => void;
   onSetDueToday?: (item: TodayItem) => void;
+  onEdit?: (item: TodayItem) => void;
   draggable?: boolean;
   dragHandlers?: {
     onDragStart: () => void;
@@ -84,7 +88,13 @@ function TaskCard({
                   <Badge key={label} variant="outline" className="text-xs bg-accent/50">{label}</Badge>
                 ))}
               </div>
-              <p className="font-medium text-sm">{isAction ? a!.task : w!.description}</p>
+              <p
+                className="font-medium text-sm cursor-pointer hover:text-primary hover:underline transition-colors"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEdit?.(item);
+                }}
+              >{isAction ? a!.task : w!.description}</p>
               <div className="flex gap-4 mt-1 text-xs text-muted-foreground">
                 {isAction && a!.project && <span>{a!.project}</span>}
                 {isAction && a!.dueDate && <span className="font-mono">Due: {a!.dueDate}</span>}
@@ -93,6 +103,18 @@ function TaskCard({
               </div>
             </div>
             <div className="flex items-center gap-1 shrink-0">
+              {onEdit && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onEdit(item);
+                  }}
+                  title="Edit task"
+                  className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-primary transition-colors"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </button>
+              )}
               {onSetDueToday && !hasDueToday && (
                 <button
                   onClick={(e) => {
@@ -207,6 +229,7 @@ function DraggableSection({
   onRemove,
   onReorder,
   onSetDueToday,
+  onEdit,
   colorClass,
 }: {
   title: string;
@@ -215,6 +238,7 @@ function DraggableSection({
   onRemove: (id: string) => void;
   onReorder: (fromIndex: number, toIndex: number) => void;
   onSetDueToday: (item: TodayItem) => void;
+  onEdit: (item: TodayItem) => void;
   colorClass: string;
 }) {
   const dragItem = useRef<number | null>(null);
@@ -255,6 +279,7 @@ function DraggableSection({
             item={item}
             onRemove={onRemove}
             onSetDueToday={onSetDueToday}
+            onEdit={onEdit}
             draggable
             dragHandlers={{
               onDragStart: () => handleDragStart(index),
@@ -278,10 +303,18 @@ export default function Dashboard() {
   const clearToday = useAppStore((s) => s.clearToday);
   const reorderToday = useAppStore((s) => s.reorderToday);
   const updateAction = useAppStore((s) => s.updateAction);
+  const deleteAction = useAppStore((s) => s.deleteAction);
+  const delegateAction = useAppStore((s) => s.delegateAction);
   const updateWaitingItem = useAppStore((s) => s.updateWaitingItem);
+  const deleteWaitingItem = useAppStore((s) => s.deleteWaitingItem);
+  const takeBackWaiting = useAppStore((s) => s.takeBackWaiting);
 
   const [pickerOpen, setPickerOpen] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("gathered");
+  const [editingAction, setEditingAction] = useState<Action | null>(null);
+  const [editingWaiting, setEditingWaiting] = useState<WaitingItem | null>(null);
+  const [actionDialogOpen, setActionDialogOpen] = useState(false);
+  const [waitingDialogOpen, setWaitingDialogOpen] = useState(false);
 
   const todayStr = new Date().toISOString().slice(0, 10);
 
@@ -292,6 +325,16 @@ export default function Dashboard() {
       updateWaitingItem(item.data.id, { dueBy: todayStr });
     }
   }, [updateAction, updateWaitingItem, todayStr]);
+
+  const handleEdit = useCallback((item: TodayItem) => {
+    if (item.kind === "action") {
+      setEditingAction(item.data as Action);
+      setActionDialogOpen(true);
+    } else {
+      setEditingWaiting(item.data as WaitingItem);
+      setWaitingDialogOpen(true);
+    }
+  }, []);
 
   // Build gathered items in stored order, separated by type
   const { gatheredActions, gatheredWaiting } = useMemo(() => {
@@ -434,6 +477,7 @@ export default function Dashboard() {
               onRemove={removeToday}
               onReorder={handleReorderActions}
               onSetDueToday={handleSetDueToday}
+              onEdit={handleEdit}
               colorClass="text-primary"
             />
             <DraggableSection
@@ -443,6 +487,7 @@ export default function Dashboard() {
               onRemove={removeToday}
               onReorder={handleReorderWaiting}
               onSetDueToday={handleSetDueToday}
+              onEdit={handleEdit}
               colorClass="text-rag-amber"
             />
           </div>
@@ -463,6 +508,7 @@ export default function Dashboard() {
                 key={item.data.id}
                 item={item}
                 onSetDueToday={handleSetDueToday}
+                onEdit={handleEdit}
               />
             ))}
           </div>
@@ -546,6 +592,60 @@ export default function Dashboard() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Edit Action Dialog */}
+      <ActionDialog
+        open={actionDialogOpen}
+        onOpenChange={(open) => {
+          setActionDialogOpen(open);
+          if (!open) setEditingAction(null);
+        }}
+        action={editingAction}
+        onSave={(action) => {
+          updateAction(action.id, action);
+          setEditingAction(null);
+          setActionDialogOpen(false);
+        }}
+        onDelete={(id) => {
+          deleteAction(id);
+          removeToday(id);
+          setEditingAction(null);
+          setActionDialogOpen(false);
+        }}
+        onDelegate={(id, toWhom) => {
+          delegateAction(id, toWhom);
+          removeToday(id);
+          setEditingAction(null);
+          setActionDialogOpen(false);
+        }}
+      />
+
+      {/* Edit Waiting Dialog */}
+      <WaitingDialog
+        open={waitingDialogOpen}
+        onOpenChange={(open) => {
+          setWaitingDialogOpen(open);
+          if (!open) setEditingWaiting(null);
+        }}
+        item={editingWaiting}
+        onSave={(item) => {
+          updateWaitingItem(item.id, item);
+          setEditingWaiting(null);
+          setWaitingDialogOpen(false);
+        }}
+        onDelete={(id) => {
+          deleteWaitingItem(id);
+          removeToday(id);
+          setEditingWaiting(null);
+          setWaitingDialogOpen(false);
+        }}
+        onTakeBack={(id) => {
+          takeBackWaiting(id);
+          removeToday(id);
+          setEditingWaiting(null);
+          setWaitingDialogOpen(false);
+        }}
+      />
     </div>
   );
 }

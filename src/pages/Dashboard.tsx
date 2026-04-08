@@ -477,6 +477,7 @@ export default function Dashboard() {
               onRemove={removeToday}
               onReorder={handleReorderActions}
               onSetDueToday={handleSetDueToday}
+              onEdit={handleEdit}
               colorClass="text-primary"
             />
             <DraggableSection
@@ -486,6 +487,7 @@ export default function Dashboard() {
               onRemove={removeToday}
               onReorder={handleReorderWaiting}
               onSetDueToday={handleSetDueToday}
+              onEdit={handleEdit}
               colorClass="text-rag-amber"
             />
           </div>

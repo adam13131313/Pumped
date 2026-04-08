@@ -140,7 +140,7 @@ export default function ProjectDetailPage() {
                   </div>
                 )}
                 {wpActions.length === 0 && <p className="text-sm text-muted-foreground mb-3">No actions yet.</p>}
-                <Button variant="outline" size="sm" onClick={() => { setEditingAction({ id: "", task: "", project: project.name, workPackage: wp.workPackage, startDate: "", dueDate: "", priority: "Medium", status: "Not Started", notes: "" }); setActionDialogOpen(true); }}>
+                <Button variant="outline" size="sm" onClick={() => { setEditingAction({ id: "", task: "", project: project.name, workPackage: wp.workPackage, startDate: "", dueDate: "", priority: "Medium", status: "Not Started", notes: "", labels: [] }); setActionDialogOpen(true); }}>
                   <Plus className="h-3.5 w-3.5 mr-1" /> Add Action
                 </Button>
               </CardContent>

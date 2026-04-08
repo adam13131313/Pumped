@@ -429,6 +429,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
       priority: i.priority,
       status: "Not Started" as const,
       notes: i.notes,
+      labels: [],
     }));
     set({
       inboxItems: s.inboxItems.filter((i) => !ids.includes(i.id)),
@@ -496,6 +497,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
       priority: "Medium",
       status: "Not Started",
       notes: item.notes,
+      labels: [],
     };
     set({
       waitingItems: s.waitingItems.filter((w) => w.id !== id),

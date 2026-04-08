@@ -32,7 +32,8 @@ export function ActionDialog({ open, onOpenChange, action, onSave, onDelete, onD
   const workPackages = useAppStore((s) => s.workPackages);
   const globalFilter = useAppStore((s) => s.globalFilter);
 
-  const emptyForm: Partial<Action> = { task: "", project: "", workPackage: "", startDate: "", dueDate: "", priority: "Medium", status: "Not Started", notes: "" };
+  const emptyForm: Partial<Action> = { task: "", project: "", workPackage: "", startDate: "", dueDate: "", priority: "Medium", status: "Not Started", notes: "", labels: [] };
+  const [labelInput, setLabelInput] = useState("");
   const [form, setForm] = useState<Partial<Action>>(action ?? emptyForm);
   const [selectedProgrammeId, setSelectedProgrammeId] = useState("");
   const [selectedProjectId, setSelectedProjectId] = useState("");
@@ -162,8 +163,21 @@ export function ActionDialog({ open, onOpenChange, action, onSave, onDelete, onD
       priority: form.priority ?? "Medium",
       status: form.status ?? "Not Started",
       notes: form.notes?.trim() ?? "",
+      labels: form.labels ?? [],
     });
     onOpenChange(false);
+  };
+
+  const addLabel = () => {
+    const label = labelInput.trim();
+    if (label && !(form.labels ?? []).includes(label)) {
+      setForm({ ...form, labels: [...(form.labels ?? []), label] });
+    }
+    setLabelInput("");
+  };
+
+  const removeLabel = (label: string) => {
+    setForm({ ...form, labels: (form.labels ?? []).filter((l) => l !== label) });
   };
 
   // Find current WP id for the select value

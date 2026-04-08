@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+import { X, Tag } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,6 +11,7 @@ import { useAppStore } from "@/lib/store";
 import { LinkRenderer } from "@/components/LinkRenderer";
 import { TaskAttachments } from "@/components/TaskAttachments";
 import { TaskComments } from "@/components/TaskComments";
+import { Badge } from "@/components/ui/badge";
 
 interface ActionDialogProps {
   open: boolean;

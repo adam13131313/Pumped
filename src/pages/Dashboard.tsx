@@ -8,7 +8,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Target, Plus, X, CheckCircle2, Clock, ListChecks, CalendarCheck, GripVertical } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Target, Plus, X, CheckCircle2, Clock, ListChecks, CalendarCheck, GripVertical, ChevronDown, CalendarPlus } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type TodayItem =
@@ -17,12 +18,195 @@ type TodayItem =
 
 type ViewMode = "gathered" | "due-today";
 
+function TaskCard({
+  item,
+  onRemove,
+  onSetDueToday,
+  draggable = false,
+  dragHandlers,
+  isDragOver,
+}: {
+  item: TodayItem;
+  onRemove?: (id: string) => void;
+  onSetDueToday?: (item: TodayItem) => void;
+  draggable?: boolean;
+  dragHandlers?: {
+    onDragStart: () => void;
+    onDragOver: (e: React.DragEvent) => void;
+    onDragEnd: () => void;
+  };
+  isDragOver?: boolean;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const id = item.data.id;
+  const isAction = item.kind === "action";
+  const a = isAction ? (item.data as Action) : null;
+  const w = !isAction ? (item.data as WaitingItem) : null;
+
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const hasDueToday = isAction
+    ? a!.dueDate?.slice(0, 10) === todayStr
+    : w!.dueBy?.slice(0, 10) === todayStr;
+
+  return (
+    <Collapsible open={expanded} onOpenChange={setExpanded}>
+      <div
+        draggable={draggable}
+        onDragStart={dragHandlers?.onDragStart}
+        onDragOver={dragHandlers?.onDragOver}
+        onDragEnd={dragHandlers?.onDragEnd}
+        className={cn(
+          "rounded-lg border bg-card group hover:border-primary/30 transition-all",
+          draggable && "cursor-grab active:cursor-grabbing",
+          isDragOver && "border-primary/50 bg-primary/5"
+        )}
+      >
+        <CollapsibleTrigger asChild>
+          <div className="flex items-start gap-2 p-3 cursor-pointer select-none">
+            {draggable && (
+              <div className="shrink-0 pt-1 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors">
+                <GripVertical className="h-4 w-4" />
+              </div>
+            )}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                {a?.priority && (
+                  <Badge variant="outline" className={cn(
+                    "text-xs",
+                    a.priority === "High" ? "bg-rag-red/10 text-rag-red border-rag-red/20" :
+                    a.priority === "Medium" ? "bg-rag-amber/10 text-rag-amber border-rag-amber/20" :
+                    "bg-muted text-muted-foreground"
+                  )}>{a.priority}</Badge>
+                )}
+                {a?.status && <Badge variant="secondary" className="text-xs">{a.status}</Badge>}
+                {w?.status && <Badge variant="secondary" className="text-xs">{w.status}</Badge>}
+                {a?.labels && a.labels.length > 0 && a.labels.map((label) => (
+                  <Badge key={label} variant="outline" className="text-xs bg-accent/50">{label}</Badge>
+                ))}
+              </div>
+              <p className="font-medium text-sm">{isAction ? a!.task : w!.description}</p>
+              <div className="flex gap-4 mt-1 text-xs text-muted-foreground">
+                {isAction && a!.project && <span>{a!.project}</span>}
+                {isAction && a!.dueDate && <span className="font-mono">Due: {a!.dueDate}</span>}
+                {!isAction && w!.fromWhom && <span>From: {w!.fromWhom}</span>}
+                {!isAction && w!.dueBy && <span className="font-mono">Due: {w!.dueBy}</span>}
+              </div>
+            </div>
+            <div className="flex items-center gap-1 shrink-0">
+              {onSetDueToday && !hasDueToday && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSetDueToday(item);
+                  }}
+                  title="Set due date to today"
+                  className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-primary transition-colors"
+                >
+                  <CalendarPlus className="h-4 w-4" />
+                </button>
+              )}
+              {onRemove && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRemove(id);
+                  }}
+                  className="p-1 rounded hover:bg-muted text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+              <ChevronDown className={cn(
+                "h-4 w-4 text-muted-foreground transition-transform",
+                expanded && "rotate-180"
+              )} />
+            </div>
+          </div>
+        </CollapsibleTrigger>
+
+        <CollapsibleContent>
+          <div className="px-3 pb-3 pt-0 border-t mx-3 mt-0 pt-3 space-y-2 text-sm">
+            {isAction ? (
+              <>
+                {a!.project && (
+                  <div className="flex gap-2">
+                    <span className="text-muted-foreground w-24 shrink-0">Project:</span>
+                    <span>{a!.project}</span>
+                  </div>
+                )}
+                {a!.workPackage && (
+                  <div className="flex gap-2">
+                    <span className="text-muted-foreground w-24 shrink-0">Work Package:</span>
+                    <span>{a!.workPackage}</span>
+                  </div>
+                )}
+                {a!.startDate && (
+                  <div className="flex gap-2">
+                    <span className="text-muted-foreground w-24 shrink-0">Start Date:</span>
+                    <span className="font-mono">{a!.startDate}</span>
+                  </div>
+                )}
+                {a!.dueDate && (
+                  <div className="flex gap-2">
+                    <span className="text-muted-foreground w-24 shrink-0">Due Date:</span>
+                    <span className="font-mono">{a!.dueDate}</span>
+                  </div>
+                )}
+                {a!.notes && (
+                  <div className="flex gap-2">
+                    <span className="text-muted-foreground w-24 shrink-0">Notes:</span>
+                    <span className="whitespace-pre-wrap">{a!.notes}</span>
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                {w!.fromWhom && (
+                  <div className="flex gap-2">
+                    <span className="text-muted-foreground w-24 shrink-0">From:</span>
+                    <span>{w!.fromWhom}</span>
+                  </div>
+                )}
+                {w!.projectWP && (
+                  <div className="flex gap-2">
+                    <span className="text-muted-foreground w-24 shrink-0">Project/WP:</span>
+                    <span>{w!.projectWP}</span>
+                  </div>
+                )}
+                {w!.askedOn && (
+                  <div className="flex gap-2">
+                    <span className="text-muted-foreground w-24 shrink-0">Asked On:</span>
+                    <span className="font-mono">{w!.askedOn}</span>
+                  </div>
+                )}
+                {w!.dueBy && (
+                  <div className="flex gap-2">
+                    <span className="text-muted-foreground w-24 shrink-0">Due By:</span>
+                    <span className="font-mono">{w!.dueBy}</span>
+                  </div>
+                )}
+                {w!.notes && (
+                  <div className="flex gap-2">
+                    <span className="text-muted-foreground w-24 shrink-0">Notes:</span>
+                    <span className="whitespace-pre-wrap">{w!.notes}</span>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </CollapsibleContent>
+      </div>
+    </Collapsible>
+  );
+}
+
 function DraggableSection({
   title,
   icon,
   items,
   onRemove,
   onReorder,
+  onSetDueToday,
   colorClass,
 }: {
   title: string;
@@ -30,6 +214,7 @@ function DraggableSection({
   items: TodayItem[];
   onRemove: (id: string) => void;
   onReorder: (fromIndex: number, toIndex: number) => void;
+  onSetDueToday: (item: TodayItem) => void;
   colorClass: string;
 }) {
   const dragItem = useRef<number | null>(null);
@@ -64,57 +249,21 @@ function DraggableSection({
         <Badge variant="secondary" className="text-xs">{items.length}</Badge>
       </h2>
       <div className="space-y-1.5">
-        {items.map((item, index) => {
-          const id = item.data.id;
-          const isAction = item.kind === "action";
-          const a = isAction ? (item.data as Action) : null;
-          const w = !isAction ? (item.data as WaitingItem) : null;
-
-          return (
-            <div
-              key={id}
-              draggable
-              onDragStart={() => handleDragStart(index)}
-              onDragOver={(e) => handleDragOver(e, index)}
-              onDragEnd={handleDragEnd}
-              className={cn(
-                "flex items-start gap-2 rounded-lg border bg-card p-3 group hover:border-primary/30 transition-all cursor-grab active:cursor-grabbing",
-                dragOverIndex === index && "border-primary/50 bg-primary/5"
-              )}
-            >
-              <div className="shrink-0 pt-1 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors">
-                <GripVertical className="h-4 w-4" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-                  {a?.priority && (
-                    <Badge variant="outline" className={cn(
-                      "text-xs",
-                      a.priority === "High" ? "bg-rag-red/10 text-rag-red border-rag-red/20" :
-                      a.priority === "Medium" ? "bg-rag-amber/10 text-rag-amber border-rag-amber/20" :
-                      "bg-muted text-muted-foreground"
-                    )}>{a.priority}</Badge>
-                  )}
-                  {a?.status && <Badge variant="secondary" className="text-xs">{a.status}</Badge>}
-                  {w?.status && <Badge variant="secondary" className="text-xs">{w.status}</Badge>}
-                </div>
-                <p className="font-medium text-sm">{isAction ? a!.task : w!.description}</p>
-                <div className="flex gap-4 mt-1 text-xs text-muted-foreground">
-                  {isAction && a!.project && <span>{a!.project}</span>}
-                  {isAction && a!.dueDate && <span className="font-mono">Due: {a!.dueDate}</span>}
-                  {!isAction && w!.fromWhom && <span>From: {w!.fromWhom}</span>}
-                  {!isAction && w!.dueBy && <span className="font-mono">Due: {w!.dueBy}</span>}
-                </div>
-              </div>
-              <button
-                onClick={() => onRemove(id)}
-                className="shrink-0 p-1 rounded hover:bg-muted text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-          );
-        })}
+        {items.map((item, index) => (
+          <TaskCard
+            key={item.data.id}
+            item={item}
+            onRemove={onRemove}
+            onSetDueToday={onSetDueToday}
+            draggable
+            dragHandlers={{
+              onDragStart: () => handleDragStart(index),
+              onDragOver: (e) => handleDragOver(e, index),
+              onDragEnd: handleDragEnd,
+            }}
+            isDragOver={dragOverIndex === index}
+          />
+        ))}
       </div>
     </div>
   );
@@ -128,22 +277,30 @@ export default function Dashboard() {
   const removeToday = useAppStore((s) => s.removeToday);
   const clearToday = useAppStore((s) => s.clearToday);
   const reorderToday = useAppStore((s) => s.reorderToday);
+  const updateAction = useAppStore((s) => s.updateAction);
+  const updateWaitingItem = useAppStore((s) => s.updateWaitingItem);
 
   const [pickerOpen, setPickerOpen] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("gathered");
 
   const todayStr = new Date().toISOString().slice(0, 10);
 
+  const handleSetDueToday = useCallback((item: TodayItem) => {
+    if (item.kind === "action") {
+      updateAction(item.data.id, { dueDate: todayStr });
+    } else {
+      updateWaitingItem(item.data.id, { dueBy: todayStr });
+    }
+  }, [updateAction, updateWaitingItem, todayStr]);
+
   // Build gathered items in stored order, separated by type
   const { gatheredActions, gatheredWaiting } = useMemo(() => {
     const actionMap = new Map(actions.filter((a) => todayIds.has(a.id)).map((a) => [a.id, a]));
     const waitingMap = new Map(waitingItems.filter((w) => todayIds.has(w.id)).map((w) => [w.id, w]));
 
-    // Order based on todayOrder, actions first then waiting
     const orderedActionIds = todayOrder.filter((id) => actionMap.has(id));
     const orderedWaitingIds = todayOrder.filter((id) => waitingMap.has(id));
 
-    // Add any ids not in order list (newly added)
     actionMap.forEach((_, id) => { if (!orderedActionIds.includes(id)) orderedActionIds.push(id); });
     waitingMap.forEach((_, id) => { if (!orderedWaitingIds.includes(id)) orderedWaitingIds.push(id); });
 
@@ -171,7 +328,6 @@ export default function Dashboard() {
   const handleReorderActions = useCallback((fromIndex: number, toIndex: number) => {
     const actionIds = todayOrder.filter((id) => actions.some((a) => a.id === id && todayIds.has(id)));
     const waitingIds = todayOrder.filter((id) => waitingItems.some((w) => w.id === id && todayIds.has(id)));
-    // Also include any not yet in order
     actions.filter((a) => todayIds.has(a.id) && !actionIds.includes(a.id)).forEach((a) => actionIds.push(a.id));
 
     const item = actionIds.splice(fromIndex, 1)[0];
@@ -259,7 +415,7 @@ export default function Dashboard() {
         </button>
       </div>
 
-      {/* Gathered view — separated sections */}
+      {/* Gathered view */}
       {viewMode === "gathered" ? (
         totalGathered === 0 ? (
           <Card>
@@ -277,6 +433,7 @@ export default function Dashboard() {
               items={gatheredActions}
               onRemove={removeToday}
               onReorder={handleReorderActions}
+              onSetDueToday={handleSetDueToday}
               colorClass="text-primary"
             />
             <DraggableSection
@@ -285,6 +442,7 @@ export default function Dashboard() {
               items={gatheredWaiting}
               onRemove={removeToday}
               onReorder={handleReorderWaiting}
+              onSetDueToday={handleSetDueToday}
               colorClass="text-rag-amber"
             />
           </div>
@@ -299,33 +457,14 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         ) : (
-          <div className="space-y-2">
-            {dueTodayItems.map((item) => {
-              const id = item.data.id;
-              const isAction = item.kind === "action";
-              const a = isAction ? (item.data as Action) : null;
-              const w = !isAction ? (item.data as WaitingItem) : null;
-              return (
-                <div key={id} className="flex items-start gap-3 rounded-lg border bg-card p-4 hover:border-primary/30 transition-colors">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Badge variant="outline" className={isAction ? "bg-primary/10 text-primary border-primary/20" : "bg-rag-amber/10 text-rag-amber border-rag-amber/20"}>
-                        {isAction ? <><CheckCircle2 className="h-3 w-3 mr-1" />My Action</> : <><Clock className="h-3 w-3 mr-1" />Waiting For</>}
-                      </Badge>
-                      {a?.status && <Badge variant="secondary" className="text-xs">{a.status}</Badge>}
-                      {w?.status && <Badge variant="secondary" className="text-xs">{w.status}</Badge>}
-                    </div>
-                    <p className="font-medium text-sm">{isAction ? a!.task : w!.description}</p>
-                    <div className="flex gap-4 mt-1 text-xs text-muted-foreground">
-                      {isAction && a!.project && <span>{a!.project}</span>}
-                      {isAction && a!.dueDate && <span className="font-mono">Due: {a!.dueDate}</span>}
-                      {!isAction && w!.fromWhom && <span>From: {w!.fromWhom}</span>}
-                      {!isAction && w!.dueBy && <span className="font-mono">Due: {w!.dueBy}</span>}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+          <div className="space-y-1.5">
+            {dueTodayItems.map((item) => (
+              <TaskCard
+                key={item.data.id}
+                item={item}
+                onSetDueToday={handleSetDueToday}
+              />
+            ))}
           </div>
         )
       )}

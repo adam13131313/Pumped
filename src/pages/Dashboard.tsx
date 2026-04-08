@@ -508,6 +508,7 @@ export default function Dashboard() {
                 key={item.data.id}
                 item={item}
                 onSetDueToday={handleSetDueToday}
+                onEdit={handleEdit}
               />
             ))}
           </div>

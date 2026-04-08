@@ -326,6 +326,16 @@ export default function Dashboard() {
     }
   }, [updateAction, updateWaitingItem, todayStr]);
 
+  const handleEdit = useCallback((item: TodayItem) => {
+    if (item.kind === "action") {
+      setEditingAction(item.data as Action);
+      setActionDialogOpen(true);
+    } else {
+      setEditingWaiting(item.data as WaitingItem);
+      setWaitingDialogOpen(true);
+    }
+  }, []);
+
   // Build gathered items in stored order, separated by type
   const { gatheredActions, gatheredWaiting } = useMemo(() => {
     const actionMap = new Map(actions.filter((a) => todayIds.has(a.id)).map((a) => [a.id, a]));

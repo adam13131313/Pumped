@@ -556,13 +556,17 @@ export default function InboxPage() {
                     First row is header
                   </label>
                 </div>
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
                   {([
                     ["task", "Task *"],
                     ["priority", "Priority"],
+                    ["status", "Status"],
+                    ["startDate", "Start Date"],
                     ["dueDate", "Due Date"],
                     ["project", "Project"],
+                    ["workPackage", "Work Package"],
                     ["notes", "Notes"],
+                    ["labels", "Labels"],
                   ] as const).map(([key, label]) => (
                     <div key={key} className="space-y-1">
                       <span className="text-xs text-muted-foreground">{label}</span>

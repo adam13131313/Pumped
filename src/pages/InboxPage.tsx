@@ -13,17 +13,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Inbox, FileText, Mic, Link, Upload, Sparkles, Trash2, ArrowRight,
-  MicOff, Loader2, PenLine, X, Check, GripVertical
+  MicOff, Loader2, PenLine, X, Check, GripVertical, Table as TableIcon
 } from "lucide-react";
 import { toast } from "sonner";
-
-type ProposedTask = {
-  task: string;
-  priority: Priority;
-  dueDate: string;
-  project: string;
-  notes: string;
-};
+import {
+  parseCSV, autoMapColumns, rowsToTasks, ColumnMapping, ProposedTask,
+} from "@/lib/csvImport";
 
 export default function InboxPage() {
   const { addInboxItems, updateInboxItem, deleteInboxItem, bulkDeleteInboxItems, promoteInboxToActions, projects } = useAppStore();

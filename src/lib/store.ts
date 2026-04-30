@@ -455,7 +455,17 @@ export const useAppStore = create<AppState>()((set, get) => ({
     });
   },
 
-  // --- SOP Items ---
+  bulkAddActions: (actions) => {
+    set((s) => ({ actions: [...s.actions, ...actions] }));
+    getUserId().then((uid) => {
+      const rows = actions.map((a) => ({
+        id: a.id, user_id: uid, task: a.task, project: a.project,
+        work_package: a.workPackage, start_date: a.startDate, due_date: a.dueDate,
+        priority: a.priority, status: a.status, notes: a.notes, labels: a.labels ?? [],
+      }));
+      supabase.from("actions").insert(rows).then();
+    });
+  },
   updateSOPItem: (id, updates) => {
     set((s) => ({ sopItems: s.sopItems.map((item) => (item.id === id ? { ...item, ...updates } : item)) }));
     const dbUpdates: any = {};

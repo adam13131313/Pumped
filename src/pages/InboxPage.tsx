@@ -465,13 +465,54 @@ export default function InboxPage() {
             <div className="flex items-center justify-between">
               <CardTitle className="text-lg">Proposed Tasks ({proposedTasks.length})</CardTitle>
               <div className="flex gap-2">
-                <Button size="sm" variant="ghost" onClick={() => setShowPreview(false)}><X className="h-4 w-4 mr-1" />Cancel</Button>
+                <Button size="sm" variant="ghost" onClick={cancelPreview}><X className="h-4 w-4 mr-1" />Cancel</Button>
                 <Button size="sm" onClick={acceptProposed} disabled={proposedTasks.length === 0}>
                   <Check className="h-4 w-4 mr-1" />Add to Inbox
                 </Button>
               </div>
             </div>
             {summary && <p className="text-sm text-muted-foreground mt-1">{summary}</p>}
+            {csvRows && csvMapping && (
+              <div className="mt-3 rounded-md border bg-muted/30 p-3 space-y-2">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <TableIcon className="h-4 w-4" /> Column mapping
+                  <label className="ml-auto flex items-center gap-1.5 text-xs font-normal text-muted-foreground">
+                    <Checkbox
+                      checked={csvHasHeader}
+                      onCheckedChange={(v) => remapCsv(csvMapping, !!v)}
+                    />
+                    First row is header
+                  </label>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                  {([
+                    ["task", "Task *"],
+                    ["priority", "Priority"],
+                    ["dueDate", "Due Date"],
+                    ["project", "Project"],
+                    ["notes", "Notes"],
+                  ] as const).map(([key, label]) => (
+                    <div key={key} className="space-y-1">
+                      <span className="text-xs text-muted-foreground">{label}</span>
+                      <Select
+                        value={String(csvMapping[key])}
+                        onValueChange={(v) => remapCsv({ ...csvMapping, [key]: parseInt(v) }, csvHasHeader)}
+                      >
+                        <SelectTrigger className="h-8"><SelectValue placeholder="—" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="-1">— None —</SelectItem>
+                          {csvHeaders.map((h, i) => (
+                            <SelectItem key={i} value={String(i)}>
+                              {csvHasHeader ? (h || `Column ${i + 1}`) : `Column ${i + 1}`}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </CardHeader>
           <CardContent className="space-y-2">
             {proposedTasks.map((t, i) => (

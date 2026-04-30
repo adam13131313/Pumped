@@ -289,6 +289,17 @@ export default function InboxPage() {
     }
   };
 
+  const resetPreviewState = () => {
+    setShowPreview(false);
+    setProposedTasks([]);
+    setSummary("");
+    setTextInput("");
+    setCsvRows(null);
+    setCsvHeaders([]);
+    setCsvMapping(null);
+    setCsvFileName("");
+  };
+
   const acceptProposed = () => {
     const now = new Date().toISOString();
     const items: InboxItem[] = proposedTasks.map((t) => ({
@@ -302,26 +313,32 @@ export default function InboxPage() {
       createdAt: now,
     }));
     addInboxItems(items);
-    setShowPreview(false);
-    setProposedTasks([]);
-    setSummary("");
-    setTextInput("");
-    setCsvRows(null);
-    setCsvHeaders([]);
-    setCsvMapping(null);
-    setCsvFileName("");
+    resetPreviewState();
     toast.success(`${items.length} tasks added to inbox`);
   };
 
-  const cancelPreview = () => {
-    setShowPreview(false);
-    setProposedTasks([]);
-    setSummary("");
-    setCsvRows(null);
-    setCsvHeaders([]);
-    setCsvMapping(null);
-    setCsvFileName("");
+  const acceptAsActions = () => {
+    const newActions: Action[] = proposedTasks.map((t) => ({
+      id: crypto.randomUUID(),
+      task: t.task,
+      project: t.project,
+      workPackage: t.workPackage,
+      startDate: t.startDate,
+      dueDate: t.dueDate,
+      priority: t.priority,
+      status: t.status,
+      notes: t.notes,
+      labels: t.labels ?? [],
+    }));
+    bulkAddActions(newActions);
+    resetPreviewState();
+    toast.success(`${newActions.length} tasks added to My Actions`);
   };
+
+  const cancelPreview = () => {
+    resetPreviewState();
+  };
+
 
   const removeProposed = (idx: number) => {
     setProposedTasks((prev) => prev.filter((_, i) => i !== idx));

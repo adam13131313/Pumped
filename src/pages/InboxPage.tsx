@@ -429,7 +429,7 @@ export default function InboxPage() {
                     <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
                       <Upload className="h-4 w-4 mr-2" />Choose File
                     </Button>
-                    <p className="text-xs text-muted-foreground mt-2">Supports .txt, .csv, .md, .tsv</p>
+                    <p className="text-xs text-muted-foreground mt-2">.csv & .tsv are auto-parsed with column mapping. .txt & .md use AI extraction.</p>
                   </div>
                 </TabsContent>
 

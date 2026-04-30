@@ -469,14 +469,34 @@ export default function InboxPage() {
                 </TabsContent>
 
                 <TabsContent value="file" className="space-y-3 mt-0">
+                  <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+                    <p className="text-sm font-medium flex items-center gap-2">
+                      <FileSpreadsheet className="h-4 w-4" /> Need a starter file?
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Download a pre-formatted template with all task fields. The Excel version includes dropdowns
+                      for Priority, Status, your Projects, and Work Packages.
+                    </p>
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      <Button size="sm" variant="default" onClick={() =>
+                        downloadXLSXTemplate({ projects: projectNames, workPackages: workPackageNames })
+                      }>
+                        <Download className="h-4 w-4 mr-2" />Excel template (.xlsx)
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={downloadCSVTemplate}>
+                        <Download className="h-4 w-4 mr-2" />Plain CSV template
+                      </Button>
+                    </div>
+                  </div>
+
                   <div className="rounded-lg border-2 border-dashed border-muted-foreground/25 p-8 text-center">
                     <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground/50" />
                     <p className="text-sm text-muted-foreground mb-3">Drag & drop a file here, or click to browse</p>
-                    <input ref={fileInputRef} type="file" accept=".txt,.csv,.md,.tsv" onChange={handleFileUpload} className="hidden" />
+                    <input ref={fileInputRef} type="file" accept=".txt,.csv,.md,.tsv,.xlsx,.xls" onChange={handleFileUpload} className="hidden" />
                     <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
                       <Upload className="h-4 w-4 mr-2" />Choose File
                     </Button>
-                    <p className="text-xs text-muted-foreground mt-2">.csv & .tsv are auto-parsed with column mapping. .txt & .md use AI extraction.</p>
+                    <p className="text-xs text-muted-foreground mt-2">.xlsx, .csv & .tsv are auto-parsed with column mapping. .txt & .md use AI extraction.</p>
                   </div>
                 </TabsContent>
 

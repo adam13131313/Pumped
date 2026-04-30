@@ -276,7 +276,21 @@ export default function InboxPage() {
     setProposedTasks([]);
     setSummary("");
     setTextInput("");
+    setCsvRows(null);
+    setCsvHeaders([]);
+    setCsvMapping(null);
+    setCsvFileName("");
     toast.success(`${items.length} tasks added to inbox`);
+  };
+
+  const cancelPreview = () => {
+    setShowPreview(false);
+    setProposedTasks([]);
+    setSummary("");
+    setCsvRows(null);
+    setCsvHeaders([]);
+    setCsvMapping(null);
+    setCsvFileName("");
   };
 
   const removeProposed = (idx: number) => {

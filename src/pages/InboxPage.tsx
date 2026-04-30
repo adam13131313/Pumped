@@ -13,17 +13,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Inbox, FileText, Mic, Link, Upload, Sparkles, Trash2, ArrowRight,
-  MicOff, Loader2, PenLine, X, Check, GripVertical
+  MicOff, Loader2, PenLine, X, Check, GripVertical, Table as TableIcon
 } from "lucide-react";
 import { toast } from "sonner";
-
-type ProposedTask = {
-  task: string;
-  priority: Priority;
-  dueDate: string;
-  project: string;
-  notes: string;
-};
+import {
+  parseCSV, autoMapColumns, rowsToTasks, ColumnMapping, ProposedTask,
+} from "@/lib/csvImport";
 
 export default function InboxPage() {
   const { addInboxItems, updateInboxItem, deleteInboxItem, bulkDeleteInboxItems, promoteInboxToActions, projects } = useAppStore();
@@ -52,6 +47,13 @@ export default function InboxPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragCounterRef = useRef(0);
 
+  // CSV mapping state
+  const [csvRows, setCsvRows] = useState<string[][] | null>(null);
+  const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
+  const [csvHasHeader, setCsvHasHeader] = useState(true);
+  const [csvMapping, setCsvMapping] = useState<ColumnMapping | null>(null);
+  const [csvFileName, setCsvFileName] = useState("");
+
   const projectNames = projects.map((p) => p.name).filter(Boolean);
 
   const extractTasks = useCallback(async (text: string, source: string) => {
@@ -77,9 +79,69 @@ export default function InboxPage() {
     }
   }, [projectNames]);
 
+  const handleCsvFile = useCallback((file: File, text: string, delimiter?: "," | "\t") => {
+    // For TSV, convert tabs to commas in a way the parser handles. Simpler: split lines and re-quote.
+    let toParse = text;
+    if (delimiter === "\t") {
+      toParse = text
+        .split(/\r?\n/)
+        .map((line) =>
+          line.split("\t").map((c) => `"${c.replace(/"/g, '""')}"`).join(",")
+        )
+        .join("\n");
+    }
+    const rows = parseCSV(toParse);
+    if (rows.length === 0) {
+      toast.error("CSV appears to be empty");
+      return;
+    }
+    const headers = rows[0];
+    const mapping = autoMapColumns(headers);
+    setCsvRows(rows);
+    setCsvHeaders(headers);
+    setCsvHasHeader(true);
+    setCsvMapping(mapping);
+    setCsvFileName(file.name);
+    setSourceLabel("csv: " + file.name);
+
+    if (mapping.task < 0) {
+      toast.warning("Couldn't auto-detect a task column. Please choose one below.", { duration: 4000 });
+      return;
+    }
+    // Auto-generate proposed tasks
+    const tasks = rowsToTasks(rows, mapping, true, projectNames);
+    if (tasks.length === 0) {
+      toast.warning("No rows with task content found. Adjust column mapping.");
+      return;
+    }
+    setProposedTasks(tasks);
+    setSummary(`Imported ${tasks.length} rows from ${file.name}. Review the column mapping below if needed.`);
+    setShowPreview(true);
+    toast.success(`Parsed ${tasks.length} tasks from CSV`);
+  }, [projectNames]);
+
+  const remapCsv = useCallback((next: ColumnMapping, hasHeader: boolean) => {
+    if (!csvRows) return;
+    setCsvMapping(next);
+    setCsvHasHeader(hasHeader);
+    if (next.task < 0) return;
+    const tasks = rowsToTasks(csvRows, next, hasHeader, projectNames);
+    setProposedTasks(tasks);
+    setSummary(`Imported ${tasks.length} rows from ${csvFileName}.`);
+  }, [csvRows, projectNames, csvFileName]);
+
   const readFileContent = async (file: File) => {
     try {
       const text = await file.text();
+      const name = file.name.toLowerCase();
+      if (name.endsWith(".csv")) {
+        handleCsvFile(file, text, ",");
+        return;
+      }
+      if (name.endsWith(".tsv")) {
+        handleCsvFile(file, text, "\t");
+        return;
+      }
       setTextInput(text);
       extractTasks(text, "file: " + file.name);
     } catch {
@@ -93,6 +155,7 @@ export default function InboxPage() {
     await readFileContent(file);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
+
 
   const handleDragEnter = (e: DragEvent) => {
     e.preventDefault();
@@ -213,7 +276,21 @@ export default function InboxPage() {
     setProposedTasks([]);
     setSummary("");
     setTextInput("");
+    setCsvRows(null);
+    setCsvHeaders([]);
+    setCsvMapping(null);
+    setCsvFileName("");
     toast.success(`${items.length} tasks added to inbox`);
+  };
+
+  const cancelPreview = () => {
+    setShowPreview(false);
+    setProposedTasks([]);
+    setSummary("");
+    setCsvRows(null);
+    setCsvHeaders([]);
+    setCsvMapping(null);
+    setCsvFileName("");
   };
 
   const removeProposed = (idx: number) => {
@@ -352,7 +429,7 @@ export default function InboxPage() {
                     <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
                       <Upload className="h-4 w-4 mr-2" />Choose File
                     </Button>
-                    <p className="text-xs text-muted-foreground mt-2">Supports .txt, .csv, .md, .tsv</p>
+                    <p className="text-xs text-muted-foreground mt-2">.csv & .tsv are auto-parsed with column mapping. .txt & .md use AI extraction.</p>
                   </div>
                 </TabsContent>
 
@@ -388,13 +465,54 @@ export default function InboxPage() {
             <div className="flex items-center justify-between">
               <CardTitle className="text-lg">Proposed Tasks ({proposedTasks.length})</CardTitle>
               <div className="flex gap-2">
-                <Button size="sm" variant="ghost" onClick={() => setShowPreview(false)}><X className="h-4 w-4 mr-1" />Cancel</Button>
+                <Button size="sm" variant="ghost" onClick={cancelPreview}><X className="h-4 w-4 mr-1" />Cancel</Button>
                 <Button size="sm" onClick={acceptProposed} disabled={proposedTasks.length === 0}>
                   <Check className="h-4 w-4 mr-1" />Add to Inbox
                 </Button>
               </div>
             </div>
             {summary && <p className="text-sm text-muted-foreground mt-1">{summary}</p>}
+            {csvRows && csvMapping && (
+              <div className="mt-3 rounded-md border bg-muted/30 p-3 space-y-2">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <TableIcon className="h-4 w-4" /> Column mapping
+                  <label className="ml-auto flex items-center gap-1.5 text-xs font-normal text-muted-foreground">
+                    <Checkbox
+                      checked={csvHasHeader}
+                      onCheckedChange={(v) => remapCsv(csvMapping, !!v)}
+                    />
+                    First row is header
+                  </label>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                  {([
+                    ["task", "Task *"],
+                    ["priority", "Priority"],
+                    ["dueDate", "Due Date"],
+                    ["project", "Project"],
+                    ["notes", "Notes"],
+                  ] as const).map(([key, label]) => (
+                    <div key={key} className="space-y-1">
+                      <span className="text-xs text-muted-foreground">{label}</span>
+                      <Select
+                        value={String(csvMapping[key])}
+                        onValueChange={(v) => remapCsv({ ...csvMapping, [key]: parseInt(v) }, csvHasHeader)}
+                      >
+                        <SelectTrigger className="h-8"><SelectValue placeholder="—" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="-1">— None —</SelectItem>
+                          {csvHeaders.map((h, i) => (
+                            <SelectItem key={i} value={String(i)}>
+                              {csvHasHeader ? (h || `Column ${i + 1}`) : `Column ${i + 1}`}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </CardHeader>
           <CardContent className="space-y-2">
             {proposedTasks.map((t, i) => (

@@ -47,6 +47,13 @@ export default function InboxPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragCounterRef = useRef(0);
 
+  // CSV mapping state
+  const [csvRows, setCsvRows] = useState<string[][] | null>(null);
+  const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
+  const [csvHasHeader, setCsvHasHeader] = useState(true);
+  const [csvMapping, setCsvMapping] = useState<ColumnMapping | null>(null);
+  const [csvFileName, setCsvFileName] = useState("");
+
   const projectNames = projects.map((p) => p.name).filter(Boolean);
 
   const extractTasks = useCallback(async (text: string, source: string) => {
@@ -72,9 +79,69 @@ export default function InboxPage() {
     }
   }, [projectNames]);
 
+  const handleCsvFile = useCallback((file: File, text: string, delimiter?: "," | "\t") => {
+    // For TSV, convert tabs to commas in a way the parser handles. Simpler: split lines and re-quote.
+    let toParse = text;
+    if (delimiter === "\t") {
+      toParse = text
+        .split(/\r?\n/)
+        .map((line) =>
+          line.split("\t").map((c) => `"${c.replace(/"/g, '""')}"`).join(",")
+        )
+        .join("\n");
+    }
+    const rows = parseCSV(toParse);
+    if (rows.length === 0) {
+      toast.error("CSV appears to be empty");
+      return;
+    }
+    const headers = rows[0];
+    const mapping = autoMapColumns(headers);
+    setCsvRows(rows);
+    setCsvHeaders(headers);
+    setCsvHasHeader(true);
+    setCsvMapping(mapping);
+    setCsvFileName(file.name);
+    setSourceLabel("csv: " + file.name);
+
+    if (mapping.task < 0) {
+      toast.warning("Couldn't auto-detect a task column. Please choose one below.", { duration: 4000 });
+      return;
+    }
+    // Auto-generate proposed tasks
+    const tasks = rowsToTasks(rows, mapping, true, projectNames);
+    if (tasks.length === 0) {
+      toast.warning("No rows with task content found. Adjust column mapping.");
+      return;
+    }
+    setProposedTasks(tasks);
+    setSummary(`Imported ${tasks.length} rows from ${file.name}. Review the column mapping below if needed.`);
+    setShowPreview(true);
+    toast.success(`Parsed ${tasks.length} tasks from CSV`);
+  }, [projectNames]);
+
+  const remapCsv = useCallback((next: ColumnMapping, hasHeader: boolean) => {
+    if (!csvRows) return;
+    setCsvMapping(next);
+    setCsvHasHeader(hasHeader);
+    if (next.task < 0) return;
+    const tasks = rowsToTasks(csvRows, next, hasHeader, projectNames);
+    setProposedTasks(tasks);
+    setSummary(`Imported ${tasks.length} rows from ${csvFileName}.`);
+  }, [csvRows, projectNames, csvFileName]);
+
   const readFileContent = async (file: File) => {
     try {
       const text = await file.text();
+      const name = file.name.toLowerCase();
+      if (name.endsWith(".csv")) {
+        handleCsvFile(file, text, ",");
+        return;
+      }
+      if (name.endsWith(".tsv")) {
+        handleCsvFile(file, text, "\t");
+        return;
+      }
       setTextInput(text);
       extractTasks(text, "file: " + file.name);
     } catch {
@@ -88,6 +155,7 @@ export default function InboxPage() {
     await readFileContent(file);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
+
 
   const handleDragEnter = (e: DragEvent) => {
     e.preventDefault();

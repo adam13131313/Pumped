@@ -531,11 +531,16 @@ export default function InboxPage() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle className="text-lg">Proposed Tasks ({proposedTasks.length})</CardTitle>
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap">
                 <Button size="sm" variant="ghost" onClick={cancelPreview}><X className="h-4 w-4 mr-1" />Cancel</Button>
-                <Button size="sm" onClick={acceptProposed} disabled={proposedTasks.length === 0}>
+                <Button size="sm" variant="outline" onClick={acceptProposed} disabled={proposedTasks.length === 0}>
                   <Check className="h-4 w-4 mr-1" />Add to Inbox
                 </Button>
+                {csvRows && (
+                  <Button size="sm" onClick={acceptAsActions} disabled={proposedTasks.length === 0}>
+                    <ArrowRight className="h-4 w-4 mr-1" />Add as Actions
+                  </Button>
+                )}
               </div>
             </div>
             {summary && <p className="text-sm text-muted-foreground mt-1">{summary}</p>}

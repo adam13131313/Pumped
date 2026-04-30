@@ -78,6 +78,7 @@ interface AppState {
   deleteInboxItem: (id: string) => void;
   bulkDeleteInboxItems: (ids: string[]) => void;
   promoteInboxToActions: (ids: string[]) => void;
+  bulkAddActions: (actions: Action[]) => void;
   updateSOPItem: (id: string, updates: Partial<SOPItem>) => void;
   addSOPItem: (item: SOPItem) => void;
   deleteSOPItem: (id: string) => void;

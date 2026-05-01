@@ -509,11 +509,13 @@ export default function InboxPage() {
                     </p>
                     <div className="flex flex-wrap gap-2 pt-1">
                       <Button size="sm" variant="default" onClick={() =>
-                        downloadXLSXTemplate({ projects: projectNames, workPackages: workPackageNames })
+                        downloadXLSXTemplate({ projects: projectNames, workPackages: workPackageNames, wbs: wbsRows })
                       }>
                         <Download className="h-4 w-4 mr-2" />Excel template (.xlsx)
                       </Button>
-                      <Button size="sm" variant="outline" onClick={downloadCSVTemplate}>
+                      <Button size="sm" variant="outline" onClick={() =>
+                        downloadCSVTemplate({ projects: projectNames, workPackages: workPackageNames, wbs: wbsRows })
+                      }>
                         <Download className="h-4 w-4 mr-2" />Plain CSV template
                       </Button>
                     </div>

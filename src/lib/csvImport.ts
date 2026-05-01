@@ -35,14 +35,16 @@ export function parseCSV(text: string): string[][] {
     if (c === "\n" || c === "\r") {
       row.push(field); field = "";
       if (c === "\r" && src[i + 1] === "\n") i++;
-      if (row.length > 1 || (row.length === 1 && row[0].trim() !== "")) rows.push(row);
+      const isComment = row.length === 1 && row[0].trimStart().startsWith("#");
+      if (!isComment && (row.length > 1 || (row.length === 1 && row[0].trim() !== ""))) rows.push(row);
       row = []; i++; continue;
     }
     field += c; i++;
   }
   if (field.length > 0 || row.length > 0) {
     row.push(field);
-    if (row.length > 1 || (row.length === 1 && row[0].trim() !== "")) rows.push(row);
+    const isComment = row.length === 1 && row[0].trimStart().startsWith("#");
+    if (!isComment && (row.length > 1 || (row.length === 1 && row[0].trim() !== ""))) rows.push(row);
   }
   return rows;
 }
@@ -186,13 +188,39 @@ export const TEMPLATE_SAMPLE_ROWS: string[][] = [
   ["Send weekly status update", "Low", "Not Started", "", "", "", "", "", "comms"],
 ];
 
-export function downloadCSVTemplate() {
-  const lines = [
-    TEMPLATE_HEADERS.join(","),
-    ...TEMPLATE_SAMPLE_ROWS.map((r) =>
-      r.map((c) => (/[",\n]/.test(c) ? `"${c.replace(/"/g, '""')}"` : c)).join(",")
-    ),
-  ];
+export type WBSRow = { programme: string; project: string; workPackage: string };
+
+const csvEscape = (c: string) => (/[",\n]/.test(c) ? `"${c.replace(/"/g, '""')}"` : c);
+
+export function downloadCSVTemplate(opts?: {
+  projects?: string[];
+  workPackages?: string[];
+  wbs?: WBSRow[];
+}) {
+  const lines: string[] = [];
+  // Reference block (commented with #) showing the user's current WBS so they
+  // know exactly which Project / Work Package values are valid.
+  const projects = opts?.projects ?? [];
+  const wps = opts?.workPackages ?? [];
+  const wbs = opts?.wbs ?? [];
+  if (projects.length || wps.length || wbs.length) {
+    lines.push("# === Your current setup (reference only — delete these lines before import) ===");
+    if (wbs.length) {
+      lines.push("# Programme | Project | Work Package");
+      for (const r of wbs) {
+        lines.push(`# ${r.programme || "(none)"} | ${r.project || "(none)"} | ${r.workPackage || "(none)"}`);
+      }
+    } else {
+      if (projects.length) lines.push("# Projects: " + projects.join(", "));
+      if (wps.length) lines.push("# Work Packages: " + wps.join(", "));
+    }
+    lines.push("# Priority values: High, Medium, Low");
+    lines.push("# Status values: Not Started, In Progress, Complete, Blocked");
+    lines.push("# Date format: YYYY-MM-DD");
+    lines.push("#");
+  }
+  lines.push(TEMPLATE_HEADERS.join(","));
+  for (const r of TEMPLATE_SAMPLE_ROWS) lines.push(r.map(csvEscape).join(","));
   const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
   triggerDownload(blob, "tasks-template.csv");
 }
@@ -200,11 +228,13 @@ export function downloadCSVTemplate() {
 export async function downloadXLSXTemplate(opts: {
   projects: string[];
   workPackages: string[];
+  wbs?: WBSRow[];
 }) {
   // Dynamic import keeps bundle lean
   const ExcelJS = (await import("exceljs")).default;
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet("Tasks");
+  const reference = wb.addWorksheet("WBS Reference");
   const lookups = wb.addWorksheet("Lookups");
   lookups.state = "hidden";
 
@@ -217,6 +247,28 @@ export async function downloadXLSXTemplate(opts: {
   writeList("B", "Status", ["Not Started", "In Progress", "Complete", "Blocked"]);
   writeList("C", "Project", opts.projects.length ? opts.projects : [" "]);
   writeList("D", "WorkPackage", opts.workPackages.length ? opts.workPackages : [" "]);
+
+  // WBS Reference sheet — visible to the user so they see their hierarchy.
+  reference.columns = [
+    { header: "Programme", key: "programme", width: 28 },
+    { header: "Project", key: "project", width: 28 },
+    { header: "Work Package", key: "workPackage", width: 32 },
+  ];
+  reference.getRow(1).font = { bold: true };
+  reference.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE5E7EB" } };
+  const wbs = opts.wbs ?? [];
+  if (wbs.length) {
+    for (const r of wbs) reference.addRow([r.programme || "(none)", r.project || "(none)", r.workPackage || "(none)"]);
+  } else {
+    // Fall back to flat lists if WBS not provided
+    const max = Math.max(opts.projects.length, opts.workPackages.length, 1);
+    for (let i = 0; i < max; i++) {
+      reference.addRow(["", opts.projects[i] ?? "", opts.workPackages[i] ?? ""]);
+    }
+  }
+  reference.addRow([]);
+  reference.addRow(["Snapshot generated:", new Date().toISOString().slice(0, 10)]);
+  reference.getRow(reference.rowCount).font = { italic: true, color: { argb: "FF6B7280" } };
 
   // Headers
   ws.columns = TEMPLATE_HEADERS.map((h) => ({ header: h, key: h, width: h === "Notes" ? 40 : h === "Task" ? 36 : 18 }));

@@ -23,7 +23,7 @@ import {
 import { TaskStatus, Action } from "@/lib/types";
 
 export default function InboxPage() {
-  const { addInboxItems, updateInboxItem, deleteInboxItem, bulkDeleteInboxItems, promoteInboxToActions, bulkAddActions, projects, workPackages } = useAppStore();
+  const { addInboxItems, updateInboxItem, deleteInboxItem, bulkDeleteInboxItems, promoteInboxToActions, bulkAddActions, projects, workPackages, programmes } = useAppStore();
   const { inboxItems } = useFilteredData();
   const [textInput, setTextInput] = useState("");
   const [isExtracting, setIsExtracting] = useState(false);
@@ -58,6 +58,36 @@ export default function InboxPage() {
 
   const projectNames = projects.map((p) => p.name).filter(Boolean);
   const workPackageNames = Array.from(new Set(workPackages.map((w) => w.workPackage).filter(Boolean)));
+
+  // Build a flattened Programme → Project → Work Package reference reflecting
+  // the user's current setup so downloaded templates stay in sync with the app.
+  const wbsRows = (() => {
+    const rows: { programme: string; project: string; workPackage: string }[] = [];
+    const progName = (id: string) => programmes.find((pr) => pr.id === id)?.name ?? "";
+    const wpsByProject = new Map<string, string[]>();
+    for (const wp of workPackages) {
+      if (!wp.workPackage) continue;
+      const list = wpsByProject.get(wp.project) ?? [];
+      list.push(wp.workPackage);
+      wpsByProject.set(wp.project, list);
+    }
+    if (projects.length === 0 && workPackages.length === 0) return rows;
+    for (const p of projects) {
+      const wps = wpsByProject.get(p.name) ?? [];
+      if (wps.length === 0) {
+        rows.push({ programme: progName(p.programmeId), project: p.name, workPackage: "" });
+      } else {
+        for (const w of wps) rows.push({ programme: progName(p.programmeId), project: p.name, workPackage: w });
+      }
+    }
+    // Orphan work packages (project not in projects list)
+    for (const [proj, wps] of wpsByProject) {
+      if (!projects.find((p) => p.name === proj)) {
+        for (const w of wps) rows.push({ programme: "", project: proj, workPackage: w });
+      }
+    }
+    return rows;
+  })();
 
   // Normalize tasks coming from AI (older shape) into full ProposedTask shape
   const normalizeProposed = (raw: any[]): ProposedTask[] =>
@@ -479,11 +509,13 @@ export default function InboxPage() {
                     </p>
                     <div className="flex flex-wrap gap-2 pt-1">
                       <Button size="sm" variant="default" onClick={() =>
-                        downloadXLSXTemplate({ projects: projectNames, workPackages: workPackageNames })
+                        downloadXLSXTemplate({ projects: projectNames, workPackages: workPackageNames, wbs: wbsRows })
                       }>
                         <Download className="h-4 w-4 mr-2" />Excel template (.xlsx)
                       </Button>
-                      <Button size="sm" variant="outline" onClick={downloadCSVTemplate}>
+                      <Button size="sm" variant="outline" onClick={() =>
+                        downloadCSVTemplate({ projects: projectNames, workPackages: workPackageNames, wbs: wbsRows })
+                      }>
                         <Download className="h-4 w-4 mr-2" />Plain CSV template
                       </Button>
                     </div>

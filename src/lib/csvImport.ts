@@ -43,7 +43,8 @@ export function parseCSV(text: string): string[][] {
   }
   if (field.length > 0 || row.length > 0) {
     row.push(field);
-    if (row.length > 1 || (row.length === 1 && row[0].trim() !== "")) rows.push(row);
+    const isComment = row.length === 1 && row[0].trimStart().startsWith("#");
+    if (!isComment && (row.length > 1 || (row.length === 1 && row[0].trim() !== ""))) rows.push(row);
   }
   return rows;
 }

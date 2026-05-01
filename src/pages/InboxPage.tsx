@@ -23,7 +23,7 @@ import {
 import { TaskStatus, Action } from "@/lib/types";
 
 export default function InboxPage() {
-  const { addInboxItems, updateInboxItem, deleteInboxItem, bulkDeleteInboxItems, promoteInboxToActions, bulkAddActions, projects, workPackages } = useAppStore();
+  const { addInboxItems, updateInboxItem, deleteInboxItem, bulkDeleteInboxItems, promoteInboxToActions, bulkAddActions, projects, workPackages, programmes } = useAppStore();
   const { inboxItems } = useFilteredData();
   const [textInput, setTextInput] = useState("");
   const [isExtracting, setIsExtracting] = useState(false);

@@ -35,7 +35,8 @@ export function parseCSV(text: string): string[][] {
     if (c === "\n" || c === "\r") {
       row.push(field); field = "";
       if (c === "\r" && src[i + 1] === "\n") i++;
-      if (row.length > 1 || (row.length === 1 && row[0].trim() !== "")) rows.push(row);
+      const isComment = row.length === 1 && row[0].trimStart().startsWith("#");
+      if (!isComment && (row.length > 1 || (row.length === 1 && row[0].trim() !== ""))) rows.push(row);
       row = []; i++; continue;
     }
     field += c; i++;

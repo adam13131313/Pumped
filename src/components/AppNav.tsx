@@ -2,7 +2,7 @@ import { NavLink as RouterNavLink } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, CheckSquare, Clock, BookOpen, FolderKanban,
-  Sparkles, Library, Inbox, LucideIcon, PanelLeftClose, PanelLeft, GanttChart, Settings,
+  Sparkles, Library, Inbox, LucideIcon, PanelLeftClose, PanelLeft, Settings,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -13,7 +13,7 @@ const links: { to: string; label: string; icon: LucideIcon }[] = [
   { to: "/waiting", label: "Waiting For", icon: Clock },
   { to: "/inbox", label: "Rapid Capture", icon: Inbox },
   { to: "/projects", label: "Projects", icon: FolderKanban },
-  { to: "/visual-planner", label: "Visual Planner", icon: GanttChart },
+  
   { to: "/planner", label: "WBS Planner", icon: Sparkles },
   { to: "/sop", label: "SOP", icon: BookOpen },
   { to: "/knowledgebase", label: "Knowledgebase", icon: Library },

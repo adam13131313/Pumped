@@ -13,6 +13,7 @@ import SOPPage from "@/pages/SOPPage";
 import ProjectsPage from "@/pages/ProjectsPage";
 import ProjectDetailPage from "@/pages/ProjectDetailPage";
 import WBSPlanner from "@/pages/WBSPlanner";
+import RoutinesPage from "@/pages/RoutinesPage";
 
 import KnowledgebasePage from "@/pages/KnowledgebasePage";
 import InboxPage from "@/pages/InboxPage";
@@ -57,6 +58,7 @@ function ProtectedRoutes() {
         
         <Route path="/waiting" element={<WaitingFor />} />
         
+        <Route path="/routines" element={<RoutinesPage />} />
         <Route path="/planner" element={<WBSPlanner />} />
         <Route path="/sop" element={<SOPPage />} />
         <Route path="/knowledgebase" element={<KnowledgebasePage />} />

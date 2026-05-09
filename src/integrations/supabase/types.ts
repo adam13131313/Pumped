@@ -269,6 +269,71 @@ export type Database = {
         }
         Relationships: []
       }
+      routine_completions: {
+        Row: {
+          completed_at: string
+          completed_date: string
+          id: string
+          routine_id: string
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string
+          completed_date: string
+          id?: string
+          routine_id: string
+          user_id: string
+        }
+        Update: {
+          completed_at?: string
+          completed_date?: string
+          id?: string
+          routine_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "routine_completions_routine_id_fkey"
+            columns: ["routine_id"]
+            isOneToOne: false
+            referencedRelation: "routines"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      routines: {
+        Row: {
+          archived_at: string | null
+          created_at: string
+          frequency_config: Json
+          frequency_type: string
+          id: string
+          name: string
+          time_of_day: string
+          user_id: string
+        }
+        Insert: {
+          archived_at?: string | null
+          created_at?: string
+          frequency_config?: Json
+          frequency_type?: string
+          id?: string
+          name: string
+          time_of_day?: string
+          user_id: string
+        }
+        Update: {
+          archived_at?: string | null
+          created_at?: string
+          frequency_config?: Json
+          frequency_type?: string
+          id?: string
+          name?: string
+          time_of_day?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       sop_items: {
         Row: {
           created_at: string

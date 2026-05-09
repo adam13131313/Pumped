@@ -87,14 +87,24 @@ export default function ResetPasswordPage() {
     setLoading(false);
   };
 
+  if (verifying) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
   if (!isRecovery) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background px-4">
         <Card className="w-full max-w-md border-border shadow-lg">
           <CardHeader>
-            <CardTitle>Invalid Link</CardTitle>
+            <CardTitle>Link expired or already used</CardTitle>
             <CardDescription>
-              This password reset link is invalid or has expired. Please request a new one.
+              {verifyError
+                ? `${verifyError}. Reset links expire quickly and can only be used once — please request a new one.`
+                : "This password reset link is invalid, expired, or was already used. Please request a new one."}
             </CardDescription>
           </CardHeader>
           <CardFooter>

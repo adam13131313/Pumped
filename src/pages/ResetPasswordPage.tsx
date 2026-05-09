@@ -17,16 +17,51 @@ export default function ResetPasswordPage() {
   const { toast } = useToast();
   const navigate = useNavigate();
 
+  const [verifying, setVerifying] = useState(true);
+  const [verifyError, setVerifyError] = useState<string | null>(null);
+
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === "PASSWORD_RECOVERY") {
         setIsRecovery(true);
+        setVerifying(false);
       }
     });
-    // Check hash for recovery token
-    if (window.location.hash.includes("type=recovery")) {
-      setIsRecovery(true);
-    }
+
+    (async () => {
+      const params = new URLSearchParams(window.location.search);
+      const tokenHash = params.get("token_hash");
+      const type = params.get("type");
+      const errorDesc = params.get("error_description") ?? new URLSearchParams(window.location.hash.slice(1)).get("error_description");
+
+      if (errorDesc) {
+        setVerifyError(errorDesc);
+        setVerifying(false);
+        return;
+      }
+
+      // Modern PKCE / OTP flow: ?token_hash=...&type=recovery
+      if (tokenHash && type === "recovery") {
+        const { error } = await supabase.auth.verifyOtp({ type: "recovery", token_hash: tokenHash });
+        if (error) setVerifyError(error.message);
+        else setIsRecovery(true);
+        setVerifying(false);
+        return;
+      }
+
+      // Legacy implicit flow: #access_token=...&type=recovery (auto-handled by supabase-js)
+      if (window.location.hash.includes("type=recovery")) {
+        setIsRecovery(true);
+        setVerifying(false);
+        return;
+      }
+
+      // Already in a recovery session
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) setIsRecovery(true);
+      setVerifying(false);
+    })();
+
     return () => subscription.unsubscribe();
   }, []);
 
@@ -52,14 +87,24 @@ export default function ResetPasswordPage() {
     setLoading(false);
   };
 
+  if (verifying) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
   if (!isRecovery) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background px-4">
         <Card className="w-full max-w-md border-border shadow-lg">
           <CardHeader>
-            <CardTitle>Invalid Link</CardTitle>
+            <CardTitle>Link expired or already used</CardTitle>
             <CardDescription>
-              This password reset link is invalid or has expired. Please request a new one.
+              {verifyError
+                ? `${verifyError}. Reset links expire quickly and can only be used once — please request a new one.`
+                : "This password reset link is invalid, expired, or was already used. Please request a new one."}
             </CardDescription>
           </CardHeader>
           <CardFooter>

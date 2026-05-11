@@ -152,6 +152,42 @@ export type Database = {
         }
         Relationships: []
       }
+      feature_suggestions: {
+        Row: {
+          created_at: string
+          description: string
+          github_issue_number: number | null
+          github_issue_url: string | null
+          id: string
+          status: string
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          description: string
+          github_issue_number?: number | null
+          github_issue_url?: string | null
+          id?: string
+          status?: string
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          github_issue_number?: number | null
+          github_issue_url?: string | null
+          id?: string
+          status?: string
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       inbox_items: {
         Row: {
           created_at: string
@@ -184,6 +220,30 @@ export type Database = {
           project?: string
           source?: string
           task?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      kb_chat_messages: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          role: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          role?: string
           user_id?: string
         }
         Relationships: []

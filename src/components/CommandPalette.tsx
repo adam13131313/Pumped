@@ -52,7 +52,7 @@ export function CommandPalette() {
   };
 
   const openActions = useMemo(
-    () => actions.filter((a) => !a.archived && a.status !== "Complete"),
+    () => actions.filter((a) => a.status !== "Complete"),
     [actions],
   );
 

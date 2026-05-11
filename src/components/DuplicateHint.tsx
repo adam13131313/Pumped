@@ -23,7 +23,7 @@ export function DuplicateHint({ query, excludeActionId, className }: DuplicateHi
     if (!query || query.trim().length < 4) return [];
 
     const openActions = actions.filter(
-      (a) => !a.archived && a.status !== "Complete" && a.id !== excludeActionId,
+      (a) => a.status !== "Complete" && a.id !== excludeActionId,
     );
 
     const actionMatches = findSimilar(query, openActions, (a) => a.task, 0.5, 2)

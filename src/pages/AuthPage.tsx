@@ -118,7 +118,7 @@ export default function AuthPage() {
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-primary-foreground text-xl font-bold">
             P
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Programme Tracker</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Pumped</h1>
           <p className="text-muted-foreground text-sm">
             {isLogin ? "Sign in to your account" : "Create a new account"}
           </p>

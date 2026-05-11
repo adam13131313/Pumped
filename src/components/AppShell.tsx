@@ -24,7 +24,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           P
         </div>
         {(isMobile || !collapsed) && (
-          <h1 className="text-sm font-semibold tracking-tight truncate">Programme Tracker</h1>
+          <h1 className="text-sm font-semibold tracking-tight truncate">Pumped</h1>
         )}
       </div>
 

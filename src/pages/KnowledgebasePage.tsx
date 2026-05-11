@@ -146,7 +146,7 @@ export default function KnowledgebasePage() {
       <div>
         <h2 className="text-2xl font-bold tracking-tight">Knowledgebase</h2>
         <p className="text-muted-foreground mt-1">
-          Learn how to use every feature of Programme Tracker effectively.
+          Learn how to use every feature of Pumped effectively.
         </p>
       </div>
 
@@ -159,7 +159,7 @@ export default function KnowledgebasePage() {
         </CardHeader>
         <CardContent className="text-sm text-muted-foreground leading-relaxed space-y-3">
           <p>
-            Programme Tracker helps you manage projects, actions, and delegated tasks in one place.
+            Pumped helps you manage projects, actions, and delegated tasks in one place.
             The workflow is simple:
           </p>
           <ol className="list-decimal list-inside space-y-1">

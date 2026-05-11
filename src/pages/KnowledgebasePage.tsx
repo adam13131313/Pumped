@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { BookOpen, CheckSquare, Clock, FolderKanban, LayoutDashboard, Sparkles, FileText, Inbox, Search, Filter, Paperclip, CalendarRange, Smartphone } from "lucide-react";
+import { BookOpen, CheckSquare, Clock, FolderKanban, LayoutDashboard, Sparkles, FileText, Inbox, Search, Filter, Paperclip, Smartphone } from "lucide-react";
 
 const sections = [
   {
@@ -105,7 +105,7 @@ The AI produces a multi-level structure:
     id: "filter",
     icon: Filter,
     title: "Global Filter",
-    content: `The persistent filter in the header narrows everything you see across the app — Dashboard, My Actions, Waiting For, Projects, Inbox, and Visual Planner.
+    content: `The persistent filter in the header narrows everything you see across the app — Dashboard, My Actions, Waiting For, Projects, and Inbox.
 
 **How to use it:**
 - Filter by Programme, Project, or Work Package from the header dropdowns.
@@ -126,21 +126,6 @@ The AI produces a multi-level structure:
 **Comments:**
 - Add notes, decisions, or progress updates directly on the task.
 - Useful for tasks that span multiple days or involve back-and-forth.`,
-  },
-  {
-    id: "planner-visual",
-    icon: CalendarRange,
-    title: "Visual Planner (Gantt)",
-    content: `The Visual Planner shows your Work Packages and Actions on a timeline with RAG-coloured bars and dependency lines.
-
-**What it shows:**
-- Work Packages and their child Actions plotted by start/due dates.
-- Bars coloured by RAG status — red, amber, green.
-- Dependency arrows between linked items.
-
-**Use it for:**
-- Spotting clashes and overloaded weeks.
-- Communicating timeline at a glance in reviews.`,
   },
   {
     id: "mobile",

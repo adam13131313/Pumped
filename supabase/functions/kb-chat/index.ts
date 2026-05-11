@@ -20,7 +20,7 @@ Programme → Project → Work Package → Action (Task). Strict — no other le
 - **Rapid Capture (Inbox)**: Quick entry. AI extracts tasks from raw text/notes. Matches to existing WBS — never invents projects. Bulk edit, promote to Actions, voice transcription on mobile.
 - **WBS Planner**: AI generates full Programme→Project→WP→Action hierarchy from uploaded docs (.txt, .md, .csv, .json, .xml, .doc, .docx, .rtf, .pdf), images, or free text. Multimodal. Iterative refine prompt. Inline editing. Accept & Create imports everything. NOT a Gantt or Visual Planner.
 - **SOP**: Editable standard operating procedures and rhythms (daily check-in, weekly review Mondays, follow-up Wednesdays, RAG guidance, delegation rules).
-- **Routines**: Recurring habits with frequency (daily/weekly/etc) and time of day.
+- **Personal Routines**: Personal habits (NOT tied to the WBS/projects). Frequency (daily/specific weekdays/N times per week) and time of day. Tracks streaks. Different from Actions, which deliver project work.
 - **Duplicate prevention**: Inline amber hint when adding similar tasks. ⌘K / Ctrl+K global search across actions, inbox, waiting, WPs, projects.
 - **Global filter**: Header dropdowns filter by Programme/Project/WP across whole app. Persists across navigation.
 - **Task attachments & comments**: Auto-link detection, file uploads up to 10MB (must save task first), threaded comments.

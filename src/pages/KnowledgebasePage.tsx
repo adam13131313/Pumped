@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { BookOpen, CheckSquare, Clock, FolderKanban, LayoutDashboard, Sparkles, FileText, Inbox, Search, Filter, Paperclip, CalendarRange, Smartphone } from "lucide-react";
+import { BookOpen, CheckSquare, Clock, FolderKanban, LayoutDashboard, Sparkles, FileText, Inbox, Search, Filter, Paperclip, Smartphone } from "lucide-react";
 
 const sections = [
   {

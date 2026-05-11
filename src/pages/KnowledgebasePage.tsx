@@ -80,6 +80,79 @@ The AI produces a multi-level structure:
     title: "SOP (Standard Operating Procedures)",
     content: `The SOP page contains your operating rhythm — the habits and rules that keep your work on track.\n\n**Default SOPs include:**\n- Daily 2-minute check-in.\n- Post-meeting and post-email task extraction.\n- Weekly review routine (Mondays).\n- Follow-up sweep (Wednesdays).\n- RAG status guidance and delegation rules.\n\nYou can customise, add, or remove SOP items to match your workflow.`,
   },
+  {
+    id: "duplicates",
+    icon: Search,
+    title: "Duplicate Prevention & Global Search (⌘K)",
+    content: `Two layers help you avoid type 1 errors (adding the same task twice) and type 2 errors (assuming a task exists when it doesn't).
+
+**Inline duplicate hint:**
+- When you type a new action, an amber hint appears beneath the Task field if anything similar already exists in My Actions, Rapid Capture, or Waiting For.
+- It shows up to 3 likely matches with their context (project / list).
+- It never blocks save — it just informs. You can still add the task if it's genuinely different.
+
+**Global search — ⌘K / Ctrl+K:**
+- Press ⌘K (Mac) or Ctrl+K (Windows/Linux) anywhere in the app to open the command palette.
+- Searches across actions, Rapid Capture, Waiting For, Work Packages, and Projects in one place.
+- Partial-word matching — type a few characters of any keyword.
+- Selecting a result jumps you straight to the relevant page so you can confirm whether it's already captured.
+
+**When to use which:**
+- Use the inline hint passively while capturing — it catches near-duplicates automatically.
+- Use ⌘K actively when you're unsure whether you've already logged something.`,
+  },
+  {
+    id: "filter",
+    icon: Filter,
+    title: "Global Filter",
+    content: `The persistent filter in the header narrows everything you see across the app — Dashboard, My Actions, Waiting For, Projects, Inbox, and Visual Planner.
+
+**How to use it:**
+- Filter by Programme, Project, or Work Package from the header dropdowns.
+- The filter persists across navigation so you can stay focused on one piece of work.
+- Clear the filter to return to the full view.`,
+  },
+  {
+    id: "attachments",
+    icon: Paperclip,
+    title: "Task Attachments & Comments",
+    content: `Every action supports links, file attachments, and comments to keep context with the task.
+
+**Attachments:**
+- Paste a URL into the task and it's auto-detected as a clickable link.
+- Upload files up to 10MB — useful for briefs, specs, screenshots, or supporting docs.
+- You must save the task once before adding file attachments.
+
+**Comments:**
+- Add notes, decisions, or progress updates directly on the task.
+- Useful for tasks that span multiple days or involve back-and-forth.`,
+  },
+  {
+    id: "planner-visual",
+    icon: CalendarRange,
+    title: "Visual Planner (Gantt)",
+    content: `The Visual Planner shows your Work Packages and Actions on a timeline with RAG-coloured bars and dependency lines.
+
+**What it shows:**
+- Work Packages and their child Actions plotted by start/due dates.
+- Bars coloured by RAG status — red, amber, green.
+- Dependency arrows between linked items.
+
+**Use it for:**
+- Spotting clashes and overloaded weeks.
+- Communicating timeline at a glance in reviews.`,
+  },
+  {
+    id: "mobile",
+    icon: Smartphone,
+    title: "Mobile",
+    content: `The app is fully responsive with a mobile-optimised layout.
+
+**Mobile features:**
+- Bottom navigation bar for one-thumb access to Dashboard, Actions, Inbox, and more.
+- Slide-out menu for less-frequent pages.
+- Capture tasks on the go via Rapid Capture, including voice transcription.`,
+  },
 ];
 
 export default function KnowledgebasePage() {

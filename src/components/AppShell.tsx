@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { MobileBottomNav } from "./MobileBottomNav";
+import { CommandPalette } from "./CommandPalette";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { signOut, user } = useAuth();
@@ -87,6 +88,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </div>
 
       {isMobile && <MobileBottomNav />}
+      <CommandPalette />
     </div>
   );
 }

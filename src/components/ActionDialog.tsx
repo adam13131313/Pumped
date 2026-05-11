@@ -12,6 +12,7 @@ import { LinkRenderer } from "@/components/LinkRenderer";
 import { TaskAttachments } from "@/components/TaskAttachments";
 import { TaskComments } from "@/components/TaskComments";
 import { Badge } from "@/components/ui/badge";
+import { DuplicateHint } from "@/components/DuplicateHint";
 
 interface ActionDialogProps {
   open: boolean;
@@ -199,6 +200,7 @@ export function ActionDialog({ open, onOpenChange, action, onSave, onDelete, onD
           <div>
             <Label htmlFor="task">Task *</Label>
             <Textarea id="task" value={form.task ?? ""} onChange={(e) => setForm({ ...form, task: e.target.value })} className="mt-1" rows={2} maxLength={500} />
+            <DuplicateHint query={form.task ?? ""} excludeActionId={action?.id} />
           </div>
 
           {/* Hierarchy selectors */}

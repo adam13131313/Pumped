@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { MobileBottomNav } from "./MobileBottomNav";
+import { CommandPalette } from "./CommandPalette";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { signOut, user } = useAuth();
@@ -77,6 +78,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </Sheet>
             )}
             <GlobalFilter />
+            {!isMobile && (
+              <kbd className="ml-auto hidden md:inline-flex items-center gap-1 rounded border bg-muted/40 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                ⌘K <span className="text-muted-foreground/70">search</span>
+              </kbd>
+            )}
           </div>
         </header>
         <main className={cn("flex-1 px-3 py-4 sm:px-6 sm:py-6 animate-fade-in", isMobile && "pb-20")}>
@@ -87,6 +93,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </div>
 
       {isMobile && <MobileBottomNav />}
+      <CommandPalette />
     </div>
   );
 }

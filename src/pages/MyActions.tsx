@@ -33,7 +33,6 @@ export default function MyActions() {
 
   // Filters
   const [filterTask, setFilterTask] = useState("");
-  const [filterProject, setFilterProject] = useState("");
   const [filterPriority, setFilterPriority] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [showFilters, setShowFilters] = useState(false);
@@ -41,18 +40,16 @@ export default function MyActions() {
   const actions = useMemo(() => {
     return allActions.filter((a) => {
       if (filterTask && !a.task.toLowerCase().includes(filterTask.toLowerCase())) return false;
-      if (filterProject && !a.project.toLowerCase().includes(filterProject.toLowerCase())) return false;
       if (filterPriority !== "all" && a.priority !== filterPriority) return false;
       if (filterStatus !== "all" && a.status !== filterStatus) return false;
       return true;
     });
-  }, [allActions, filterTask, filterProject, filterPriority, filterStatus]);
+  }, [allActions, filterTask, filterPriority, filterStatus]);
 
-  const hasActiveFilters = filterTask || filterProject || filterPriority !== "all" || filterStatus !== "all";
+  const hasActiveFilters = filterTask || filterPriority !== "all" || filterStatus !== "all";
 
   const clearFilters = () => {
     setFilterTask("");
-    setFilterProject("");
     setFilterPriority("all");
     setFilterStatus("all");
   };
@@ -194,16 +191,10 @@ export default function MyActions() {
       {showFilters && (
         <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-muted/30 p-3">
           <Input
-            placeholder="Filter by task..."
+            placeholder="Search tasks..."
             value={filterTask}
             onChange={(e) => setFilterTask(e.target.value)}
-            className="h-8 w-[180px] text-xs"
-          />
-          <Input
-            placeholder="Filter by project..."
-            value={filterProject}
-            onChange={(e) => setFilterProject(e.target.value)}
-            className="h-8 w-[160px] text-xs"
+            className="h-8 w-[220px] text-xs"
           />
           <Select value={filterPriority} onValueChange={setFilterPriority}>
             <SelectTrigger className="h-8 w-[120px] text-xs">

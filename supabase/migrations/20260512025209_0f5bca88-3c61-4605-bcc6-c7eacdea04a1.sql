@@ -1,0 +1,1 @@
+ALTER TABLE public.inbox_items ADD CONSTRAINT inbox_items_user_source_sourceid_key UNIQUE (user_id, source, source_id);

@@ -176,7 +176,7 @@ export default function MyActions() {
       </div>
 
       {/* Filter bar */}
-      {showFilters && (
+      {(
         <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-muted/30 p-3">
           <Input
             placeholder="Search tasks..."

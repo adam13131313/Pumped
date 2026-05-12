@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { Mail, Lock, Loader2, ArrowRight } from "lucide-react";
+import IngestSourcesSection from "@/components/IngestSourcesSection";
 
 export default function SettingsPage() {
   const { user } = useAuth();
@@ -63,7 +64,7 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="space-y-6 max-w-lg">
+    <div className="space-y-6 max-w-2xl">
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-foreground">Settings</h1>
         <p className="text-muted-foreground text-sm mt-1">Manage your account</p>
@@ -163,6 +164,7 @@ export default function SettingsPage() {
           </CardFooter>
         </form>
       </Card>
+      <IngestSourcesSection />
     </div>
   );
 }

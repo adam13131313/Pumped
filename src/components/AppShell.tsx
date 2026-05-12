@@ -9,7 +9,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { MobileBottomNav } from "./MobileBottomNav";
 import { CommandPalette } from "./CommandPalette";
-import pumpedLogo from "@/assets/pumped-logo.png";
+const pumpedLogo = "/favicon.png";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { signOut, user } = useAuth();

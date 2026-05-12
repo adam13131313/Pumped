@@ -208,7 +208,6 @@ export default function MyActions() {
           )}
           <span className="ml-auto text-xs text-muted-foreground">{actions.length} of {allActions.length} shown</span>
         </div>
-      )}
 
       {/* Bulk action toolbar */}
       {selected.size > 0 && (

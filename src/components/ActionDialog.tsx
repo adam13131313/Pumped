@@ -273,13 +273,13 @@ export function ActionDialog({ open, onOpenChange, action, onSave, onDelete, onD
           </div>
           <div>
             <Label htmlFor="notes">Notes</Label>
-            <Textarea id="notes" value={form.notes ?? ""} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="mt-1" rows={2} maxLength={1000} placeholder="Add notes or paste links (Google Docs, Sheets, etc.)" />
-            {form.notes && /(https?:\/\/[^\s]+)/.test(form.notes) && (
-              <div className="mt-2">
-                <div className="text-xs text-muted-foreground mb-1">Detected links</div>
-                <LinkRenderer text={form.notes} chipsOnly />
-              </div>
-            )}
+            <NotesWithLinks
+              value={form.notes ?? ""}
+              onChange={(next) => setForm({ ...form, notes: next })}
+              rows={2}
+              maxLength={1000}
+              placeholder="Add notes. Paste a URL — it'll appear as a link chip below."
+            />
           </div>
           <div>
             <Label className="flex items-center gap-1.5"><Tag className="h-3.5 w-3.5" /> Labels</Label>

@@ -27,6 +27,7 @@ Programme → Project → Work Package → Action (Task). Strict — no other le
 - **Mobile**: Bottom nav, slide-out menu, voice capture.
 - **CSV/XLSX import**: Templates, column mapping, direct-to-actions import.
 - **Auth**: Email/password + Google OAuth.
+- **Integrations**: Webhook ingest sources let any external app POST tasks into the user's Rapid Capture inbox. Each source has a name, slug, and bearer token (shown once on creation, stored as SHA-256 hash, regenerable). Endpoint accepts JSON with source_id (required), task (required), priority (High/Medium/Low), due_date, project, notes, source_url. Re-sending the same source_id is idempotent (upsert). Three connection paths: (1) direct Webhook Sources for any custom/AI-built app; (2) Zapier & Make using a Webhooks → POST step (unlocks Gmail, Slack, Outlook, Notion, Trello, Sheets, 5,000+ triggers, no code); (3) Native one-click connectors (Gmail, Slack, Linear, Asana, Notion, Outlook) — coming soon. Built-in "Send test task" button verifies the full loop. Use cases: pull tasks from a CRM/recruiter/PM tool, trigger from email or chat, run scheduled syncs, deep-link back via source_url. Benefit: one inbox for every system, nothing slips through the cracks.
 - **Knowledgebase (this page)**: Feature docs + this AI assistant.
 
 # Behaviour rules

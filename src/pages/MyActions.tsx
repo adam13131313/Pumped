@@ -33,7 +33,6 @@ export default function MyActions() {
 
   // Filters
   const [filterTask, setFilterTask] = useState("");
-  const [filterProject, setFilterProject] = useState("");
   const [filterPriority, setFilterPriority] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [showFilters, setShowFilters] = useState(false);
@@ -41,18 +40,16 @@ export default function MyActions() {
   const actions = useMemo(() => {
     return allActions.filter((a) => {
       if (filterTask && !a.task.toLowerCase().includes(filterTask.toLowerCase())) return false;
-      if (filterProject && !a.project.toLowerCase().includes(filterProject.toLowerCase())) return false;
       if (filterPriority !== "all" && a.priority !== filterPriority) return false;
       if (filterStatus !== "all" && a.status !== filterStatus) return false;
       return true;
     });
-  }, [allActions, filterTask, filterProject, filterPriority, filterStatus]);
+  }, [allActions, filterTask, filterPriority, filterStatus]);
 
-  const hasActiveFilters = filterTask || filterProject || filterPriority !== "all" || filterStatus !== "all";
+  const hasActiveFilters = filterTask || filterPriority !== "all" || filterStatus !== "all";
 
   const clearFilters = () => {
     setFilterTask("");
-    setFilterProject("");
     setFilterPriority("all");
     setFilterStatus("all");
   };

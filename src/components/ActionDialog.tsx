@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Action, Priority, TaskStatus } from "@/lib/types";
 import { useAppStore } from "@/lib/store";
-import { LinkRenderer } from "@/components/LinkRenderer";
+import { NotesWithLinks } from "@/components/NotesWithLinks";
 import { TaskAttachments } from "@/components/TaskAttachments";
 import { TaskComments } from "@/components/TaskComments";
 import { Badge } from "@/components/ui/badge";

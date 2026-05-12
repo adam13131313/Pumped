@@ -9,6 +9,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { MobileBottomNav } from "./MobileBottomNav";
 import { CommandPalette } from "./CommandPalette";
+import pumpedLogo from "@/assets/pumped-logo.png";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { signOut, user } = useAuth();
@@ -19,10 +20,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const sidebarContent = (
     <>
       {/* Brand */}
-      <div className={cn("flex items-center gap-2.5 border-b px-3 py-3", !isMobile && collapsed && "justify-center px-1.5")}>
-        <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground text-sm font-bold">
-          P
-        </div>
+      <div className={cn("flex items-center gap-2 border-b px-3 py-3", !isMobile && collapsed && "justify-center px-1.5")}>
+        <img
+          src={pumpedLogo}
+          alt="Pumped logo"
+          width={32}
+          height={32}
+          className="h-8 w-8 flex-shrink-0"
+        />
         {(isMobile || !collapsed) && (
           <h1 className="text-sm font-semibold tracking-tight truncate">Pumped</h1>
         )}

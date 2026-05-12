@@ -2,7 +2,6 @@ import { useMemo, useState, KeyboardEvent, ClipboardEvent } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { LinkRenderer } from "@/components/LinkRenderer";
 import { Plus, X, Link as LinkIcon } from "lucide-react";
 
 const URL_REGEX = /(https?:\/\/[^\s<]+)/g;

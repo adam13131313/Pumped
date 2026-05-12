@@ -149,17 +149,6 @@ export default function MyActions() {
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="text-lg font-semibold">My Actions</h2>
         <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-          <Button
-            size="sm"
-            variant={showFilters ? "secondary" : "outline"}
-            onClick={() => setShowFilters(!showFilters)}
-            className="relative h-8"
-          >
-            <Filter className="mr-1.5 h-4 w-4" /> Filters
-            {hasActiveFilters && (
-              <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-primary" />
-            )}
-          </Button>
           <Button size="sm" className="h-8" onClick={() => { setEditing(null); setDialogOpen(true); }}>
             <Plus className="mr-1.5 h-4 w-4" /> New Action
           </Button>
@@ -187,7 +176,6 @@ export default function MyActions() {
       </div>
 
       {/* Filter bar */}
-      {showFilters && (
         <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-muted/30 p-3">
           <Input
             placeholder="Search tasks..."
@@ -220,7 +208,6 @@ export default function MyActions() {
           )}
           <span className="ml-auto text-xs text-muted-foreground">{actions.length} of {allActions.length} shown</span>
         </div>
-      )}
 
       {/* Bulk action toolbar */}
       {selected.size > 0 && (

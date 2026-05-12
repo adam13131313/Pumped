@@ -197,6 +197,8 @@ export type Database = {
           priority: string
           project: string
           source: string
+          source_id: string
+          source_url: string
           task: string
           user_id: string
         }
@@ -208,6 +210,8 @@ export type Database = {
           priority?: string
           project?: string
           source?: string
+          source_id?: string
+          source_url?: string
           task?: string
           user_id: string
         }
@@ -219,7 +223,42 @@ export type Database = {
           priority?: string
           project?: string
           source?: string
+          source_id?: string
+          source_url?: string
           task?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      ingest_sources: {
+        Row: {
+          created_at: string
+          id: string
+          last_received_at: string | null
+          name: string
+          slug: string
+          token_hash: string
+          token_prefix: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          last_received_at?: string | null
+          name: string
+          slug: string
+          token_hash: string
+          token_prefix?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          last_received_at?: string | null
+          name?: string
+          slug?: string
+          token_hash?: string
+          token_prefix?: string
           user_id?: string
         }
         Relationships: []

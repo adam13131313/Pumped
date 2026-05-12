@@ -2,7 +2,7 @@ import { NavLink as RouterNavLink } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, CheckSquare, Clock, BookOpen, FolderKanban,
-  Sparkles, Library, Inbox, LucideIcon, PanelLeftClose, PanelLeft, Settings, Repeat,
+  Sparkles, Library, Inbox, LucideIcon, PanelLeftClose, PanelLeft, Settings, Repeat, Plug,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -18,6 +18,7 @@ const links: { to: string; label: string; icon: LucideIcon }[] = [
   { to: "/planner", label: "WBS Planner", icon: Sparkles },
   { to: "/sop", label: "SOP", icon: BookOpen },
   { to: "/knowledgebase", label: "Knowledgebase", icon: Library },
+  { to: "/integrations", label: "Integrations", icon: Plug },
   { to: "/settings", label: "Settings", icon: Settings },
 ];
 

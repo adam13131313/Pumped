@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { Mail, Lock, Loader2, ArrowRight } from "lucide-react";
-import IngestSourcesSection from "@/components/IngestSourcesSection";
+
 
 export default function SettingsPage() {
   const { user } = useAuth();
@@ -164,7 +164,6 @@ export default function SettingsPage() {
           </CardFooter>
         </form>
       </Card>
-      <IngestSourcesSection />
     </div>
   );
 }

@@ -104,20 +104,6 @@ export function NotesWithLinks({ value, onChange, rows = 2, maxLength = 1000, pl
         placeholder={placeholder ?? "Add notes. Pasted links are extracted below."}
         className="mt-1"
       />
-      <div className="flex flex-wrap items-center gap-1.5">
-        {urls.length > 0 && <LinkRenderer text={urls.join(" ")} chipsOnly />}
-        {urls.map((url) => (
-          <button
-            key={`x-${url}`}
-            type="button"
-            onClick={() => removeUrl(url)}
-            title="Remove link"
-            className="hidden"
-            aria-hidden
-          />
-        ))}
-        {/* Remove buttons rendered as overlay chips: re-render compact list with remove */}
-      </div>
       {urls.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {urls.map((url) => (

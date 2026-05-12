@@ -35,7 +35,6 @@ export default function MyActions() {
   const [filterTask, setFilterTask] = useState("");
   const [filterPriority, setFilterPriority] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
-  const [showFilters, setShowFilters] = useState(false);
 
   const actions = useMemo(() => {
     return allActions.filter((a) => {

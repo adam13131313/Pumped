@@ -149,17 +149,6 @@ export default function MyActions() {
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="text-lg font-semibold">My Actions</h2>
         <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-          <Button
-            size="sm"
-            variant={showFilters ? "secondary" : "outline"}
-            onClick={() => setShowFilters(!showFilters)}
-            className="relative h-8"
-          >
-            <Filter className="mr-1.5 h-4 w-4" /> Filters
-            {hasActiveFilters && (
-              <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-primary" />
-            )}
-          </Button>
           <Button size="sm" className="h-8" onClick={() => { setEditing(null); setDialogOpen(true); }}>
             <Plus className="mr-1.5 h-4 w-4" /> New Action
           </Button>

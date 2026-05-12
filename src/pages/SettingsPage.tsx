@@ -164,6 +164,7 @@ export default function SettingsPage() {
           </CardFooter>
         </form>
       </Card>
+      <IngestSourcesSection />
     </div>
   );
 }

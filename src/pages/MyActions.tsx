@@ -280,6 +280,22 @@ export default function MyActions() {
               ))}
             </SelectContent>
           </Select>
+          <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => {
+            const ids = [...selected];
+            ids.forEach((id) => addToday(id));
+            toast.success(`${ids.length} task(s) gathered`);
+            clearSelection();
+          }}>
+            <Target className="mr-1 h-3.5 w-3.5" /> Gather
+          </Button>
+          <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => {
+            const ids = [...selected];
+            ids.forEach((id) => removeToday(id));
+            toast.success(`${ids.length} task(s) scattered`);
+            clearSelection();
+          }}>
+            <X className="mr-1 h-3.5 w-3.5" /> Scatter
+          </Button>
           <Button size="sm" variant="destructive" className="h-8 text-xs" onClick={handleBulkDelete}>
             <Trash2 className="mr-1 h-3.5 w-3.5" /> Delete
           </Button>

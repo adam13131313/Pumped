@@ -9,7 +9,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { LayoutList, Columns3, Plus, Pencil, Target, Trash2, X, CheckSquare, Filter, Tag } from "lucide-react";
+import { LayoutList, Columns3, Plus, Pencil, Target, Trash2, X, CheckSquare, Filter, Tag, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -26,6 +26,10 @@ export default function MyActions() {
   const delegateAction = useAppStore((s) => s.delegateAction);
   const bulkUpdateActions = useAppStore((s) => s.bulkUpdateActions);
   const bulkDeleteActions = useAppStore((s) => s.bulkDeleteActions);
+  const todayIds = useAppStore((s) => s.todayIds);
+  const addToday = useAppStore((s) => s.addToday);
+  const removeToday = useAppStore((s) => s.removeToday);
+  const clearToday = useAppStore((s) => s.clearToday);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Action | null>(null);
@@ -35,22 +39,30 @@ export default function MyActions() {
   const [filterTask, setFilterTask] = useState("");
   const [filterPriority, setFilterPriority] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [gatheredOnly, setGatheredOnly] = useState(false);
 
   const actions = useMemo(() => {
     return allActions.filter((a) => {
+      if (gatheredOnly && !todayIds.has(a.id)) return false;
       if (filterTask && !a.task.toLowerCase().includes(filterTask.toLowerCase())) return false;
       if (filterPriority !== "all" && a.priority !== filterPriority) return false;
       if (filterStatus !== "all" && a.status !== filterStatus) return false;
       return true;
     });
-  }, [allActions, filterTask, filterPriority, filterStatus]);
+  }, [allActions, filterTask, filterPriority, filterStatus, gatheredOnly, todayIds]);
 
-  const hasActiveFilters = filterTask || filterPriority !== "all" || filterStatus !== "all";
+  const gatheredCount = useMemo(
+    () => allActions.filter((a) => todayIds.has(a.id)).length,
+    [allActions, todayIds]
+  );
+
+  const hasActiveFilters = filterTask || filterPriority !== "all" || filterStatus !== "all" || gatheredOnly;
 
   const clearFilters = () => {
     setFilterTask("");
     setFilterPriority("all");
     setFilterStatus("all");
+    setGatheredOnly(false);
   };
 
   const toggleSelect = (id: string) => {
@@ -177,6 +189,23 @@ export default function MyActions() {
 
       {/* Filter bar */}
         <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-muted/30 p-3">
+          <button
+            onClick={() => setGatheredOnly((v) => !v)}
+            className={cn(
+              "h-8 inline-flex items-center gap-1.5 rounded-md border px-2.5 text-xs font-medium transition-colors",
+              gatheredOnly
+                ? "bg-primary text-primary-foreground border-primary"
+                : "bg-card text-muted-foreground hover:bg-accent"
+            )}
+            title="Show only gathered tasks"
+          >
+            <Target className="h-3.5 w-3.5" />
+            Gathered only
+            <span className={cn(
+              "ml-1 rounded-full px-1.5 text-[10px] font-semibold",
+              gatheredOnly ? "bg-primary-foreground/20 text-primary-foreground" : "bg-muted text-muted-foreground"
+            )}>{gatheredCount}</span>
+          </button>
           <Input
             placeholder="Search tasks..."
             value={filterTask}
@@ -204,6 +233,20 @@ export default function MyActions() {
           {hasActiveFilters && (
             <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={clearFilters}>
               <X className="mr-1 h-3.5 w-3.5" /> Clear
+            </Button>
+          )}
+          {gatheredCount > 0 && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-8 text-xs text-muted-foreground"
+              onClick={() => {
+                clearToday();
+                toast.success("Scattered all gathered tasks");
+              }}
+              title="Remove all tasks from gathered"
+            >
+              Scatter all
             </Button>
           )}
           <span className="ml-auto text-xs text-muted-foreground">{actions.length} of {allActions.length} shown</span>
@@ -237,6 +280,22 @@ export default function MyActions() {
               ))}
             </SelectContent>
           </Select>
+          <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => {
+            const ids = [...selected];
+            ids.forEach((id) => addToday(id));
+            toast.success(`${ids.length} task(s) gathered`);
+            clearSelection();
+          }}>
+            <Target className="mr-1 h-3.5 w-3.5" /> Gather
+          </Button>
+          <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => {
+            const ids = [...selected];
+            ids.forEach((id) => removeToday(id));
+            toast.success(`${ids.length} task(s) scattered`);
+            clearSelection();
+          }}>
+            <X className="mr-1 h-3.5 w-3.5" /> Scatter
+          </Button>
           <Button size="sm" variant="destructive" className="h-8 text-xs" onClick={handleBulkDelete}>
             <Trash2 className="mr-1 h-3.5 w-3.5" /> Delete
           </Button>
@@ -328,7 +387,7 @@ function ListView({ actions, onEdit, selected, onToggle, onToggleAll }: { action
                           <Target className="h-3.5 w-3.5" />
                         </button>
                       </TooltipTrigger>
-                      <TooltipContent side="right">{gathered ? "Remove from today" : "Gather for today"}</TooltipContent>
+                      <TooltipContent side="right">{gathered ? "Scatter (remove from gathered)" : "Gather"}</TooltipContent>
                     </Tooltip>
                   </td>
                   <td className="max-w-md px-4 py-3">

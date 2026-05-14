@@ -6,7 +6,6 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { useAppStore } from "@/lib/store";
 import { AppShell } from "@/components/AppShell";
-import Dashboard from "@/pages/Dashboard";
 import MyActions from "@/pages/MyActions";
 import WaitingFor from "@/pages/WaitingFor";
 import SOPPage from "@/pages/SOPPage";
@@ -52,11 +51,11 @@ function ProtectedRoutes() {
   return (
     <AppShell>
       <Routes>
-        <Route path="/" element={<Dashboard />} />
+        <Route path="/" element={<MyActions />} />
         <Route path="/inbox" element={<InboxPage />} />
         <Route path="/projects" element={<ProjectsPage />} />
         <Route path="/projects/:projectId" element={<ProjectDetailPage />} />
-        <Route path="/actions" element={<MyActions />} />
+        <Route path="/actions" element={<Navigate to="/" replace />} />
         
         <Route path="/waiting" element={<WaitingFor />} />
         

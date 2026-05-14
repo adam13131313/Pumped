@@ -95,12 +95,13 @@ async function getUserId(): Promise<string> {
   return user.id;
 }
 
-// Persist today's focus data to localStorage (keyed by date so it resets daily)
-const TODAY_KEY = () => `p3m-today-${new Date().toISOString().slice(0, 10)}`;
+// Persist gathered tasks across sessions (no daily reset). Migrate from old per-day key if present.
+const GATHERED_KEY = "pumped-gathered";
+const LEGACY_TODAY_KEY = `p3m-today-${new Date().toISOString().slice(0, 10)}`;
 
 function saveTodayState(todayIds: Set<string>, scheduleMap: Record<string, number>, durationMap: Record<string, number>, todayOrder: string[]) {
   try {
-    localStorage.setItem(TODAY_KEY(), JSON.stringify({
+    localStorage.setItem(GATHERED_KEY, JSON.stringify({
       ids: Array.from(todayIds),
       schedule: scheduleMap,
       durations: durationMap,
@@ -111,7 +112,12 @@ function saveTodayState(todayIds: Set<string>, scheduleMap: Record<string, numbe
 
 function loadTodayState(): { todayIds: Set<string>; scheduleMap: Record<string, number>; durationMap: Record<string, number>; todayOrder: string[] } {
   try {
-    const raw = localStorage.getItem(TODAY_KEY());
+    let raw = localStorage.getItem(GATHERED_KEY);
+    if (!raw) {
+      // One-time migration from legacy per-day key
+      raw = localStorage.getItem(LEGACY_TODAY_KEY);
+      if (raw) localStorage.setItem(GATHERED_KEY, raw);
+    }
     if (raw) {
       const parsed = JSON.parse(raw);
       return {

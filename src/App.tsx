@@ -51,11 +51,11 @@ function ProtectedRoutes() {
   return (
     <AppShell>
       <Routes>
-        <Route path="/" element={<Dashboard />} />
+        <Route path="/" element={<MyActions />} />
         <Route path="/inbox" element={<InboxPage />} />
         <Route path="/projects" element={<ProjectsPage />} />
         <Route path="/projects/:projectId" element={<ProjectDetailPage />} />
-        <Route path="/actions" element={<MyActions />} />
+        <Route path="/actions" element={<Navigate to="/" replace />} />
         
         <Route path="/waiting" element={<WaitingFor />} />
         

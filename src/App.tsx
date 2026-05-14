@@ -46,7 +46,7 @@ function ProtectedRoutes() {
   }
 
   if (!isDev && !session) {
-    return <Navigate to="/auth" replace />;
+    return <Navigate to="/landing" replace />;
   }
 
   return (

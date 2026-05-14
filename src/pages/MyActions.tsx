@@ -189,6 +189,23 @@ export default function MyActions() {
 
       {/* Filter bar */}
         <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-muted/30 p-3">
+          <button
+            onClick={() => setGatheredOnly((v) => !v)}
+            className={cn(
+              "h-8 inline-flex items-center gap-1.5 rounded-md border px-2.5 text-xs font-medium transition-colors",
+              gatheredOnly
+                ? "bg-primary text-primary-foreground border-primary"
+                : "bg-card text-muted-foreground hover:bg-accent"
+            )}
+            title="Show only gathered tasks"
+          >
+            <Target className="h-3.5 w-3.5" />
+            Gathered only
+            <span className={cn(
+              "ml-1 rounded-full px-1.5 text-[10px] font-semibold",
+              gatheredOnly ? "bg-primary-foreground/20 text-primary-foreground" : "bg-muted text-muted-foreground"
+            )}>{gatheredCount}</span>
+          </button>
           <Input
             placeholder="Search tasks..."
             value={filterTask}
@@ -216,6 +233,20 @@ export default function MyActions() {
           {hasActiveFilters && (
             <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={clearFilters}>
               <X className="mr-1 h-3.5 w-3.5" /> Clear
+            </Button>
+          )}
+          {gatheredCount > 0 && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-8 text-xs text-muted-foreground"
+              onClick={() => {
+                clearToday();
+                toast.success("Scattered all gathered tasks");
+              }}
+              title="Remove all tasks from gathered"
+            >
+              Scatter all
             </Button>
           )}
           <span className="ml-auto text-xs text-muted-foreground">{actions.length} of {allActions.length} shown</span>

@@ -387,7 +387,7 @@ function ListView({ actions, onEdit, selected, onToggle, onToggleAll }: { action
                           <Target className="h-3.5 w-3.5" />
                         </button>
                       </TooltipTrigger>
-                      <TooltipContent side="right">{gathered ? "Remove from today" : "Gather for today"}</TooltipContent>
+                      <TooltipContent side="right">{gathered ? "Scatter (remove from gathered)" : "Gather"}</TooltipContent>
                     </Tooltip>
                   </td>
                   <td className="max-w-md px-4 py-3">

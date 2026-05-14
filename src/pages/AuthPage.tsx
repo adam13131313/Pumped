@@ -61,9 +61,7 @@ export default function AuthPage() {
       <div className="min-h-screen flex items-center justify-center bg-background px-4">
         <div className="w-full max-w-md space-y-6">
           <div className="text-center space-y-2">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-primary-foreground text-xl font-bold">
-              P
-            </div>
+            <img src="/favicon.png" alt="Pumped logo" width={48} height={48} className="mx-auto h-12 w-12" />
             <h1 className="text-2xl font-bold tracking-tight text-foreground">Reset Password</h1>
             <p className="text-muted-foreground text-sm">Enter your email to receive a reset link</p>
           </div>
@@ -115,10 +113,8 @@ export default function AuthPage() {
     <div className="min-h-screen flex items-center justify-center bg-background px-4">
       <div className="w-full max-w-md space-y-6">
         <div className="text-center space-y-2">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-primary-foreground text-xl font-bold">
-            P
-          </div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Pumped</h1>
+            <img src="/favicon.png" alt="Pumped logo" width={48} height={48} className="mx-auto h-12 w-12" />
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">Pumped</h1>
           <p className="text-muted-foreground text-sm">
             {isLogin ? "Sign in to your account" : "Create a new account"}
           </p>

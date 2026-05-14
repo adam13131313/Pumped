@@ -26,6 +26,10 @@ export default function MyActions() {
   const delegateAction = useAppStore((s) => s.delegateAction);
   const bulkUpdateActions = useAppStore((s) => s.bulkUpdateActions);
   const bulkDeleteActions = useAppStore((s) => s.bulkDeleteActions);
+  const todayIds = useAppStore((s) => s.todayIds);
+  const addToday = useAppStore((s) => s.addToday);
+  const removeToday = useAppStore((s) => s.removeToday);
+  const clearToday = useAppStore((s) => s.clearToday);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Action | null>(null);
@@ -35,22 +39,30 @@ export default function MyActions() {
   const [filterTask, setFilterTask] = useState("");
   const [filterPriority, setFilterPriority] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [gatheredOnly, setGatheredOnly] = useState(false);
 
   const actions = useMemo(() => {
     return allActions.filter((a) => {
+      if (gatheredOnly && !todayIds.has(a.id)) return false;
       if (filterTask && !a.task.toLowerCase().includes(filterTask.toLowerCase())) return false;
       if (filterPriority !== "all" && a.priority !== filterPriority) return false;
       if (filterStatus !== "all" && a.status !== filterStatus) return false;
       return true;
     });
-  }, [allActions, filterTask, filterPriority, filterStatus]);
+  }, [allActions, filterTask, filterPriority, filterStatus, gatheredOnly, todayIds]);
 
-  const hasActiveFilters = filterTask || filterPriority !== "all" || filterStatus !== "all";
+  const gatheredCount = useMemo(
+    () => allActions.filter((a) => todayIds.has(a.id)).length,
+    [allActions, todayIds]
+  );
+
+  const hasActiveFilters = filterTask || filterPriority !== "all" || filterStatus !== "all" || gatheredOnly;
 
   const clearFilters = () => {
     setFilterTask("");
     setFilterPriority("all");
     setFilterStatus("all");
+    setGatheredOnly(false);
   };
 
   const toggleSelect = (id: string) => {

@@ -6,7 +6,6 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { useAppStore } from "@/lib/store";
 import { AppShell } from "@/components/AppShell";
-import Dashboard from "@/pages/Dashboard";
 import MyActions from "@/pages/MyActions";
 import WaitingFor from "@/pages/WaitingFor";
 import SOPPage from "@/pages/SOPPage";

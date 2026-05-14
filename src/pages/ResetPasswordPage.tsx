@@ -137,9 +137,7 @@ export default function ResetPasswordPage() {
     <div className="min-h-screen flex items-center justify-center bg-background px-4">
       <div className="w-full max-w-md space-y-6">
         <div className="text-center space-y-2">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-primary-foreground text-xl font-bold">
-            P
-          </div>
+          <img src="/favicon.png" alt="Pumped logo" width={48} height={48} className="mx-auto h-12 w-12" />
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Set New Password</h1>
           <p className="text-muted-foreground text-sm">Choose a new password for your account</p>
         </div>

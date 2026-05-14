@@ -1,20 +1,19 @@
 import { NavLink as RouterNavLink } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import {
-  LayoutDashboard, CheckSquare, Clock, BookOpen, FolderKanban,
+  CheckSquare, Clock, BookOpen, FolderKanban,
   Sparkles, Library, Inbox, LucideIcon, PanelLeftClose, PanelLeft, Settings, Repeat, Plug,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 const links: { to: string; label: string; icon: LucideIcon }[] = [
-  { to: "/", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/actions", label: "My Actions", icon: CheckSquare },
+  { to: "/", label: "My Actions", icon: CheckSquare },
   { to: "/routines", label: "Personal Routines", icon: Repeat },
   { to: "/waiting", label: "Waiting For", icon: Clock },
   { to: "/inbox", label: "Rapid Capture", icon: Inbox },
   { to: "/projects", label: "Projects", icon: FolderKanban },
-  
+
   { to: "/planner", label: "WBS Planner", icon: Sparkles },
   { to: "/sop", label: "SOP", icon: BookOpen },
   { to: "/knowledgebase", label: "Knowledgebase", icon: Library },

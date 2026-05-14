@@ -9,7 +9,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { LayoutList, Columns3, Plus, Pencil, Target, Trash2, X, CheckSquare, Filter, Tag, TargetIcon } from "lucide-react";
+import { LayoutList, Columns3, Plus, Pencil, Target, Trash2, X, CheckSquare, Filter, Tag, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";

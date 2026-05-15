@@ -235,7 +235,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
     const mapProject = (r: any): Project => ({ id: r.id, name: r.name, description: r.description, programmeId: r.programme_id, status: r.status });
     const mapWP = (r: any): WorkPackage => ({ id: r.id, project: r.project, workPackage: r.work_package, wpLead: r.wp_lead, startDate: r.start_date, dueDate: r.due_date, ragStatus: r.rag_status, blockers: r.blockers, dependencies: r.dependencies || [] });
     const mapAction = (r: any): Action => ({ id: r.id, task: r.task, project: r.project, workPackage: r.work_package, startDate: r.start_date, dueDate: r.due_date, priority: r.priority, status: r.status, notes: r.notes, completedAt: r.completed_at || undefined, labels: r.labels || [] });
-    const mapWaiting = (r: any): WaitingItem => ({ id: r.id, description: r.description, fromWhom: r.from_whom, projectWP: r.project_wp, askedOn: r.asked_on, dueBy: r.due_by, status: r.status, notes: r.notes });
+    const mapWaiting = (r: any): WaitingItem => ({ id: r.id, description: r.description, fromWhom: r.from_whom, projectWP: r.project_wp, askedOn: r.asked_on, dueBy: r.due_by, status: r.status, notes: r.notes, linkedProjectId: r.linked_project_id || undefined });
     const mapInbox = (r: any): InboxItem => ({ id: r.id, task: r.task, priority: r.priority, dueDate: r.due_date, project: r.project, notes: r.notes, source: r.source, createdAt: r.created_at });
     const mapSOP = (r: any): SOPItem => ({ id: r.id, when: r.trigger_when, instruction: r.instruction });
 

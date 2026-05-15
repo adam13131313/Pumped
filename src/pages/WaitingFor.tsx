@@ -58,6 +58,21 @@ export default function WaitingFor() {
     setEditing(null);
   };
 
+  // Auto-open dialog when navigated from command palette via ?open=<id>
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const openId = searchParams.get("open");
+    if (!openId) return;
+    const target = allItems.find((w) => w.id === openId);
+    if (target) {
+      setEditing(target);
+      setDialogOpen(true);
+    }
+    const next = new URLSearchParams(searchParams);
+    next.delete("open");
+    setSearchParams(next, { replace: true });
+  }, [searchParams, allItems, setSearchParams]);
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">

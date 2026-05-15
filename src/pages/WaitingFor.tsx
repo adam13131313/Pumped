@@ -59,19 +59,21 @@ export default function WaitingFor() {
   };
 
   // Auto-open dialog when navigated from command palette via ?open=<id>
+  // Use raw store so global filter doesn't hide the target.
+  const allItemsRaw = useAppStore((s) => s.waitingItems);
   const [searchParams, setSearchParams] = useSearchParams();
   useEffect(() => {
     const openId = searchParams.get("open");
     if (!openId) return;
-    const target = allItems.find((w) => w.id === openId);
+    const target = allItemsRaw.find((w) => w.id === openId);
     if (target) {
       setEditing(target);
       setDialogOpen(true);
+      const next = new URLSearchParams(searchParams);
+      next.delete("open");
+      setSearchParams(next, { replace: true });
     }
-    const next = new URLSearchParams(searchParams);
-    next.delete("open");
-    setSearchParams(next, { replace: true });
-  }, [searchParams, allItems, setSearchParams]);
+  }, [searchParams, allItemsRaw, setSearchParams]);
 
   return (
     <div className="space-y-4">

@@ -113,20 +113,22 @@ export default function MyActions() {
   };
 
   // Auto-open dialog when navigated from command palette via ?open=<id>
+  // Look up against the raw store (not filtered actions) so global filter
+  // doesn't hide the target.
+  const allActionsRaw = useAppStore((s) => s.actions);
   const [searchParams, setSearchParams] = useSearchParams();
   useEffect(() => {
     const openId = searchParams.get("open");
     if (!openId) return;
-    const target = allActions.find((a) => a.id === openId);
+    const target = allActionsRaw.find((a) => a.id === openId);
     if (target) {
       setEditing(target);
       setDialogOpen(true);
+      const next = new URLSearchParams(searchParams);
+      next.delete("open");
+      setSearchParams(next, { replace: true });
     }
-    // Clear param so reopening isn't sticky
-    const next = new URLSearchParams(searchParams);
-    next.delete("open");
-    setSearchParams(next, { replace: true });
-  }, [searchParams, allActions, setSearchParams]);
+  }, [searchParams, allActionsRaw, setSearchParams]);
 
   // Kanban column ordering state
   const [columnOrder, setColumnOrder] = useState<Record<string, string[]>>({});

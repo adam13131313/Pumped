@@ -100,7 +100,7 @@ export function CommandPalette() {
         {filteredActions.length > 0 && (
           <CommandGroup heading="Actions">
             {filteredActions.map((a) => (
-              <CommandItem key={`a-${a.id}`} value={`action ${a.task} ${a.id}`} onSelect={() => go("/actions")}>
+              <CommandItem key={`a-${a.id}`} value={`action ${a.task} ${a.id}`} onSelect={() => go(`/actions?open=${a.id}`)}>
                 <CheckSquare className="mr-2 h-4 w-4 text-muted-foreground" />
                 <span className="truncate">{a.task}</span>
                 {(a.project || a.workPackage) && (
@@ -116,7 +116,7 @@ export function CommandPalette() {
         {filteredInbox.length > 0 && (
           <CommandGroup heading="Rapid Capture">
             {filteredInbox.map((i) => (
-              <CommandItem key={`i-${i.id}`} value={`inbox ${i.task} ${i.id}`} onSelect={() => go("/inbox")}>
+              <CommandItem key={`i-${i.id}`} value={`inbox ${i.task} ${i.id}`} onSelect={() => go(`/inbox?focus=${i.id}`)}>
                 <Inbox className="mr-2 h-4 w-4 text-muted-foreground" />
                 <span className="truncate">{i.task}</span>
               </CommandItem>
@@ -127,7 +127,7 @@ export function CommandPalette() {
         {filteredWaiting.length > 0 && (
           <CommandGroup heading="Waiting For">
             {filteredWaiting.map((w) => (
-              <CommandItem key={`w-${w.id}`} value={`waiting ${w.description} ${w.id}`} onSelect={() => go("/waiting")}>
+              <CommandItem key={`w-${w.id}`} value={`waiting ${w.description} ${w.id}`} onSelect={() => go(`/waiting?open=${w.id}`)}>
                 <Clock className="mr-2 h-4 w-4 text-muted-foreground" />
                 <span className="truncate">{w.description}</span>
                 {w.fromWhom && (
@@ -140,13 +140,17 @@ export function CommandPalette() {
 
         {filteredWPs.length > 0 && (
           <CommandGroup heading="Work Packages">
-            {filteredWPs.map((wp) => (
-              <CommandItem key={`wp-${wp.id}`} value={`wp ${wp.workPackage} ${wp.id}`} onSelect={() => go("/projects")}>
-                <Layers className="mr-2 h-4 w-4 text-muted-foreground" />
-                <span className="truncate">{wp.workPackage}</span>
-                <span className="ml-2 truncate text-xs text-muted-foreground">· {wp.project}</span>
-              </CommandItem>
-            ))}
+            {filteredWPs.map((wp) => {
+              const proj = projects.find((p) => p.name === wp.project);
+              const target = proj ? `/projects/${proj.id}?wp=${wp.id}` : "/projects";
+              return (
+                <CommandItem key={`wp-${wp.id}`} value={`wp ${wp.workPackage} ${wp.id}`} onSelect={() => go(target)}>
+                  <Layers className="mr-2 h-4 w-4 text-muted-foreground" />
+                  <span className="truncate">{wp.workPackage}</span>
+                  <span className="ml-2 truncate text-xs text-muted-foreground">· {wp.project}</span>
+                </CommandItem>
+              );
+            })}
           </CommandGroup>
         )}
 

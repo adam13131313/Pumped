@@ -54,6 +54,7 @@ function ProtectedRoutes() {
     <AppShell>
       <Routes>
         <Route path="/" element={<MyActions />} />
+        <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/inbox" element={<InboxPage />} />
         <Route path="/projects" element={<ProjectsPage />} />
         <Route path="/projects/:projectId" element={<ProjectDetailPage />} />

@@ -345,7 +345,11 @@ export default function RoutinesPage() {
         </TabsContent>
 
         <TabsContent value="week" className="mt-6">
-          <WeekGrid routines={routines.filter((r) => !r.archived_at)} completions={completions} />
+          <WeekGrid
+            routines={routines.filter((r) => !r.archived_at)}
+            completions={completions}
+            onToggle={toggleCompletionForDate}
+          />
         </TabsContent>
 
         <TabsContent value="all" className="mt-6">
@@ -355,6 +359,7 @@ export default function RoutinesPage() {
             onArchive={(r) => handleArchive(r, true)}
             onUnarchive={(r) => handleArchive(r, false)}
             onEdit={(r) => { setEditing(r); setDialogOpen(true); }}
+            onDelete={handleDelete}
           />
         </TabsContent>
       </Tabs>

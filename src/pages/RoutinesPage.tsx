@@ -226,6 +226,48 @@ export default function RoutinesPage() {
     await supabase.from("routines").update({ archived_at }).eq("id", r.id);
   }
 
+  async function handleDelete(r: Routine) {
+    setRoutines((prev) => prev.filter((x) => x.id !== r.id));
+    setCompletions((prev) => prev.filter((c) => c.routine_id !== r.id));
+    const { error } = await supabase.from("routines").delete().eq("id", r.id);
+    if (error) {
+      toast.error("Couldn't delete — try again");
+      void load();
+    } else {
+      toast.success(`Deleted "${r.name}"`);
+    }
+  }
+
+  async function toggleCompletionForDate(routineId: string, dateStr: string) {
+    if (!user) return;
+    const existing = completions.find(
+      (c) => c.routine_id === routineId && c.completed_date === dateStr
+    );
+    if (existing) {
+      setCompletions((prev) => prev.filter((c) => c.id !== existing.id));
+      const { error } = await supabase.from("routine_completions").delete().eq("id", existing.id);
+      if (error) { toast.error("Couldn't update"); void load(); }
+    } else {
+      const optimistic: Completion = {
+        id: `tmp-${Date.now()}`,
+        routine_id: routineId,
+        completed_date: dateStr,
+      };
+      setCompletions((prev) => [...prev, optimistic]);
+      const { data, error } = await supabase
+        .from("routine_completions")
+        .insert({ routine_id: routineId, user_id: user.id, completed_date: dateStr })
+        .select()
+        .single();
+      if (error) {
+        setCompletions((prev) => prev.filter((c) => c.id !== optimistic.id));
+        toast.error("Couldn't save");
+      } else {
+        setCompletions((prev) => prev.map((c) => (c.id === optimistic.id ? (data as any) : c)));
+      }
+    }
+  }
+
   if (!user) {
     return (
       <div className="p-8 text-center text-muted-foreground">

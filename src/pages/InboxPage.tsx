@@ -721,7 +721,11 @@ export default function InboxPage() {
           </CardHeader>
           <CardContent className="space-y-2">
             {inboxItems.map((item) => (
-              <div key={item.id} className="flex items-center gap-3 rounded-lg border p-3 hover:bg-accent/50 transition-colors">
+              <div
+                key={item.id}
+                id={`inbox-${item.id}`}
+                className={`flex items-center gap-3 rounded-lg border p-3 hover:bg-accent/50 transition-colors ${focusId === item.id ? "ring-2 ring-primary" : ""}`}
+              >
                 <Checkbox checked={selected.has(item.id)} onCheckedChange={() => toggleSelect(item.id)} />
                 <div className="flex-1 min-w-0">
                   <p className="font-medium truncate">{item.task}</p>

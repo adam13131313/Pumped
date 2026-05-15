@@ -194,7 +194,7 @@ export default function Landing() {
       >
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6">
           <Link to="/" className="flex items-center">
-            <img src="/logo-horizontal-white.png" alt="Pumped" className="h-12 w-auto object-contain" />
+            <img src="/logo-navbar.png" alt="Pumped" className="h-7 w-auto object-contain" />
           </Link>
           <div className="flex items-center gap-2">
             <Link to="/auth">
@@ -497,8 +497,7 @@ export default function Landing() {
           style={{ color: TEXT_MUTED }}
         >
           <div className="flex items-center gap-3">
-            <img src="/logo-horizontal-white.png" alt="Pumped" className="h-6 w-auto object-contain opacity-70" />
-            <span>Work in Motion</span>
+            <img src="/logo-footer.png" alt="Pumped" className="h-5 w-auto object-contain opacity-60" />
           </div>
           <div className="flex items-center gap-4">
             <Link to="/auth" className="hover:text-white">Sign in</Link>

@@ -61,7 +61,7 @@ export default function AuthPage() {
       <div className="min-h-screen flex items-center justify-center bg-background px-4">
         <div className="w-full max-w-md space-y-6">
           <div className="text-center space-y-3">
-            <img src="/logo-horizontal-dark.png" alt="Pumped" className="mx-auto h-9 w-auto object-contain" />
+            <img src="/logo-navbar-dark.png" alt="Pumped" className="mx-auto h-9 w-auto object-contain" />
             <h1 className="text-2xl font-bold tracking-tight text-foreground">Reset Password</h1>
             <p className="text-muted-foreground text-sm">Enter your email to receive a reset link</p>
           </div>
@@ -113,7 +113,7 @@ export default function AuthPage() {
     <div className="min-h-screen flex items-center justify-center bg-background px-4">
       <div className="w-full max-w-md space-y-6">
         <div className="text-center space-y-3">
-          <img src="/logo-horizontal-dark.png" alt="Pumped" className="mx-auto h-10 w-auto object-contain" />
+          <img src="/logo-navbar-dark.png" alt="Pumped" className="mx-auto h-10 w-auto object-contain" />
           <p className="text-muted-foreground text-sm">
             {isLogin ? "Sign in to your account" : "Create a new account"}
           </p>

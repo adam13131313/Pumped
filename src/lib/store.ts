@@ -429,12 +429,25 @@ export const useAppStore = create<AppState>()((set, get) => ({
     supabase.from("inbox_items").update(dbUpdates).eq("id", id).then();
   },
   deleteInboxItem: (id) => {
+    const item = get().inboxItems.find((i) => i.id === id);
     set((s) => ({ inboxItems: s.inboxItems.filter((i) => i.id !== id) }));
     supabase.from("inbox_items").delete().eq("id", id).then();
+    if (item) {
+      getUserId().then((uid) => supabase.from("inbox_item_events").insert({
+        inbox_item_id: id, event: 'deleted', user_id: uid, source: item.source || '', created_at_snapshot: item.createdAt,
+      } as any).then());
+    }
   },
   bulkDeleteInboxItems: (ids) => {
+    const items = get().inboxItems.filter((i) => ids.includes(i.id));
     set((s) => ({ inboxItems: s.inboxItems.filter((i) => !ids.includes(i.id)) }));
     supabase.from("inbox_items").delete().in("id", ids).then();
+    if (items.length) {
+      getUserId().then((uid) => {
+        const rows = items.map((i) => ({ inbox_item_id: i.id, event: 'deleted' as const, user_id: uid, source: i.source || '', created_at_snapshot: i.createdAt }));
+        supabase.from("inbox_item_events").insert(rows as any).then();
+      });
+    }
   },
   promoteInboxToActions: (ids) => {
     const s = get();
@@ -460,6 +473,11 @@ export const useAppStore = create<AppState>()((set, get) => ({
     getUserId().then((uid) => {
       const rows = newActions.map((a) => ({ id: a.id, user_id: uid, task: a.task, project: a.project, work_package: a.workPackage, start_date: a.startDate, due_date: a.dueDate, priority: a.priority, status: a.status, notes: a.notes }));
       supabase.from("actions").insert(rows).then();
+      // Log inbox promotion events
+      if (toPromote.length) {
+        const eventRows = toPromote.map((i) => ({ inbox_item_id: i.id, event: 'promoted' as const, user_id: uid, source: i.source || '', created_at_snapshot: i.createdAt }));
+        supabase.from("inbox_item_events").insert(eventRows as any).then();
+      }
     });
   },
 

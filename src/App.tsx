@@ -58,7 +58,7 @@ function ProtectedRoutes() {
         <Route path="/inbox" element={<InboxPage />} />
         <Route path="/projects" element={<ProjectsPage />} />
         <Route path="/projects/:projectId" element={<ProjectDetailPage />} />
-        <Route path="/actions" element={<Navigate to="/" replace />} />
+        <Route path="/actions" element={<MyActions />} />
         
         <Route path="/waiting" element={<WaitingFor />} />
         

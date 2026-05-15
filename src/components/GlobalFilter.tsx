@@ -11,7 +11,8 @@ export function GlobalFilter() {
   const setGlobalFilter = useAppStore((s) => s.setGlobalFilter);
   const clearGlobalFilter = useAppStore((s) => s.clearGlobalFilter);
 
-  const hasFilter = globalFilter.programmeId || globalFilter.projectId || globalFilter.workPackageId;
+  const hasFilter = globalFilter.programmeId || globalFilter.projectId || globalFilter.workPackageId || globalFilter.unassigned;
+  const isUnassigned = !!globalFilter.unassigned;
 
   const filteredProjects = globalFilter.programmeId
     ? projects.filter((p) => p.programmeId === globalFilter.programmeId)
@@ -29,22 +30,32 @@ export function GlobalFilter() {
         })
       : workPackages;
 
+  const programmeValue = isUnassigned ? "__unassigned__" : (globalFilter.programmeId || "__all__");
+
   return (
     <div className="flex flex-wrap items-center gap-2">
       <Filter className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
       <Select
-        value={globalFilter.programmeId || "__all__"}
-        onValueChange={(v) => setGlobalFilter({
-          programmeId: v === "__all__" ? "" : v,
-          projectId: "",
-          workPackageId: "",
-        })}
+        value={programmeValue}
+        onValueChange={(v) => {
+          if (v === "__unassigned__") {
+            setGlobalFilter({ programmeId: "", projectId: "", workPackageId: "", unassigned: true });
+          } else {
+            setGlobalFilter({
+              programmeId: v === "__all__" ? "" : v,
+              projectId: "",
+              workPackageId: "",
+              unassigned: false,
+            });
+          }
+        }}
       >
-        <SelectTrigger className="h-8 w-[130px] sm:w-[150px] text-xs">
+        <SelectTrigger className="h-8 w-[130px] sm:w-[160px] text-xs">
           <SelectValue placeholder="All Programmes" />
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="__all__">All Programmes</SelectItem>
+          <SelectItem value="__unassigned__">Unassigned only</SelectItem>
           {programmes.map((p) => (
             <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
           ))}

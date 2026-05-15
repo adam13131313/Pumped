@@ -87,7 +87,7 @@ interface AppState {
   takeBackWaiting: (id: string) => void;
 }
 
-const defaultGlobalFilter: GlobalFilter = { programmeId: "", projectId: "", workPackageId: "" };
+const defaultGlobalFilter: GlobalFilter = { programmeId: "", projectId: "", workPackageId: "", unassigned: false };
 
 // Helper to get current user id
 async function getUserId(): Promise<string> {

@@ -589,13 +589,14 @@ function WeekGrid({
 }
 
 function AllRoutinesList({
-  routines, completions, onArchive, onUnarchive, onEdit,
+  routines, completions, onArchive, onUnarchive, onEdit, onDelete,
 }: {
   routines: Routine[];
   completions: Completion[];
   onArchive: (r: Routine) => void;
   onUnarchive: (r: Routine) => void;
   onEdit: (r: Routine) => void;
+  onDelete: (r: Routine) => void;
 }) {
   const active = routines.filter((r) => !r.archived_at);
   const archived = routines.filter((r) => r.archived_at);
@@ -614,8 +615,9 @@ function AllRoutinesList({
                   <FrequencyLabel routine={r} /> · {TOD_META[r.time_of_day].label} · streak {current} (best {longest})
                 </div>
               </div>
-              <Button size="icon" variant="ghost" onClick={() => onEdit(r)}><Pencil className="h-4 w-4" /></Button>
-              <Button size="icon" variant="ghost" onClick={() => onArchive(r)}><Archive className="h-4 w-4" /></Button>
+              <Button size="icon" variant="ghost" onClick={() => onEdit(r)} aria-label="Edit routine"><Pencil className="h-4 w-4" /></Button>
+              <Button size="icon" variant="ghost" onClick={() => onArchive(r)} aria-label="Archive routine"><Archive className="h-4 w-4" /></Button>
+              <DeleteRoutineButton routine={r} onDelete={onDelete} />
             </div>
           );
         })}
@@ -625,12 +627,42 @@ function AllRoutinesList({
           {archived.map((r) => (
             <div key={r.id} className="flex items-center gap-3 rounded-2xl border bg-muted/30 p-3 opacity-70">
               <div className="min-w-0 flex-1 truncate">{r.name}</div>
-              <Button size="icon" variant="ghost" onClick={() => onUnarchive(r)}><ArchiveRestore className="h-4 w-4" /></Button>
+              <Button size="icon" variant="ghost" onClick={() => onUnarchive(r)} aria-label="Restore routine"><ArchiveRestore className="h-4 w-4" /></Button>
+              <DeleteRoutineButton routine={r} onDelete={onDelete} />
             </div>
           ))}
         </Section>
       )}
     </div>
+  );
+}
+
+function DeleteRoutineButton({ routine, onDelete }: { routine: Routine; onDelete: (r: Routine) => void }) {
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        <Button size="icon" variant="ghost" aria-label="Delete routine" className="text-destructive hover:text-destructive">
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete "{routine.name}"?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This permanently removes the routine and its completion history. This cannot be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={() => onDelete(routine)}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          >
+            Delete
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
 

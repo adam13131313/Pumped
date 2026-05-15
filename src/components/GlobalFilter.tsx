@@ -64,10 +64,12 @@ export function GlobalFilter() {
 
       <Select
         value={globalFilter.projectId || "__all__"}
+        disabled={isUnassigned}
         onValueChange={(v) => setGlobalFilter({
           ...globalFilter,
           projectId: v === "__all__" ? "" : v,
           workPackageId: "",
+          unassigned: false,
         })}
       >
         <SelectTrigger className="h-8 w-[130px] sm:w-[150px] text-xs">
@@ -83,9 +85,11 @@ export function GlobalFilter() {
 
       <Select
         value={globalFilter.workPackageId || "__all__"}
+        disabled={isUnassigned}
         onValueChange={(v) => setGlobalFilter({
           ...globalFilter,
           workPackageId: v === "__all__" ? "" : v,
+          unassigned: false,
         })}
       >
         <SelectTrigger className="h-8 w-[130px] sm:w-[150px] text-xs">

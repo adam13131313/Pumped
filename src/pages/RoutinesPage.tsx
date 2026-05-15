@@ -11,7 +11,11 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Plus, Sun, CloudSun, Moon, Sparkles, Flame, Archive, ArchiveRestore, Pencil } from "lucide-react";
+import { Plus, Sun, CloudSun, Moon, Sparkles, Flame, Archive, ArchiveRestore, Pencil, Trash2 } from "lucide-react";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { motion, AnimatePresence } from "framer-motion";
 import confetti from "canvas-confetti";
 import { format, startOfWeek, addDays, isSameDay, parseISO, differenceInCalendarDays, startOfDay } from "date-fns";
@@ -222,6 +226,48 @@ export default function RoutinesPage() {
     await supabase.from("routines").update({ archived_at }).eq("id", r.id);
   }
 
+  async function handleDelete(r: Routine) {
+    setRoutines((prev) => prev.filter((x) => x.id !== r.id));
+    setCompletions((prev) => prev.filter((c) => c.routine_id !== r.id));
+    const { error } = await supabase.from("routines").delete().eq("id", r.id);
+    if (error) {
+      toast.error("Couldn't delete — try again");
+      void load();
+    } else {
+      toast.success(`Deleted "${r.name}"`);
+    }
+  }
+
+  async function toggleCompletionForDate(routineId: string, dateStr: string) {
+    if (!user) return;
+    const existing = completions.find(
+      (c) => c.routine_id === routineId && c.completed_date === dateStr
+    );
+    if (existing) {
+      setCompletions((prev) => prev.filter((c) => c.id !== existing.id));
+      const { error } = await supabase.from("routine_completions").delete().eq("id", existing.id);
+      if (error) { toast.error("Couldn't update"); void load(); }
+    } else {
+      const optimistic: Completion = {
+        id: `tmp-${Date.now()}`,
+        routine_id: routineId,
+        completed_date: dateStr,
+      };
+      setCompletions((prev) => [...prev, optimistic]);
+      const { data, error } = await supabase
+        .from("routine_completions")
+        .insert({ routine_id: routineId, user_id: user.id, completed_date: dateStr })
+        .select()
+        .single();
+      if (error) {
+        setCompletions((prev) => prev.filter((c) => c.id !== optimistic.id));
+        toast.error("Couldn't save");
+      } else {
+        setCompletions((prev) => prev.map((c) => (c.id === optimistic.id ? (data as any) : c)));
+      }
+    }
+  }
+
   if (!user) {
     return (
       <div className="p-8 text-center text-muted-foreground">
@@ -299,7 +345,11 @@ export default function RoutinesPage() {
         </TabsContent>
 
         <TabsContent value="week" className="mt-6">
-          <WeekGrid routines={routines.filter((r) => !r.archived_at)} completions={completions} />
+          <WeekGrid
+            routines={routines.filter((r) => !r.archived_at)}
+            completions={completions}
+            onToggle={toggleCompletionForDate}
+          />
         </TabsContent>
 
         <TabsContent value="all" className="mt-6">
@@ -309,6 +359,7 @@ export default function RoutinesPage() {
             onArchive={(r) => handleArchive(r, true)}
             onUnarchive={(r) => handleArchive(r, false)}
             onEdit={(r) => { setEditing(r); setDialogOpen(true); }}
+            onDelete={handleDelete}
           />
         </TabsContent>
       </Tabs>
@@ -469,7 +520,13 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
   );
 }
 
-function WeekGrid({ routines, completions }: { routines: Routine[]; completions: Completion[] }) {
+function WeekGrid({
+  routines, completions, onToggle,
+}: {
+  routines: Routine[];
+  completions: Completion[];
+  onToggle: (routineId: string, dateStr: string) => void;
+}) {
   const start = startOfWeek(new Date(), { weekStartsOn: 1 });
   const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
   const today = new Date();
@@ -478,6 +535,7 @@ function WeekGrid({ routines, completions }: { routines: Routine[]; completions:
   }
   return (
     <div className="overflow-x-auto">
+      <p className="mb-2 px-1 text-xs text-muted-foreground">Tap a day to mark a routine complete or undo it.</p>
       <table className="w-full border-separate border-spacing-y-1">
         <thead>
           <tr className="text-xs text-muted-foreground">
@@ -500,15 +558,22 @@ function WeekGrid({ routines, completions }: { routines: Routine[]; completions:
                 const ds = format(d, "yyyy-MM-dd");
                 const did = completions.some((c) => c.routine_id === r.id && c.completed_date === ds);
                 const due = isDueOn(r, d);
+                const isFuture = d > startOfDay(today) && !isSameDay(d, today);
                 return (
                   <td key={ds} className="text-center">
-                    <div
+                    <button
+                      type="button"
+                      disabled={isFuture}
+                      onClick={() => onToggle(r.id, ds)}
+                      aria-label={`${did ? "Unmark" : "Mark"} ${r.name} on ${ds}`}
                       className={cn(
-                        "mx-auto h-7 w-7 rounded-full",
+                        "mx-auto block h-7 w-7 rounded-full transition-transform",
+                        !isFuture && "hover:scale-110 active:scale-95 cursor-pointer",
+                        isFuture && "cursor-not-allowed opacity-40",
                         did
                           ? "bg-emerald-500"
                           : due
-                            ? "border border-dashed border-muted-foreground/30"
+                            ? "border border-dashed border-muted-foreground/40"
                             : "bg-muted/40"
                       )}
                     />
@@ -524,13 +589,14 @@ function WeekGrid({ routines, completions }: { routines: Routine[]; completions:
 }
 
 function AllRoutinesList({
-  routines, completions, onArchive, onUnarchive, onEdit,
+  routines, completions, onArchive, onUnarchive, onEdit, onDelete,
 }: {
   routines: Routine[];
   completions: Completion[];
   onArchive: (r: Routine) => void;
   onUnarchive: (r: Routine) => void;
   onEdit: (r: Routine) => void;
+  onDelete: (r: Routine) => void;
 }) {
   const active = routines.filter((r) => !r.archived_at);
   const archived = routines.filter((r) => r.archived_at);
@@ -549,8 +615,9 @@ function AllRoutinesList({
                   <FrequencyLabel routine={r} /> · {TOD_META[r.time_of_day].label} · streak {current} (best {longest})
                 </div>
               </div>
-              <Button size="icon" variant="ghost" onClick={() => onEdit(r)}><Pencil className="h-4 w-4" /></Button>
-              <Button size="icon" variant="ghost" onClick={() => onArchive(r)}><Archive className="h-4 w-4" /></Button>
+              <Button size="icon" variant="ghost" onClick={() => onEdit(r)} aria-label="Edit routine"><Pencil className="h-4 w-4" /></Button>
+              <Button size="icon" variant="ghost" onClick={() => onArchive(r)} aria-label="Archive routine"><Archive className="h-4 w-4" /></Button>
+              <DeleteRoutineButton routine={r} onDelete={onDelete} />
             </div>
           );
         })}
@@ -560,12 +627,42 @@ function AllRoutinesList({
           {archived.map((r) => (
             <div key={r.id} className="flex items-center gap-3 rounded-2xl border bg-muted/30 p-3 opacity-70">
               <div className="min-w-0 flex-1 truncate">{r.name}</div>
-              <Button size="icon" variant="ghost" onClick={() => onUnarchive(r)}><ArchiveRestore className="h-4 w-4" /></Button>
+              <Button size="icon" variant="ghost" onClick={() => onUnarchive(r)} aria-label="Restore routine"><ArchiveRestore className="h-4 w-4" /></Button>
+              <DeleteRoutineButton routine={r} onDelete={onDelete} />
             </div>
           ))}
         </Section>
       )}
     </div>
+  );
+}
+
+function DeleteRoutineButton({ routine, onDelete }: { routine: Routine; onDelete: (r: Routine) => void }) {
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        <Button size="icon" variant="ghost" aria-label="Delete routine" className="text-destructive hover:text-destructive">
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete "{routine.name}"?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This permanently removes the routine and its completion history. This cannot be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={() => onDelete(routine)}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          >
+            Delete
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
 

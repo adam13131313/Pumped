@@ -1,4 +1,4 @@
-[README (3).md](https://github.com/user-attachments/files/27782906/README.3.md)
+[README (4).md](https://github.com/user-attachments/files/27782970/README.4.md)
 # Pumped — Work in Motion
 
 > Capture, plan, and ship your work. One inbox for everything, zero dropped balls.
@@ -176,4 +176,10 @@ VITE_SUPABASE_PROJECT_ID=your_project_id
 
 ## Deployment
 
-Open [Lovable](https://lovable.dev) and click **Share → Publish**. You can also connect a custom domain under **Project → Settings → Domains**.
+The app can be deployed to any static hosting platform (Vercel, Netlify, Cloudflare Pages, etc.). Build with:
+
+```bash
+npm run build
+```
+
+Then deploy the contents of the `dist` folder. Set your three Supabase environment variables in your hosting provider's settings.

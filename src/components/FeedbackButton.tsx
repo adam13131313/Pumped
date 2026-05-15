@@ -49,6 +49,17 @@ export function FeedbackButton() {
     }
     setSubmitting(true);
     try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      if (!accessToken) {
+        toast({
+          title: "Please sign in",
+          description: "You need to be signed in to send feedback.",
+          variant: "destructive",
+        });
+        setSubmitting(false);
+        return;
+      }
       const prefix =
         type === "bug" ? "[Bug] " : type === "other" ? "[Feedback] " : "";
       const { data, error } = await supabase.functions.invoke(
@@ -58,6 +69,7 @@ export function FeedbackButton() {
             title: `${prefix}${title.trim()}`,
             description: desc.trim() || title.trim(),
           },
+          headers: { Authorization: `Bearer ${accessToken}` },
         }
       );
       if (error) throw error;

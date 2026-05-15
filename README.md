@@ -1,4 +1,4 @@
-[README (4).md](https://github.com/user-attachments/files/27782970/README.4.md)
+[README (6).md](https://github.com/user-attachments/files/27784748/README.6.md)
 # Pumped — Work in Motion
 
 > Capture, plan, and ship your work. One inbox for everything, zero dropped balls.
@@ -25,18 +25,18 @@ The dashboard reads the global filter bar (Programme / Project / Work Package) a
 Every data point is clickable and navigates directly to the relevant page with filters pre-applied — the dashboard is a launchpad, not just a read-only report.
 
 **Widgets:**
-- **Health score** — a 0–100 composite score built from on-time delivery, overdue waiting items, routine streaks, project RAG spread, and inbox lag. Colour coded green/amber/red with a week-on-week delta
-- **Health score breakdown** — a donut ring with a per-component breakdown showing exactly what's helping or hurting your score
+- **Health score** — a 0–100 composite score built from on-time delivery, overdue waiting items, routine streaks, project RAG spread, and inbox lag; colour coded green/amber/red with a week-on-week delta
+- **Health score breakdown** — donut ring with a per-component breakdown showing exactly what's helping or hurting your score
 - **Completed on time** — percentage of actions completed on or before their due date this week
 - **Overdue waiting for** — count of pending waiting items past their due date; click to jump straight to them
-- **Inbox lag** — average days between capture and action, across all sources
+- **Inbox lag** — average days between capture and promotion to action, across all sources
 - **Priority drift** — high-priority actions sitting in Not Started for 3+ days; sorted by age, click any row to go directly to that task
 - **Action velocity** — line chart of tasks added vs completed over 8 weeks; reveals whether work is accumulating faster than you're clearing it
 - **Workload heatmap** — 12-week day-by-day grid of tasks due; darker = heavier load; click any cell to see those tasks
-- **Project RAG trend** — how Green/Amber/Red project counts have shifted week by week (switches to WP completion bars at project/WP scope)
+- **Project RAG trend** — how Green/Amber/Red project counts have shifted week by week; switches to WP completion bars at project/WP scope
 - **Waiting For risk matrix** — 2×2 scatter of waiting items by urgency and project risk; top-left quadrant = chase now
 - **Routine consistency** — 4-week habit grid showing which routines are genuinely embedded vs aspirational
-- **Inbox lag by source** — average days to action broken down by capture source (meeting notes, email, voice memo, webhook, etc.)
+- **Inbox lag by source** — average days to action broken down by capture source
 
 Every widget has a hover tooltip explaining what it measures and how to act on it.
 
@@ -47,10 +47,11 @@ Your personal task list and daily command centre.
 
 - Add actions with title, project, work package, due date, priority, status, notes, and labels
 - Status workflow: **Not Started → In Progress → Complete → Blocked**
+- Switch between **List** and **Kanban** views without losing context
 - Delegate an action to someone → it moves automatically to Waiting For
-- Filter by project, priority, or label
+- Filter by task name, priority, or status; global Programme/Project/WP filter applied across the whole app
 - **Gathered focus** — pin tasks to a persistent "Gathered" set for the day; scatter when done
-- Bulk select → bulk gather/scatter, update, or delete
+- Bulk select → bulk update status, bulk update priority, bulk delete, bulk gather/scatter
 - Task attachments (files up to 10MB, auto-detected URLs)
 - Threaded comments on tasks
 - Duplicate detection — inline warning while typing a similar task name
@@ -58,20 +59,21 @@ Your personal task list and daily command centre.
 ### Inbox / Rapid Capture
 Your quick-entry inbox for capturing tasks from anywhere.
 
-- Paste raw text from meetings, emails, or voice memos → **AI extracts structured tasks** with project, priority, and due date
-- Projects are matched to your existing WBS — the AI never invents project names
-- Bulk edit priority or project across multiple items
+- Label captures by source type (meeting notes, email, voice memo, etc.)
+- Paste raw text → **AI extracts structured tasks** with project, priority, and due date matched to your existing WBS
+- Bulk edit priority or project across multiple items at once
 - Promote to My Actions in one click
-- Voice transcription on mobile
+- Bulk delete
+- Voice transcription support on mobile
 
 ### Waiting For
 Never chase from memory again.
 
 - Log everything you've asked others to deliver — who, what, and when
-- Status tracking: **Pending / Received / Overdue**
-- Link waiting items to a project for risk matrix tracking in the dashboard
+- Status tracking: **Pending / Received / Overdue** with overdue highlighting
+- Filter by description, from whom, project, or status
+- Link waiting items to a project (used by the dashboard risk matrix)
 - "Take Back" — convert a waiting item back into your own action
-- Overdue highlighting
 - Built-in review cadence in the SOP (Mon + Wed sweeps)
 
 ### Projects & Work Packages
@@ -80,10 +82,10 @@ Organise work into a clear hierarchy.
 - **Programme → Project → Work Package → Action**
 - Project statuses: Active / On Hold / Complete
 - Work Package fields: lead, start date, due date, RAG status, blockers, dependencies
-- RAG statuses: 🟢 Green / 🟡 Amber / 🔴 Red with full history tracked over time
+- RAG statuses: 🟢 Green / 🟡 Amber / 🔴 Red — full history tracked over time for dashboard trend charts
 - Dependency types: FS, FF, SS, SF with optional lag days
 - Export the full WBS hierarchy as CSV
-- "View dashboard for this project" — one click to the scoped Pulse dashboard from any project
+- "View dashboard for this project" — one click to the scoped Pulse dashboard from any project detail page
 
 ### WBS Planner
 AI-generated project plans from documents, images, or free text.
@@ -92,13 +94,13 @@ AI-generated project plans from documents, images, or free text.
 - Edit inline and refine iteratively
 - Accept & Create imports the entire hierarchy in one click
 
-### Routines
+### Personal Routines
 Build habits alongside your project work.
 
-- Create routines with flexible frequency: daily, weekly by day, or weekly by count target
+- Create routines with flexible frequency: daily, weekly by specific days, or weekly by count target
 - Time of day: Morning / Afternoon / Evening / Anytime
 - Streak tracking with completion history
-- Weekly calendar view
+- Weekly calendar grid view
 - Archive and restore routines
 - Routine consistency feeds directly into the dashboard health score
 
@@ -109,8 +111,8 @@ One inbox for every tool you use.
 - Idempotent ingest: re-sending the same `source_id` updates the existing item safely
 - Tokens stored as SHA-256 hashes; regeneratable if compromised
 - "Send test task" verifies the full end-to-end loop
-- Auto-generated **curl and JS code snippets** per source
-- **Zapier / Make** compatible — use a "Webhooks → POST" step to connect 5,000+ apps with no code
+- Auto-generated **curl and JS code snippets** per webhook source
+- **Zapier / Make** compatible — use a Webhooks → POST step to connect 5,000+ apps with no code
 - **Native connectors coming soon**: Gmail, Slack, Linear, Asana, Notion, Outlook
 
 ### Knowledge Base
@@ -128,8 +130,8 @@ An editable operating rhythm baked into the app.
 - Fully editable to match your own workflow
 
 ### Global Features
-- **Global Filter** — filter by Programme / Project / Work Package / Unassigned across the entire app and dashboard; persists across navigation
-- **Command Palette** (⌘K / Ctrl+K) — search across actions, inbox, waiting, work packages, and projects
+- **Global Filter** — filter by Programme / Project / Work Package / Unassigned across the entire app and dashboard; persists as you navigate
+- **Command Palette** (⌘K / Ctrl+K) — instant search across actions, inbox items, waiting items, projects, and work packages
 - Dark / light mode
 - Mobile-first — bottom nav, slide-out menu, mobile-friendly forms, voice transcription
 - Supabase auth with email/password and password reset
@@ -176,10 +178,10 @@ VITE_SUPABASE_PROJECT_ID=your_project_id
 
 ## Deployment
 
-The app can be deployed to any static hosting platform (Vercel, Netlify, Cloudflare Pages, etc.). Build with:
+Build for production with:
 
 ```bash
 npm run build
 ```
 
-Then deploy the contents of the `dist` folder. Set your three Supabase environment variables in your hosting provider's settings.
+Deploy the `dist` folder to any static hosting platform (Vercel, Netlify, Cloudflare Pages, etc.). Set the three Supabase environment variables in your hosting provider's settings.

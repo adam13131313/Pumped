@@ -193,11 +193,8 @@ export default function Landing() {
         style={{ borderBottom: `1px solid ${BORDER}`, background: "rgba(7,8,9,0.7)" }}
       >
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6">
-          <Link to="/" className="flex items-center gap-2">
-            <img src={logo} alt="Pumped" className="h-8 w-8" />
-            <span style={{ fontFamily: display }} className="text-lg font-semibold tracking-tight">
-              Pumped
-            </span>
+          <Link to="/" className="flex items-center">
+            <img src="/logo-horizontal-white.png" alt="Pumped FA" className="h-8 w-auto object-contain" />
           </Link>
           <div className="flex items-center gap-2">
             <Link to="/auth">
@@ -499,9 +496,9 @@ export default function Landing() {
           className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-3 px-4 py-8 text-xs sm:flex-row sm:px-6"
           style={{ color: TEXT_MUTED }}
         >
-          <div className="flex items-center gap-2">
-            <img src={logo} alt="" className="h-5 w-5 opacity-80" />
-            <span>Pumped — Work in Motion</span>
+          <div className="flex items-center gap-3">
+            <img src="/logo-wordmark-white.png" alt="Pumped FA" className="h-5 w-auto object-contain opacity-60" />
+            <span>Work in Motion</span>
           </div>
           <div className="flex items-center gap-4">
             <Link to="/auth" className="hover:text-white">Sign in</Link>

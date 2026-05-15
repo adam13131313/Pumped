@@ -223,7 +223,7 @@ export default function KnowledgebasePage() {
             <li>Set up your <strong>Projects</strong> and <strong>Work Packages</strong>.</li>
             <li>Add tasks to <strong>My Actions</strong> — things <em>you</em> need to do.</li>
             <li>Track delegated items in <strong>Waiting For</strong> — things <em>others</em> owe you.</li>
-            <li>Use the <strong>Dashboard</strong> each morning to pick your daily focus.</li>
+            <li>Each morning, open <strong>My Actions</strong>, gather your focus items, and toggle <strong>Gathered only</strong>.</li>
             <li>Follow the <strong>SOP</strong> rhythm to stay consistent.</li>
           </ol>
         </CardContent>

@@ -11,7 +11,11 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Plus, Sun, CloudSun, Moon, Sparkles, Flame, Archive, ArchiveRestore, Pencil } from "lucide-react";
+import { Plus, Sun, CloudSun, Moon, Sparkles, Flame, Archive, ArchiveRestore, Pencil, Trash2 } from "lucide-react";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { motion, AnimatePresence } from "framer-motion";
 import confetti from "canvas-confetti";
 import { format, startOfWeek, addDays, isSameDay, parseISO, differenceInCalendarDays, startOfDay } from "date-fns";

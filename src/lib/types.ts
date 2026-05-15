@@ -59,6 +59,7 @@ export interface WaitingItem {
   dueBy: string;
   status: WaitingStatus;
   notes: string;
+  linkedProjectId?: string;
 }
 
 export interface InboxItem {

@@ -112,6 +112,22 @@ export default function MyActions() {
     setDialogOpen(true);
   };
 
+  // Auto-open dialog when navigated from command palette via ?open=<id>
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const openId = searchParams.get("open");
+    if (!openId) return;
+    const target = allActions.find((a) => a.id === openId);
+    if (target) {
+      setEditing(target);
+      setDialogOpen(true);
+    }
+    // Clear param so reopening isn't sticky
+    const next = new URLSearchParams(searchParams);
+    next.delete("open");
+    setSearchParams(next, { replace: true });
+  }, [searchParams, allActions, setSearchParams]);
+
   // Kanban column ordering state
   const [columnOrder, setColumnOrder] = useState<Record<string, string[]>>({});
 

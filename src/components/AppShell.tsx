@@ -10,7 +10,8 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { MobileBottomNav } from "./MobileBottomNav";
 import { CommandPalette } from "./CommandPalette";
 import { FeedbackButton } from "./FeedbackButton";
-const pumpedLogo = "/favicon.png";
+const pumpedLogo = "/logo-icon-dark.png";
+const pumpedHorizontal = "/logo-horizontal-dark.png";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { signOut, user } = useAuth();
@@ -21,16 +22,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const sidebarContent = (
     <>
       {/* Brand */}
-      <div className={cn("flex items-center gap-2 border-b px-3 py-3", !isMobile && collapsed && "justify-center px-1.5")}>
-        <img
-          src={pumpedLogo}
-          alt="Pumped logo"
-          width={32}
-          height={32}
-          className="h-8 w-8 flex-shrink-0"
-        />
-        {(isMobile || !collapsed) && (
-          <h1 className="text-sm font-semibold tracking-tight truncate">Pumped</h1>
+      <div className={cn("flex items-center border-b px-3 py-3", !isMobile && collapsed ? "justify-center px-1.5" : "")}>
+        {(isMobile || !collapsed) ? (
+          <img
+            src={pumpedHorizontal}
+            alt="Pumped"
+            className="h-7 w-auto object-contain"
+          />
+        ) : (
+          <img
+            src={pumpedLogo}
+            alt="Pumped"
+            className="h-8 w-8 flex-shrink-0 object-contain"
+          />
         )}
       </div>
 

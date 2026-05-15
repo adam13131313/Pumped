@@ -1,9 +1,19 @@
-[README (6).md](https://github.com/user-attachments/files/27784748/README.6.md)
+[README (7).md](https://github.com/user-attachments/files/27785109/README.7.md)
 # Pumped — Work in Motion
 
-> Capture, plan, and ship your work. One inbox for everything, zero dropped balls.
+> One place to capture, organise, execute, and complete every task — regardless of where it came from.
 
-Pumped is a personal productivity app built for project managers and team leads who juggle multiple projects, delegate constantly, and can't afford to chase from memory. It combines a GTD-style action list, a waiting-for tracker, AI-powered task capture, a full Work Breakdown Structure planner, and a context-aware analytics dashboard — all in one place.
+---
+
+## What is Pumped?
+
+Most task tools ask you to choose: either you manage work inside the tool, or you manage it inside the apps your team already uses. Pumped refuses that trade-off.
+
+At its core, Pumped is a **WBS-structured task layer** — every action you own is organised into a clean Programme → Project → Work Package → Action hierarchy, giving even the busiest portfolio a shape you can reason about. Used standalone, it replaces the spreadsheets, sticky notes, and half-finished Notion pages that most project managers rely on.
+
+Its real power, however, is **connectivity**. Pumped sits across the top of your existing toolset — Slack, Linear, Asana, Gmail, Outlook, and more — acting as the single system of record for everything that requires your attention. Tasks flow in from any source. You triage, prioritise, and execute inside Pumped. When status changes, updates travel back to the originating system automatically. The source never goes stale; your WBS never goes blind.
+
+The result: one inbox for every tool you use, one hierarchy for every programme you run, and one dashboard that tells you — at any scope, in real time — whether the work is on track.
 
 ---
 
@@ -57,13 +67,13 @@ Your personal task list and daily command centre.
 - Duplicate detection — inline warning while typing a similar task name
 
 ### Inbox / Rapid Capture
-Your quick-entry inbox for capturing tasks from anywhere.
+Every task, from every source, in one place.
 
-- Label captures by source type (meeting notes, email, voice memo, etc.)
+- Label captures by source type (meeting notes, email, voice memo, webhook, etc.)
 - Paste raw text → **AI extracts structured tasks** with project, priority, and due date matched to your existing WBS
+- Tasks piped in via webhook arrive here automatically, tagged with their originating source
 - Bulk edit priority or project across multiple items at once
 - Promote to My Actions in one click
-- Bulk delete
 - Voice transcription support on mobile
 
 ### Waiting For
@@ -79,7 +89,7 @@ Never chase from memory again.
 ### Projects & Work Packages
 Organise work into a clear hierarchy.
 
-- **Programme → Project → Work Package → Action**
+- **Programme → Project → Work Package → Action** — a strict structure that keeps strategic intent and daily execution in the same shape
 - Project statuses: Active / On Hold / Complete
 - Work Package fields: lead, start date, due date, RAG status, blockers, dependencies
 - RAG statuses: 🟢 Green / 🟡 Amber / 🔴 Red — full history tracked over time for dashboard trend charts
@@ -104,16 +114,16 @@ Build habits alongside your project work.
 - Archive and restore routines
 - Routine consistency feeds directly into the dashboard health score
 
-### Integrations
-One inbox for every tool you use.
+### Integrations & Two-Way Sync
+Pumped sits across your existing toolset, not alongside it.
 
-- **Webhook Sources** — generate a bearer token, POST tasks from any external app directly into your Pumped inbox
-- Idempotent ingest: re-sending the same `source_id` updates the existing item safely
-- Tokens stored as SHA-256 hashes; regeneratable if compromised
-- "Send test task" verifies the full end-to-end loop
+- **Webhook ingest** — generate a bearer token per source and POST tasks from any external app directly into your Pumped inbox; tasks arrive pre-tagged with their origin
+- **Idempotent updates** — re-sending the same `source_id` updates the existing task rather than creating a duplicate; status changes in Pumped flow back to the source via the stored `source_url` deep link
+- Tokens stored as SHA-256 hashes; regeneratable without disrupting existing flows
+- "Send test task" verifies the full end-to-end loop before you go live
 - Auto-generated **curl and JS code snippets** per webhook source
-- **Zapier / Make** compatible — use a Webhooks → POST step to connect 5,000+ apps with no code
-- **Native connectors coming soon**: Gmail, Slack, Linear, Asana, Notion, Outlook
+- **Zapier / Make** compatible — connect 5,000+ apps with a single Webhooks → POST step, no code required
+- **Native two-way connectors coming**: Gmail, Slack, Linear, Asana, Notion, Outlook — tasks sync in, completions sync back
 
 ### Knowledge Base
 Built-in help and an AI assistant.

@@ -86,9 +86,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <GlobalFilter />
             <div className="ml-auto flex items-center gap-2">
               {!isMobile && (
-                <kbd className="hidden md:inline-flex items-center gap-1 rounded border bg-muted/40 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                <button
+                  type="button"
+                  onClick={() => window.dispatchEvent(new Event("open-command-palette"))}
+                  className="hidden md:inline-flex items-center gap-1 rounded border bg-muted/40 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer"
+                  aria-label="Open search"
+                >
                   ⌘K <span className="text-muted-foreground/70">search</span>
-                </kbd>
+                </button>
               )}
               <FeedbackButton />
             </div>

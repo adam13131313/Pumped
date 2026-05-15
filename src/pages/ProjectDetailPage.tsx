@@ -9,7 +9,7 @@ import { PriorityBadge, StatusBadge } from "@/components/StatusBadges";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Plus, Pencil, Trash2, ChevronDown, ChevronRight } from "lucide-react";
+import { ArrowLeft, Plus, Pencil, Trash2, ChevronDown, ChevronRight, Gauge } from "lucide-react";
 
 const statusColor: Record<string, string> = {
   Active: "bg-rag-green/15 text-rag-green border-rag-green/30",

@@ -164,6 +164,7 @@ export function WaitingDialog({ open, onOpenChange, item, onSave, onDelete, onTa
       dueBy: form.dueBy ?? "",
       status: form.status ?? "Pending",
       notes: form.notes?.trim() ?? "",
+      linkedProjectId: selectedProjectId || undefined,
     });
     onOpenChange(false);
   };

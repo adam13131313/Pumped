@@ -194,7 +194,7 @@ export default function Landing() {
       >
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6">
           <Link to="/" className="flex items-center">
-            <img src="/logo-horizontal-white.png" alt="Pumped FA" className="h-8 w-auto object-contain" />
+            <img src="/logo-horizontal-white.png" alt="Pumped" className="h-12 w-auto object-contain" />
           </Link>
           <div className="flex items-center gap-2">
             <Link to="/auth">

@@ -497,7 +497,7 @@ export default function Landing() {
           style={{ color: TEXT_MUTED }}
         >
           <div className="flex items-center gap-3">
-            <img src="/logo-wordmark-white.png" alt="Pumped FA" className="h-5 w-auto object-contain opacity-60" />
+            <img src="/logo-horizontal-white.png" alt="Pumped" className="h-6 w-auto object-contain opacity-70" />
             <span>Work in Motion</span>
           </div>
           <div className="flex items-center gap-4">

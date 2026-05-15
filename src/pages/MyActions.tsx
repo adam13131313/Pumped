@@ -1,4 +1,5 @@
-import { useState, useMemo, useCallback, useRef } from "react";
+import { useState, useMemo, useCallback, useRef, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useAppStore } from "@/lib/store";
 import { useFilteredData } from "@/hooks/useFilteredData";
 import { PriorityBadge, StatusBadge } from "@/components/StatusBadges";
@@ -110,6 +111,22 @@ export default function MyActions() {
     setEditing(action);
     setDialogOpen(true);
   };
+
+  // Auto-open dialog when navigated from command palette via ?open=<id>
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const openId = searchParams.get("open");
+    if (!openId) return;
+    const target = allActions.find((a) => a.id === openId);
+    if (target) {
+      setEditing(target);
+      setDialogOpen(true);
+    }
+    // Clear param so reopening isn't sticky
+    const next = new URLSearchParams(searchParams);
+    next.delete("open");
+    setSearchParams(next, { replace: true });
+  }, [searchParams, allActions, setSearchParams]);
 
   // Kanban column ordering state
   const [columnOrder, setColumnOrder] = useState<Record<string, string[]>>({});

@@ -1,4 +1,5 @@
-import { useState, useRef, useCallback, DragEvent } from "react";
+import { useState, useRef, useCallback, useEffect, DragEvent } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useAppStore } from "@/lib/store";
 import { useFilteredData } from "@/hooks/useFilteredData";
 import { InboxItem, Priority } from "@/lib/types";
@@ -48,6 +49,23 @@ export default function InboxPage() {
   // File upload
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragCounterRef = useRef(0);
+
+  // Focus on a specific item when navigated from command palette via ?focus=<id>
+  const [focusId, setFocusId] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const id = searchParams.get("focus");
+    if (!id) return;
+    setFocusId(id);
+    requestAnimationFrame(() => {
+      document.getElementById(`inbox-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+    const t = setTimeout(() => setFocusId(null), 2500);
+    const next = new URLSearchParams(searchParams);
+    next.delete("focus");
+    setSearchParams(next, { replace: true });
+    return () => clearTimeout(t);
+  }, [searchParams, setSearchParams]);
 
   // CSV mapping state
   const [csvRows, setCsvRows] = useState<string[][] | null>(null);
@@ -720,7 +738,11 @@ export default function InboxPage() {
           </CardHeader>
           <CardContent className="space-y-2">
             {inboxItems.map((item) => (
-              <div key={item.id} className="flex items-center gap-3 rounded-lg border p-3 hover:bg-accent/50 transition-colors">
+              <div
+                key={item.id}
+                id={`inbox-${item.id}`}
+                className={`flex items-center gap-3 rounded-lg border p-3 hover:bg-accent/50 transition-colors ${focusId === item.id ? "ring-2 ring-primary" : ""}`}
+              >
                 <Checkbox checked={selected.has(item.id)} onCheckedChange={() => toggleSelect(item.id)} />
                 <div className="flex-1 min-w-0">
                   <p className="font-medium truncate">{item.task}</p>

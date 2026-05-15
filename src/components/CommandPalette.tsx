@@ -100,7 +100,7 @@ export function CommandPalette() {
         {filteredActions.length > 0 && (
           <CommandGroup heading="Actions">
             {filteredActions.map((a) => (
-              <CommandItem key={`a-${a.id}`} value={`action ${a.task} ${a.id}`} onSelect={() => go(`/actions?open=${a.id}`)}>
+              <CommandItem key={`a-${a.id}`} value={`action ${a.task} ${a.id}`} onSelect={() => go(`/?open=${a.id}`)}>
                 <CheckSquare className="mr-2 h-4 w-4 text-muted-foreground" />
                 <span className="truncate">{a.task}</span>
                 {(a.project || a.workPackage) && (

@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { Mail, Lock, ArrowRight, Loader2 } from "lucide-react";
+import { Link } from "react-router-dom";
 
 export default function AuthPage() {
   const [isLogin, setIsLogin] = useState(true);
@@ -61,7 +62,9 @@ export default function AuthPage() {
       <div className="min-h-screen flex items-center justify-center bg-background px-4">
         <div className="w-full max-w-md space-y-6">
           <div className="text-center space-y-3">
-            <img src="/logo-navbar-dark.png" alt="Pumped" className="mx-auto h-9 w-auto object-contain" />
+            <Link to="/landing" aria-label="Back to home" className="inline-block">
+              <img src="/logo-navbar-dark.png" alt="Pumped" className="mx-auto h-9 w-auto object-contain" />
+            </Link>
             <h1 className="text-2xl font-bold tracking-tight text-foreground">Reset Password</h1>
             <p className="text-muted-foreground text-sm">Enter your email to receive a reset link</p>
           </div>
@@ -113,7 +116,9 @@ export default function AuthPage() {
     <div className="min-h-screen flex items-center justify-center bg-background px-4">
       <div className="w-full max-w-md space-y-6">
         <div className="text-center space-y-3">
-          <img src="/logo-navbar-dark.png" alt="Pumped" className="mx-auto h-10 w-auto object-contain" />
+          <Link to="/landing" aria-label="Back to home" className="inline-block">
+            <img src="/logo-navbar-dark.png" alt="Pumped" className="mx-auto h-10 w-auto object-contain" />
+          </Link>
           <p className="text-muted-foreground text-sm">
             {isLogin ? "Sign in to your account" : "Create a new account"}
           </p>

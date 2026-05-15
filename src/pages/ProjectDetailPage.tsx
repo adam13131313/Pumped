@@ -76,6 +76,21 @@ export default function ProjectDetailPage() {
             {project.description && <p className="text-sm text-muted-foreground mt-1">{project.description}</p>}
           </div>
           <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                store.setGlobalFilter({
+                  programmeId: project.programmeId || "",
+                  projectId: project.id,
+                  workPackageId: "",
+                  unassigned: false,
+                });
+                navigate("/dashboard");
+              }}
+            >
+              <Gauge className="h-3.5 w-3.5 mr-1" /> View dashboard
+            </Button>
             <Button variant="outline" size="sm" onClick={() => { setEditingWP(null); setWPDialogOpen(true); }}>
               <Plus className="h-3.5 w-3.5 mr-1" /> Work Package
             </Button>

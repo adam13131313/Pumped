@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import {
-  BookOpen, CheckSquare, Clock, FolderKanban, LayoutDashboard, Sparkles,
+  BookOpen, CheckSquare, Clock, FolderKanban, Sparkles,
   FileText, Inbox, Search, Filter, Paperclip, Smartphone, Send, Bot, User, Lightbulb, Loader2, Trash2, Plug,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";

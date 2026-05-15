@@ -520,7 +520,13 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
   );
 }
 
-function WeekGrid({ routines, completions }: { routines: Routine[]; completions: Completion[] }) {
+function WeekGrid({
+  routines, completions, onToggle,
+}: {
+  routines: Routine[];
+  completions: Completion[];
+  onToggle: (routineId: string, dateStr: string) => void;
+}) {
   const start = startOfWeek(new Date(), { weekStartsOn: 1 });
   const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
   const today = new Date();
@@ -529,6 +535,7 @@ function WeekGrid({ routines, completions }: { routines: Routine[]; completions:
   }
   return (
     <div className="overflow-x-auto">
+      <p className="mb-2 px-1 text-xs text-muted-foreground">Tap a day to mark a routine complete or undo it.</p>
       <table className="w-full border-separate border-spacing-y-1">
         <thead>
           <tr className="text-xs text-muted-foreground">
@@ -551,15 +558,22 @@ function WeekGrid({ routines, completions }: { routines: Routine[]; completions:
                 const ds = format(d, "yyyy-MM-dd");
                 const did = completions.some((c) => c.routine_id === r.id && c.completed_date === ds);
                 const due = isDueOn(r, d);
+                const isFuture = d > startOfDay(today) && !isSameDay(d, today);
                 return (
                   <td key={ds} className="text-center">
-                    <div
+                    <button
+                      type="button"
+                      disabled={isFuture}
+                      onClick={() => onToggle(r.id, ds)}
+                      aria-label={`${did ? "Unmark" : "Mark"} ${r.name} on ${ds}`}
                       className={cn(
-                        "mx-auto h-7 w-7 rounded-full",
+                        "mx-auto block h-7 w-7 rounded-full transition-transform",
+                        !isFuture && "hover:scale-110 active:scale-95 cursor-pointer",
+                        isFuture && "cursor-not-allowed opacity-40",
                         did
                           ? "bg-emerald-500"
                           : due
-                            ? "border border-dashed border-muted-foreground/30"
+                            ? "border border-dashed border-muted-foreground/40"
                             : "bg-muted/40"
                       )}
                     />

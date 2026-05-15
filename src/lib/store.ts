@@ -385,7 +385,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
   // --- Waiting Items ---
   addWaitingItem: (item) => {
     set((s) => ({ waitingItems: [...s.waitingItems, item] }));
-    getUserId().then((uid) => supabase.from("waiting_items").insert({ id: item.id, user_id: uid, description: item.description, from_whom: item.fromWhom, project_wp: item.projectWP, asked_on: item.askedOn, due_by: item.dueBy, status: item.status, notes: item.notes }).then());
+    getUserId().then((uid) => supabase.from("waiting_items").insert({ id: item.id, user_id: uid, description: item.description, from_whom: item.fromWhom, project_wp: item.projectWP, asked_on: item.askedOn, due_by: item.dueBy, status: item.status, notes: item.notes, linked_project_id: item.linkedProjectId || null } as any).then());
   },
   updateWaitingItem: (id, updates) => {
     set((s) => ({ waitingItems: s.waitingItems.map((w) => (w.id === id ? { ...w, ...updates } : w)) }));
@@ -397,6 +397,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
     if (updates.dueBy !== undefined) dbUpdates.due_by = updates.dueBy;
     if (updates.status !== undefined) dbUpdates.status = updates.status;
     if (updates.notes !== undefined) dbUpdates.notes = updates.notes;
+    if (updates.linkedProjectId !== undefined) dbUpdates.linked_project_id = updates.linkedProjectId || null;
     supabase.from("waiting_items").update(dbUpdates).eq("id", id).then();
   },
   deleteWaitingItem: (id) => {

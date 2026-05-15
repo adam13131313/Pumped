@@ -50,6 +50,23 @@ export default function InboxPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragCounterRef = useRef(0);
 
+  // Focus on a specific item when navigated from command palette via ?focus=<id>
+  const [focusId, setFocusId] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const id = searchParams.get("focus");
+    if (!id) return;
+    setFocusId(id);
+    requestAnimationFrame(() => {
+      document.getElementById(`inbox-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+    const t = setTimeout(() => setFocusId(null), 2500);
+    const next = new URLSearchParams(searchParams);
+    next.delete("focus");
+    setSearchParams(next, { replace: true });
+    return () => clearTimeout(t);
+  }, [searchParams, setSearchParams]);
+
   // CSV mapping state
   const [csvRows, setCsvRows] = useState<string[][] | null>(null);
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);

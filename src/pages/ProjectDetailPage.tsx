@@ -9,7 +9,7 @@ import { PriorityBadge, StatusBadge } from "@/components/StatusBadges";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Plus, Pencil, Trash2, ChevronDown, ChevronRight } from "lucide-react";
+import { ArrowLeft, Plus, Pencil, Trash2, ChevronDown, ChevronRight, Gauge } from "lucide-react";
 
 const statusColor: Record<string, string> = {
   Active: "bg-rag-green/15 text-rag-green border-rag-green/30",
@@ -76,6 +76,21 @@ export default function ProjectDetailPage() {
             {project.description && <p className="text-sm text-muted-foreground mt-1">{project.description}</p>}
           </div>
           <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                store.setGlobalFilter({
+                  programmeId: project.programmeId || "",
+                  projectId: project.id,
+                  workPackageId: "",
+                  unassigned: false,
+                });
+                navigate("/dashboard");
+              }}
+            >
+              <Gauge className="h-3.5 w-3.5 mr-1" /> View dashboard
+            </Button>
             <Button variant="outline" size="sm" onClick={() => { setEditingWP(null); setWPDialogOpen(true); }}>
               <Plus className="h-3.5 w-3.5 mr-1" /> Work Package
             </Button>

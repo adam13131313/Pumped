@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX IF NOT EXISTS health_score_history_user_week_uniq ON public.health_score_history(user_id, recorded_week);

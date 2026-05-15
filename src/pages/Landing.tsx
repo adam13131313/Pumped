@@ -1,4 +1,5 @@
-import { Link } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import {
   ArrowRight,
@@ -90,6 +91,10 @@ const features = [
 ];
 
 export default function Landing() {
+  const { session, loading } = useAuth();
+  if (!loading && session) {
+    return <Navigate to="/dashboard" replace />;
+  }
   return (
     <div
       className="min-h-screen bg-[hsl(218_55%_8%)] text-[hsl(150_30%_94%)] font-['DM_Sans',sans-serif] antialiased overflow-x-hidden"

@@ -8,6 +8,7 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { useAppStore } from "@/lib/store";
 import { AppShell } from "@/components/AppShell";
 import MyActions from "@/pages/MyActions";
+import DashboardPage from "@/pages/DashboardPage";
 import WaitingFor from "@/pages/WaitingFor";
 import SOPPage from "@/pages/SOPPage";
 import ProjectsPage from "@/pages/ProjectsPage";
@@ -53,6 +54,7 @@ function ProtectedRoutes() {
     <AppShell>
       <Routes>
         <Route path="/" element={<MyActions />} />
+        <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/inbox" element={<InboxPage />} />
         <Route path="/projects" element={<ProjectsPage />} />
         <Route path="/projects/:projectId" element={<ProjectDetailPage />} />

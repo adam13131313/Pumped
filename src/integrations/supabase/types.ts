@@ -14,6 +14,41 @@ export type Database = {
   }
   public: {
     Tables: {
+      action_status_log: {
+        Row: {
+          action_id: string
+          changed_at: string
+          from_status: string | null
+          id: string
+          to_status: string
+          user_id: string
+        }
+        Insert: {
+          action_id: string
+          changed_at?: string
+          from_status?: string | null
+          id?: string
+          to_status: string
+          user_id: string
+        }
+        Update: {
+          action_id?: string
+          changed_at?: string
+          from_status?: string | null
+          id?: string
+          to_status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "action_status_log_action_id_fkey"
+            columns: ["action_id"]
+            isOneToOne: false
+            referencedRelation: "actions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       actions: {
         Row: {
           archived: boolean
@@ -22,6 +57,7 @@ export type Database = {
           due_date: string
           id: string
           labels: string[]
+          not_started_since: string | null
           notes: string
           priority: string
           project: string
@@ -38,6 +74,7 @@ export type Database = {
           due_date?: string
           id?: string
           labels?: string[]
+          not_started_since?: string | null
           notes?: string
           priority?: string
           project?: string
@@ -54,6 +91,7 @@ export type Database = {
           due_date?: string
           id?: string
           labels?: string[]
+          not_started_since?: string | null
           notes?: string
           priority?: string
           project?: string
@@ -184,6 +222,75 @@ export type Database = {
           status?: string
           title?: string
           updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      health_score_history: {
+        Row: {
+          created_at: string
+          id: string
+          inbox_lag_component: number
+          on_time_component: number
+          overdue_waiting_component: number
+          rag_component: number
+          recorded_week: string
+          routine_component: number
+          score: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          inbox_lag_component?: number
+          on_time_component?: number
+          overdue_waiting_component?: number
+          rag_component?: number
+          recorded_week: string
+          routine_component?: number
+          score: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          inbox_lag_component?: number
+          on_time_component?: number
+          overdue_waiting_component?: number
+          rag_component?: number
+          recorded_week?: string
+          routine_component?: number
+          score?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
+      inbox_item_events: {
+        Row: {
+          created_at_snapshot: string | null
+          event: string
+          event_at: string
+          id: string
+          inbox_item_id: string
+          source: string
+          user_id: string
+        }
+        Insert: {
+          created_at_snapshot?: string | null
+          event: string
+          event_at?: string
+          id?: string
+          inbox_item_id: string
+          source?: string
+          user_id: string
+        }
+        Update: {
+          created_at_snapshot?: string | null
+          event?: string
+          event_at?: string
+          id?: string
+          inbox_item_id?: string
+          source?: string
           user_id?: string
         }
         Relationships: []
@@ -367,6 +474,38 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      rag_status_history: {
+        Row: {
+          id: string
+          rag_status: string
+          recorded_at: string
+          user_id: string
+          work_package_id: string
+        }
+        Insert: {
+          id?: string
+          rag_status: string
+          recorded_at?: string
+          user_id: string
+          work_package_id: string
+        }
+        Update: {
+          id?: string
+          rag_status?: string
+          recorded_at?: string
+          user_id?: string
+          work_package_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rag_status_history_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "work_packages"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       routine_completions: {
         Row: {
@@ -580,6 +719,7 @@ export type Database = {
           due_by: string
           from_whom: string
           id: string
+          linked_project_id: string | null
           notes: string
           project_wp: string
           status: string
@@ -592,6 +732,7 @@ export type Database = {
           due_by?: string
           from_whom?: string
           id?: string
+          linked_project_id?: string | null
           notes?: string
           project_wp?: string
           status?: string
@@ -604,12 +745,21 @@ export type Database = {
           due_by?: string
           from_whom?: string
           id?: string
+          linked_project_id?: string | null
           notes?: string
           project_wp?: string
           status?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "waiting_items_linked_project_id_fkey"
+            columns: ["linked_project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       work_packages: {
         Row: {

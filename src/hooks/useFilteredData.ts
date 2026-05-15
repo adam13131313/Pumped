@@ -15,11 +15,22 @@ export function useFilteredData() {
   const inboxItems = useAppStore((s) => s.inboxItems);
 
   return useMemo(() => {
-    const { programmeId, projectId, workPackageId } = globalFilter;
-    const noFilter = !programmeId && !projectId && !workPackageId;
+    const { programmeId, projectId, workPackageId, unassigned } = globalFilter;
+    const noFilter = !programmeId && !projectId && !workPackageId && !unassigned;
 
     if (noFilter) {
       return { projects, workPackages, actions, waitingItems, inboxItems };
+    }
+
+    if (unassigned) {
+      // Items with no programme/project/wp linkage
+      return {
+        projects: [],
+        workPackages: [],
+        actions: actions.filter((a) => !a.project && !a.workPackage),
+        waitingItems: waitingItems.filter((w) => !w.projectWP && !w.linkedProjectId),
+        inboxItems: inboxItems.filter((i) => !i.project),
+      };
     }
 
     // Determine which project names pass the filter

@@ -1,12 +1,12 @@
 import { NavLink } from "react-router-dom";
-import { CheckSquare, Clock, Inbox, FolderKanban, Repeat } from "lucide-react";
+import { CheckSquare, Clock, Inbox, FolderKanban, Gauge } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const tabs = [
+  { to: "/dashboard", label: "Pulse", icon: Gauge },
   { to: "/", label: "Actions", icon: CheckSquare },
   { to: "/inbox", label: "Capture", icon: Inbox },
   { to: "/waiting", label: "Waiting", icon: Clock },
-  { to: "/routines", label: "Routines", icon: Repeat },
   { to: "/projects", label: "Projects", icon: FolderKanban },
 ];
 

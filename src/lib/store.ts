@@ -23,6 +23,7 @@ export interface GlobalFilter {
   programmeId: string;
   projectId: string;
   workPackageId: string;
+  unassigned?: boolean;
 }
 
 interface AppState {
@@ -86,7 +87,7 @@ interface AppState {
   takeBackWaiting: (id: string) => void;
 }
 
-const defaultGlobalFilter: GlobalFilter = { programmeId: "", projectId: "", workPackageId: "" };
+const defaultGlobalFilter: GlobalFilter = { programmeId: "", projectId: "", workPackageId: "", unassigned: false };
 
 // Helper to get current user id
 async function getUserId(): Promise<string> {
@@ -234,7 +235,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
     const mapProject = (r: any): Project => ({ id: r.id, name: r.name, description: r.description, programmeId: r.programme_id, status: r.status });
     const mapWP = (r: any): WorkPackage => ({ id: r.id, project: r.project, workPackage: r.work_package, wpLead: r.wp_lead, startDate: r.start_date, dueDate: r.due_date, ragStatus: r.rag_status, blockers: r.blockers, dependencies: r.dependencies || [] });
     const mapAction = (r: any): Action => ({ id: r.id, task: r.task, project: r.project, workPackage: r.work_package, startDate: r.start_date, dueDate: r.due_date, priority: r.priority, status: r.status, notes: r.notes, completedAt: r.completed_at || undefined, labels: r.labels || [] });
-    const mapWaiting = (r: any): WaitingItem => ({ id: r.id, description: r.description, fromWhom: r.from_whom, projectWP: r.project_wp, askedOn: r.asked_on, dueBy: r.due_by, status: r.status, notes: r.notes });
+    const mapWaiting = (r: any): WaitingItem => ({ id: r.id, description: r.description, fromWhom: r.from_whom, projectWP: r.project_wp, askedOn: r.asked_on, dueBy: r.due_by, status: r.status, notes: r.notes, linkedProjectId: r.linked_project_id || undefined });
     const mapInbox = (r: any): InboxItem => ({ id: r.id, task: r.task, priority: r.priority, dueDate: r.due_date, project: r.project, notes: r.notes, source: r.source, createdAt: r.created_at });
     const mapSOP = (r: any): SOPItem => ({ id: r.id, when: r.trigger_when, instruction: r.instruction });
 
@@ -384,7 +385,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
   // --- Waiting Items ---
   addWaitingItem: (item) => {
     set((s) => ({ waitingItems: [...s.waitingItems, item] }));
-    getUserId().then((uid) => supabase.from("waiting_items").insert({ id: item.id, user_id: uid, description: item.description, from_whom: item.fromWhom, project_wp: item.projectWP, asked_on: item.askedOn, due_by: item.dueBy, status: item.status, notes: item.notes }).then());
+    getUserId().then((uid) => supabase.from("waiting_items").insert({ id: item.id, user_id: uid, description: item.description, from_whom: item.fromWhom, project_wp: item.projectWP, asked_on: item.askedOn, due_by: item.dueBy, status: item.status, notes: item.notes, linked_project_id: item.linkedProjectId || null } as any).then());
   },
   updateWaitingItem: (id, updates) => {
     set((s) => ({ waitingItems: s.waitingItems.map((w) => (w.id === id ? { ...w, ...updates } : w)) }));
@@ -396,6 +397,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
     if (updates.dueBy !== undefined) dbUpdates.due_by = updates.dueBy;
     if (updates.status !== undefined) dbUpdates.status = updates.status;
     if (updates.notes !== undefined) dbUpdates.notes = updates.notes;
+    if (updates.linkedProjectId !== undefined) dbUpdates.linked_project_id = updates.linkedProjectId || null;
     supabase.from("waiting_items").update(dbUpdates).eq("id", id).then();
   },
   deleteWaitingItem: (id) => {
@@ -427,12 +429,25 @@ export const useAppStore = create<AppState>()((set, get) => ({
     supabase.from("inbox_items").update(dbUpdates).eq("id", id).then();
   },
   deleteInboxItem: (id) => {
+    const item = get().inboxItems.find((i) => i.id === id);
     set((s) => ({ inboxItems: s.inboxItems.filter((i) => i.id !== id) }));
     supabase.from("inbox_items").delete().eq("id", id).then();
+    if (item) {
+      getUserId().then((uid) => supabase.from("inbox_item_events").insert({
+        inbox_item_id: id, event: 'deleted', user_id: uid, source: item.source || '', created_at_snapshot: item.createdAt,
+      } as any).then());
+    }
   },
   bulkDeleteInboxItems: (ids) => {
+    const items = get().inboxItems.filter((i) => ids.includes(i.id));
     set((s) => ({ inboxItems: s.inboxItems.filter((i) => !ids.includes(i.id)) }));
     supabase.from("inbox_items").delete().in("id", ids).then();
+    if (items.length) {
+      getUserId().then((uid) => {
+        const rows = items.map((i) => ({ inbox_item_id: i.id, event: 'deleted' as const, user_id: uid, source: i.source || '', created_at_snapshot: i.createdAt }));
+        supabase.from("inbox_item_events").insert(rows as any).then();
+      });
+    }
   },
   promoteInboxToActions: (ids) => {
     const s = get();
@@ -458,6 +473,11 @@ export const useAppStore = create<AppState>()((set, get) => ({
     getUserId().then((uid) => {
       const rows = newActions.map((a) => ({ id: a.id, user_id: uid, task: a.task, project: a.project, work_package: a.workPackage, start_date: a.startDate, due_date: a.dueDate, priority: a.priority, status: a.status, notes: a.notes }));
       supabase.from("actions").insert(rows).then();
+      // Log inbox promotion events
+      if (toPromote.length) {
+        const eventRows = toPromote.map((i) => ({ inbox_item_id: i.id, event: 'promoted' as const, user_id: uid, source: i.source || '', created_at_snapshot: i.createdAt }));
+        supabase.from("inbox_item_events").insert(eventRows as any).then();
+      }
     });
   },
 

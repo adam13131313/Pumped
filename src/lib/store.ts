@@ -23,6 +23,7 @@ export interface GlobalFilter {
   programmeId: string;
   projectId: string;
   workPackageId: string;
+  unassigned?: boolean;
 }
 
 interface AppState {

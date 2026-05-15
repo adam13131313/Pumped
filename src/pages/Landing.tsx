@@ -498,6 +498,7 @@ export default function Landing() {
         >
           <div className="flex items-center gap-3">
             <img src="/logo-footer.png" alt="Pumped" className="h-5 w-auto object-contain opacity-60" />
+            <span>Work in Motion</span>
           </div>
           <div className="flex items-center gap-4">
             <Link to="/auth" className="hover:text-white">Sign in</Link>

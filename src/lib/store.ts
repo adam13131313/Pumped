@@ -498,31 +498,29 @@ export const useAppStore = create<AppState>()((set, get) => ({
     });
     // Persist both operations
     supabase.from("inbox_items").delete().in("id", ids).then();
-    getUserId().then((uid) => {
+    getUserId().then(async (uid) => {
       const rows = newActions.map((a) => ({ id: a.id, user_id: uid, task: a.task, project: a.project, work_package: a.workPackage, start_date: a.startDate, due_date: a.dueDate, priority: a.priority, status: a.status, notes: a.notes }));
-      supabase.from("actions").insert(rows).then(({ error }) => {
-        if (error) throw error;
-      }).catch((error) => notifySaveError("Promoted actions could not be saved", error));
+      const { error } = await supabase.from("actions").insert(rows);
+      if (error) throw error;
       // Log inbox promotion events
       if (toPromote.length) {
         const eventRows = toPromote.map((i) => ({ inbox_item_id: i.id, event: 'promoted' as const, user_id: uid, source: i.source || '', created_at_snapshot: i.createdAt }));
         supabase.from("inbox_item_events").insert(eventRows as any).then();
       }
-    });
+    }).catch((error) => notifySaveError("Promoted actions could not be saved", error));
   },
 
   bulkAddActions: (actions) => {
     set((s) => ({ actions: [...s.actions, ...actions] }));
-    getUserId().then((uid) => {
+    getUserId().then(async (uid) => {
       const rows = actions.map((a) => ({
         id: a.id, user_id: uid, task: a.task, project: a.project,
         work_package: a.workPackage, start_date: a.startDate, due_date: a.dueDate,
         priority: a.priority, status: a.status, notes: a.notes, labels: a.labels ?? [],
       }));
-      supabase.from("actions").insert(rows).then(({ error }) => {
-        if (error) throw error;
-      }).catch((error) => notifySaveError("Actions could not be saved", error));
-    });
+      const { error } = await supabase.from("actions").insert(rows);
+      if (error) throw error;
+    }).catch((error) => notifySaveError("Actions could not be saved", error));
   },
   updateSOPItem: (id, updates) => {
     set((s) => ({ sopItems: s.sopItems.map((item) => (item.id === id ? { ...item, ...updates } : item)) }));

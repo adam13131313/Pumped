@@ -29,8 +29,10 @@ import NotFound from "./pages/NotFound";
 const queryClient = new QueryClient();
 
 const isDevEnvironment = () => {
+  // Auth bypass only on true localhost. Preview URLs must sign in so Supabase
+  // RLS lets reads/writes through — otherwise tasks appear to save but vanish on refresh.
   const host = window.location.hostname;
-  return host === 'localhost' || host.includes('preview--');
+  return host === 'localhost' || host === '127.0.0.1';
 };
 
 function ProtectedRoutes() {

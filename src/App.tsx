@@ -25,6 +25,7 @@ import AuthPage from "@/pages/AuthPage";
 import ResetPasswordPage from "@/pages/ResetPasswordPage";
 import Landing from "@/pages/Landing";
 import NotFound from "./pages/NotFound";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 const queryClient = new QueryClient();
 
@@ -54,24 +55,26 @@ function ProtectedRoutes() {
 
   return (
     <AppShell>
-      <Routes>
-        <Route path="/" element={<MyActions />} />
-        <Route path="/dashboard" element={<DashboardPage />} />
-        <Route path="/inbox" element={<InboxPage />} />
-        <Route path="/projects" element={<ProjectsPage />} />
-        <Route path="/projects/:projectId" element={<ProjectDetailPage />} />
-        <Route path="/actions" element={<MyActions />} />
-        
-        <Route path="/waiting" element={<WaitingFor />} />
-        
-        <Route path="/routines" element={<RoutinesPage />} />
-        <Route path="/planner" element={<WBSPlanner />} />
-        <Route path="/sop" element={<SOPPage />} />
-        <Route path="/knowledgebase" element={<KnowledgebasePage />} />
-        <Route path="/integrations" element={<IntegrationsPage />} />
-        <Route path="/settings" element={<SettingsPage />} />
-        <Route path="*" element={<NotFound />} />
-      </Routes>
+      <ErrorBoundary label="route">
+        <Routes>
+          <Route path="/" element={<MyActions />} />
+          <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/inbox" element={<InboxPage />} />
+          <Route path="/projects" element={<ProjectsPage />} />
+          <Route path="/projects/:projectId" element={<ProjectDetailPage />} />
+          <Route path="/actions" element={<MyActions />} />
+
+          <Route path="/waiting" element={<WaitingFor />} />
+
+          <Route path="/routines" element={<RoutinesPage />} />
+          <Route path="/planner" element={<WBSPlanner />} />
+          <Route path="/sop" element={<SOPPage />} />
+          <Route path="/knowledgebase" element={<KnowledgebasePage />} />
+          <Route path="/integrations" element={<IntegrationsPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </ErrorBoundary>
     </AppShell>
   );
 }
@@ -85,22 +88,24 @@ function AuthRoute() {
 }
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <AuthProvider>
-          <Routes>
-            <Route path="/landing" element={<Landing />} />
-            <Route path="/auth" element={<AuthRoute />} />
-            <Route path="/reset-password" element={<ResetPasswordPage />} />
-            <Route path="/*" element={<ProtectedRoutes />} />
-          </Routes>
-        </AuthProvider>
-      </BrowserRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
+  <ErrorBoundary label="root">
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <AuthProvider>
+            <Routes>
+              <Route path="/landing" element={<Landing />} />
+              <Route path="/auth" element={<AuthRoute />} />
+              <Route path="/reset-password" element={<ResetPasswordPage />} />
+              <Route path="/*" element={<ProtectedRoutes />} />
+            </Routes>
+          </AuthProvider>
+        </BrowserRouter>
+      </TooltipProvider>
+    </QueryClientProvider>
+  </ErrorBoundary>
 );
 
 export default App;

@@ -41,16 +41,31 @@ export default function MyActions() {
   const [filterPriority, setFilterPriority] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [gatheredOnly, setGatheredOnly] = useState(false);
+  const [dueTodayOnly, setDueTodayOnly] = useState(false);
+
+  const todayStr = useMemo(() => {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  }, []);
 
   const actions = useMemo(() => {
     return allActions.filter((a) => {
       if (gatheredOnly && !todayIds.has(a.id)) return false;
+      if (dueTodayOnly && a.dueDate !== todayStr) return false;
       if (filterTask && !a.task.toLowerCase().includes(filterTask.toLowerCase())) return false;
       if (filterPriority !== "all" && a.priority !== filterPriority) return false;
       if (filterStatus !== "all" && a.status !== filterStatus) return false;
       return true;
     });
-  }, [allActions, filterTask, filterPriority, filterStatus, gatheredOnly, todayIds]);
+  }, [allActions, filterTask, filterPriority, filterStatus, gatheredOnly, dueTodayOnly, todayIds, todayStr]);
+
+  const dueTodayCount = useMemo(
+    () => allActions.filter((a) => a.dueDate === todayStr).length,
+    [allActions, todayStr]
+  );
 
   const gatheredCount = useMemo(
     () => allActions.filter((a) => todayIds.has(a.id)).length,

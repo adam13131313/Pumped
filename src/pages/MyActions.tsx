@@ -72,13 +72,14 @@ export default function MyActions() {
     [allActions, todayIds]
   );
 
-  const hasActiveFilters = filterTask || filterPriority !== "all" || filterStatus !== "all" || gatheredOnly;
+  const hasActiveFilters = filterTask || filterPriority !== "all" || filterStatus !== "all" || gatheredOnly || dueTodayOnly;
 
   const clearFilters = () => {
     setFilterTask("");
     setFilterPriority("all");
     setFilterStatus("all");
     setGatheredOnly(false);
+    setDueTodayOnly(false);
   };
 
   const toggleSelect = (id: string) => {

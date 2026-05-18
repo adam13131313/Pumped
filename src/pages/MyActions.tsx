@@ -18,6 +18,34 @@ import { toast } from "sonner";
 const statusColumns: TaskStatus[] = ["Not Started", "In Progress", "Blocked", "Complete"];
 const priorities: Priority[] = ["High", "Medium", "Low"];
 
+function matchesGlobalFilter(
+  action: Action,
+  globalFilter: ReturnType<typeof useAppStore.getState>["globalFilter"],
+  projects: ReturnType<typeof useAppStore.getState>["projects"],
+  workPackages: ReturnType<typeof useAppStore.getState>["workPackages"]
+) {
+  const { programmeId, projectId, workPackageId, unassigned } = globalFilter;
+  if (!programmeId && !projectId && !workPackageId && !unassigned) return true;
+  if (unassigned) return !action.project && !action.workPackage;
+
+  if (projectId) {
+    const project = projects.find((p) => p.id === projectId);
+    if (!project || action.project !== project.name) return false;
+  } else if (programmeId) {
+    const projectNames = new Set(projects.filter((p) => p.programmeId === programmeId).map((p) => p.name));
+    if (!projectNames.has(action.project)) return false;
+  } else if (!action.project) {
+    return false;
+  }
+
+  if (workPackageId) {
+    const workPackage = workPackages.find((wp) => wp.id === workPackageId);
+    if (!workPackage || action.workPackage !== workPackage.workPackage) return false;
+  }
+
+  return true;
+}
+
 export default function MyActions() {
   const [view, setView] = useState<"list" | "kanban">("list");
   const { actions: allActions } = useFilteredData();

@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { Action, InboxItem, Programme, Project, WaitingItem, WorkPackage } from "./types";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 export interface SOPItem {
   id: string;
@@ -94,6 +95,30 @@ async function getUserId(): Promise<string> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Not authenticated");
   return user.id;
+}
+
+function notifySaveError(message: string, error: unknown) {
+  const description = error instanceof Error ? error.message : "Please refresh and try again.";
+  console.error(message, error);
+  toast.error(message, { description });
+}
+
+async function persistAction(action: Action) {
+  const uid = await getUserId();
+  const { error } = await supabase.from("actions").insert({
+    id: action.id,
+    user_id: uid,
+    task: action.task,
+    project: action.project,
+    work_package: action.workPackage,
+    start_date: action.startDate,
+    due_date: action.dueDate,
+    priority: action.priority,
+    status: action.status,
+    notes: action.notes,
+    labels: action.labels || [],
+  });
+  if (error) throw error;
 }
 
 // Persist gathered tasks across sessions (no daily reset). Migrate from old per-day key if present.
@@ -313,7 +338,10 @@ export const useAppStore = create<AppState>()((set, get) => ({
   // --- Actions ---
   addAction: (action) => {
     set((s) => ({ actions: [...s.actions, action] }));
-    getUserId().then((uid) => supabase.from("actions").insert({ id: action.id, user_id: uid, task: action.task, project: action.project, work_package: action.workPackage, start_date: action.startDate, due_date: action.dueDate, priority: action.priority, status: action.status, notes: action.notes, labels: action.labels || [] }).then());
+    persistAction(action).catch((error) => {
+      set((s) => ({ actions: s.actions.filter((a) => a.id !== action.id) }));
+      notifySaveError("Action could not be saved", error);
+    });
   },
   updateAction: (id, updates) => {
     // Track completed_at when status changes to Complete
@@ -470,26 +498,34 @@ export const useAppStore = create<AppState>()((set, get) => ({
     });
     // Persist both operations
     supabase.from("inbox_items").delete().in("id", ids).then();
-    getUserId().then((uid) => {
+    getUserId().then(async (uid) => {
       const rows = newActions.map((a) => ({ id: a.id, user_id: uid, task: a.task, project: a.project, work_package: a.workPackage, start_date: a.startDate, due_date: a.dueDate, priority: a.priority, status: a.status, notes: a.notes }));
-      supabase.from("actions").insert(rows).then();
+      const { error } = await supabase.from("actions").insert(rows);
+      if (error) throw error;
       // Log inbox promotion events
       if (toPromote.length) {
         const eventRows = toPromote.map((i) => ({ inbox_item_id: i.id, event: 'promoted' as const, user_id: uid, source: i.source || '', created_at_snapshot: i.createdAt }));
         supabase.from("inbox_item_events").insert(eventRows as any).then();
       }
+    }).catch((error) => {
+      set((state) => ({ actions: state.actions.filter((a) => !newActions.some((na) => na.id === a.id)) }));
+      notifySaveError("Promoted actions could not be saved", error);
     });
   },
 
   bulkAddActions: (actions) => {
     set((s) => ({ actions: [...s.actions, ...actions] }));
-    getUserId().then((uid) => {
+    getUserId().then(async (uid) => {
       const rows = actions.map((a) => ({
         id: a.id, user_id: uid, task: a.task, project: a.project,
         work_package: a.workPackage, start_date: a.startDate, due_date: a.dueDate,
         priority: a.priority, status: a.status, notes: a.notes, labels: a.labels ?? [],
       }));
-      supabase.from("actions").insert(rows).then();
+      const { error } = await supabase.from("actions").insert(rows);
+      if (error) throw error;
+    }).catch((error) => {
+      set((state) => ({ actions: state.actions.filter((a) => !actions.some((na) => na.id === a.id)) }));
+      notifySaveError("Actions could not be saved", error);
     });
   },
   updateSOPItem: (id, updates) => {
@@ -552,6 +588,9 @@ export const useAppStore = create<AppState>()((set, get) => ({
       actions: [...s.actions, newAction],
     });
     supabase.from("waiting_items").delete().eq("id", id).then();
-    getUserId().then((uid) => supabase.from("actions").insert({ id: newAction.id, user_id: uid, task: newAction.task, project: newAction.project, work_package: newAction.workPackage, start_date: newAction.startDate, due_date: newAction.dueDate, priority: newAction.priority, status: newAction.status, notes: newAction.notes }).then());
+    persistAction(newAction).catch((error) => {
+      set((state) => ({ actions: state.actions.filter((a) => a.id !== newAction.id) }));
+      notifySaveError("Action could not be saved", error);
+    });
   },
 }));

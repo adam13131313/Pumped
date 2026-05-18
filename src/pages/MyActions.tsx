@@ -241,6 +241,23 @@ export default function MyActions() {
               gatheredOnly ? "bg-primary-foreground/20 text-primary-foreground" : "bg-muted text-muted-foreground"
             )}>{gatheredCount}</span>
           </button>
+          <button
+            onClick={() => setDueTodayOnly((v) => !v)}
+            className={cn(
+              "h-8 inline-flex items-center gap-1.5 rounded-md border px-2.5 text-xs font-medium transition-colors",
+              dueTodayOnly
+                ? "bg-primary text-primary-foreground border-primary"
+                : "bg-card text-muted-foreground hover:bg-accent"
+            )}
+            title="Show only tasks due today"
+          >
+            <Filter className="h-3.5 w-3.5" />
+            Due today
+            <span className={cn(
+              "ml-1 rounded-full px-1.5 text-[10px] font-semibold",
+              dueTodayOnly ? "bg-primary-foreground/20 text-primary-foreground" : "bg-muted text-muted-foreground"
+            )}>{dueTodayCount}</span>
+          </button>
           <Input
             placeholder="Search tasks..."
             value={filterTask}

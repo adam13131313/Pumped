@@ -119,7 +119,10 @@ export default function MyActions() {
 
   const handleSave = (action: Action) => {
     if (editing) updateAction(action.id, action);
-    else addAction(action);
+    else {
+      addAction(action);
+      clearFilters();
+    }
     setEditing(null);
   };
 

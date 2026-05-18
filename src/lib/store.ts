@@ -507,7 +507,10 @@ export const useAppStore = create<AppState>()((set, get) => ({
         const eventRows = toPromote.map((i) => ({ inbox_item_id: i.id, event: 'promoted' as const, user_id: uid, source: i.source || '', created_at_snapshot: i.createdAt }));
         supabase.from("inbox_item_events").insert(eventRows as any).then();
       }
-    }).catch((error) => notifySaveError("Promoted actions could not be saved", error));
+    }).catch((error) => {
+      set((state) => ({ actions: state.actions.filter((a) => !newActions.some((na) => na.id === a.id)) }));
+      notifySaveError("Promoted actions could not be saved", error);
+    });
   },
 
   bulkAddActions: (actions) => {
@@ -520,7 +523,10 @@ export const useAppStore = create<AppState>()((set, get) => ({
       }));
       const { error } = await supabase.from("actions").insert(rows);
       if (error) throw error;
-    }).catch((error) => notifySaveError("Actions could not be saved", error));
+    }).catch((error) => {
+      set((state) => ({ actions: state.actions.filter((a) => !actions.some((na) => na.id === a.id)) }));
+      notifySaveError("Actions could not be saved", error);
+    });
   },
   updateSOPItem: (id, updates) => {
     set((s) => ({ sopItems: s.sopItems.map((item) => (item.id === id ? { ...item, ...updates } : item)) }));

@@ -18,6 +18,34 @@ import { toast } from "sonner";
 const statusColumns: TaskStatus[] = ["Not Started", "In Progress", "Blocked", "Complete"];
 const priorities: Priority[] = ["High", "Medium", "Low"];
 
+function matchesGlobalFilter(
+  action: Action,
+  globalFilter: ReturnType<typeof useAppStore.getState>["globalFilter"],
+  projects: ReturnType<typeof useAppStore.getState>["projects"],
+  workPackages: ReturnType<typeof useAppStore.getState>["workPackages"]
+) {
+  const { programmeId, projectId, workPackageId, unassigned } = globalFilter;
+  if (!programmeId && !projectId && !workPackageId && !unassigned) return true;
+  if (unassigned) return !action.project && !action.workPackage;
+
+  if (projectId) {
+    const project = projects.find((p) => p.id === projectId);
+    if (!project || action.project !== project.name) return false;
+  } else if (programmeId) {
+    const projectNames = new Set(projects.filter((p) => p.programmeId === programmeId).map((p) => p.name));
+    if (!projectNames.has(action.project)) return false;
+  } else if (!action.project) {
+    return false;
+  }
+
+  if (workPackageId) {
+    const workPackage = workPackages.find((wp) => wp.id === workPackageId);
+    if (!workPackage || action.workPackage !== workPackage.workPackage) return false;
+  }
+
+  return true;
+}
+
 export default function MyActions() {
   const [view, setView] = useState<"list" | "kanban">("list");
   const { actions: allActions } = useFilteredData();
@@ -31,6 +59,10 @@ export default function MyActions() {
   const addToday = useAppStore((s) => s.addToday);
   const removeToday = useAppStore((s) => s.removeToday);
   const clearToday = useAppStore((s) => s.clearToday);
+  const globalFilter = useAppStore((s) => s.globalFilter);
+  const clearGlobalFilter = useAppStore((s) => s.clearGlobalFilter);
+  const projects = useAppStore((s) => s.projects);
+  const workPackages = useAppStore((s) => s.workPackages);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Action | null>(null);
@@ -119,7 +151,15 @@ export default function MyActions() {
 
   const handleSave = (action: Action) => {
     if (editing) updateAction(action.id, action);
-    else addAction(action);
+    else {
+      addAction(action);
+      clearFilters();
+      const hasGlobalFilter = globalFilter.programmeId || globalFilter.projectId || globalFilter.workPackageId || globalFilter.unassigned;
+      if (hasGlobalFilter && !matchesGlobalFilter(action, globalFilter, projects, workPackages)) {
+        clearGlobalFilter();
+        toast.info("Cleared filters so your new action is visible");
+      }
+    }
     setEditing(null);
   };
 

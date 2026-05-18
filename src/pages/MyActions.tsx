@@ -41,29 +41,45 @@ export default function MyActions() {
   const [filterPriority, setFilterPriority] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [gatheredOnly, setGatheredOnly] = useState(false);
+  const [dueTodayOnly, setDueTodayOnly] = useState(false);
+
+  const todayStr = useMemo(() => {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  }, []);
 
   const actions = useMemo(() => {
     return allActions.filter((a) => {
       if (gatheredOnly && !todayIds.has(a.id)) return false;
+      if (dueTodayOnly && a.dueDate !== todayStr) return false;
       if (filterTask && !a.task.toLowerCase().includes(filterTask.toLowerCase())) return false;
       if (filterPriority !== "all" && a.priority !== filterPriority) return false;
       if (filterStatus !== "all" && a.status !== filterStatus) return false;
       return true;
     });
-  }, [allActions, filterTask, filterPriority, filterStatus, gatheredOnly, todayIds]);
+  }, [allActions, filterTask, filterPriority, filterStatus, gatheredOnly, dueTodayOnly, todayIds, todayStr]);
+
+  const dueTodayCount = useMemo(
+    () => allActions.filter((a) => a.dueDate === todayStr).length,
+    [allActions, todayStr]
+  );
 
   const gatheredCount = useMemo(
     () => allActions.filter((a) => todayIds.has(a.id)).length,
     [allActions, todayIds]
   );
 
-  const hasActiveFilters = filterTask || filterPriority !== "all" || filterStatus !== "all" || gatheredOnly;
+  const hasActiveFilters = filterTask || filterPriority !== "all" || filterStatus !== "all" || gatheredOnly || dueTodayOnly;
 
   const clearFilters = () => {
     setFilterTask("");
     setFilterPriority("all");
     setFilterStatus("all");
     setGatheredOnly(false);
+    setDueTodayOnly(false);
   };
 
   const toggleSelect = (id: string) => {
@@ -224,6 +240,23 @@ export default function MyActions() {
               "ml-1 rounded-full px-1.5 text-[10px] font-semibold",
               gatheredOnly ? "bg-primary-foreground/20 text-primary-foreground" : "bg-muted text-muted-foreground"
             )}>{gatheredCount}</span>
+          </button>
+          <button
+            onClick={() => setDueTodayOnly((v) => !v)}
+            className={cn(
+              "h-8 inline-flex items-center gap-1.5 rounded-md border px-2.5 text-xs font-medium transition-colors",
+              dueTodayOnly
+                ? "bg-primary text-primary-foreground border-primary"
+                : "bg-card text-muted-foreground hover:bg-accent"
+            )}
+            title="Show only tasks due today"
+          >
+            <Filter className="h-3.5 w-3.5" />
+            Due today
+            <span className={cn(
+              "ml-1 rounded-full px-1.5 text-[10px] font-semibold",
+              dueTodayOnly ? "bg-primary-foreground/20 text-primary-foreground" : "bg-muted text-muted-foreground"
+            )}>{dueTodayCount}</span>
           </button>
           <Input
             placeholder="Search tasks..."

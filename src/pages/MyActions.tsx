@@ -31,6 +31,10 @@ export default function MyActions() {
   const addToday = useAppStore((s) => s.addToday);
   const removeToday = useAppStore((s) => s.removeToday);
   const clearToday = useAppStore((s) => s.clearToday);
+  const globalFilter = useAppStore((s) => s.globalFilter);
+  const clearGlobalFilter = useAppStore((s) => s.clearGlobalFilter);
+  const projects = useAppStore((s) => s.projects);
+  const workPackages = useAppStore((s) => s.workPackages);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Action | null>(null);
@@ -122,6 +126,11 @@ export default function MyActions() {
     else {
       addAction(action);
       clearFilters();
+      const hasGlobalFilter = globalFilter.programmeId || globalFilter.projectId || globalFilter.workPackageId || globalFilter.unassigned;
+      if (hasGlobalFilter && !matchesGlobalFilter(action, globalFilter, projects, workPackages)) {
+        clearGlobalFilter();
+        toast.info("Cleared filters so your new action is visible");
+      }
     }
     setEditing(null);
   };

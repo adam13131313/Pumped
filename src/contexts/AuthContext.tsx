@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, ReactNode } from "react";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { useAppStore } from "@/lib/store";
@@ -23,24 +23,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const loadAllData = useAppStore((s) => s.loadAllData);
+  const loadedUserIdRef = useRef<string | null>(null);
+  const loadingUserIdRef = useRef<string | null>(null);
+
+  const loadSessionData = (nextSession: Session | null) => {
+    const userId = nextSession?.user.id ?? null;
+    if (!userId) {
+      loadedUserIdRef.current = null;
+      loadingUserIdRef.current = null;
+      return;
+    }
+    if (loadedUserIdRef.current === userId || loadingUserIdRef.current === userId) return;
+
+    loadingUserIdRef.current = userId;
+    loadAllData()
+      .then(() => {
+        loadedUserIdRef.current = userId;
+      })
+      .finally(() => {
+        if (loadingUserIdRef.current === userId) loadingUserIdRef.current = null;
+      });
+  };
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, session) => {
         setSession(session);
         setLoading(false);
-        if (session) {
-          loadAllData();
-        }
+        loadSessionData(session);
       }
     );
 
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setLoading(false);
-      if (session) {
-        loadAllData();
-      }
+      loadSessionData(session);
     });
 
     return () => subscription.unsubscribe();

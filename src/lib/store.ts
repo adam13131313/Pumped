@@ -338,7 +338,10 @@ export const useAppStore = create<AppState>()((set, get) => ({
   // --- Actions ---
   addAction: (action) => {
     set((s) => ({ actions: [...s.actions, action] }));
-    getUserId().then((uid) => supabase.from("actions").insert({ id: action.id, user_id: uid, task: action.task, project: action.project, work_package: action.workPackage, start_date: action.startDate, due_date: action.dueDate, priority: action.priority, status: action.status, notes: action.notes, labels: action.labels || [] }).then());
+    persistAction(action).catch((error) => {
+      set((s) => ({ actions: s.actions.filter((a) => a.id !== action.id) }));
+      notifySaveError("Action could not be saved", error);
+    });
   },
   updateAction: (id, updates) => {
     // Track completed_at when status changes to Complete
@@ -497,7 +500,9 @@ export const useAppStore = create<AppState>()((set, get) => ({
     supabase.from("inbox_items").delete().in("id", ids).then();
     getUserId().then((uid) => {
       const rows = newActions.map((a) => ({ id: a.id, user_id: uid, task: a.task, project: a.project, work_package: a.workPackage, start_date: a.startDate, due_date: a.dueDate, priority: a.priority, status: a.status, notes: a.notes }));
-      supabase.from("actions").insert(rows).then();
+      supabase.from("actions").insert(rows).then(({ error }) => {
+        if (error) throw error;
+      }).catch((error) => notifySaveError("Promoted actions could not be saved", error));
       // Log inbox promotion events
       if (toPromote.length) {
         const eventRows = toPromote.map((i) => ({ inbox_item_id: i.id, event: 'promoted' as const, user_id: uid, source: i.source || '', created_at_snapshot: i.createdAt }));
@@ -514,7 +519,9 @@ export const useAppStore = create<AppState>()((set, get) => ({
         work_package: a.workPackage, start_date: a.startDate, due_date: a.dueDate,
         priority: a.priority, status: a.status, notes: a.notes, labels: a.labels ?? [],
       }));
-      supabase.from("actions").insert(rows).then();
+      supabase.from("actions").insert(rows).then(({ error }) => {
+        if (error) throw error;
+      }).catch((error) => notifySaveError("Actions could not be saved", error));
     });
   },
   updateSOPItem: (id, updates) => {
@@ -577,6 +584,9 @@ export const useAppStore = create<AppState>()((set, get) => ({
       actions: [...s.actions, newAction],
     });
     supabase.from("waiting_items").delete().eq("id", id).then();
-    getUserId().then((uid) => supabase.from("actions").insert({ id: newAction.id, user_id: uid, task: newAction.task, project: newAction.project, work_package: newAction.workPackage, start_date: newAction.startDate, due_date: newAction.dueDate, priority: newAction.priority, status: newAction.status, notes: newAction.notes }).then());
+    persistAction(newAction).catch((error) => {
+      set((state) => ({ actions: state.actions.filter((a) => a.id !== newAction.id) }));
+      notifySaveError("Action could not be saved", error);
+    });
   },
 }));

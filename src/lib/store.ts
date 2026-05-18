@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { Action, InboxItem, Programme, Project, WaitingItem, WorkPackage } from "./types";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 export interface SOPItem {
   id: string;
@@ -94,6 +95,30 @@ async function getUserId(): Promise<string> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Not authenticated");
   return user.id;
+}
+
+function notifySaveError(message: string, error: unknown) {
+  const description = error instanceof Error ? error.message : "Please refresh and try again.";
+  console.error(message, error);
+  toast.error(message, { description });
+}
+
+async function persistAction(action: Action) {
+  const uid = await getUserId();
+  const { error } = await supabase.from("actions").insert({
+    id: action.id,
+    user_id: uid,
+    task: action.task,
+    project: action.project,
+    work_package: action.workPackage,
+    start_date: action.startDate,
+    due_date: action.dueDate,
+    priority: action.priority,
+    status: action.status,
+    notes: action.notes,
+    labels: action.labels || [],
+  });
+  if (error) throw error;
 }
 
 // Persist gathered tasks across sessions (no daily reset). Migrate from old per-day key if present.

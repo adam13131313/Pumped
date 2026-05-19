@@ -226,6 +226,33 @@ export type Database = {
         }
         Relationships: []
       }
+      gathered_state: {
+        Row: {
+          durations: Json
+          ids: Json
+          order_ids: Json
+          schedule: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          durations?: Json
+          ids?: Json
+          order_ids?: Json
+          schedule?: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          durations?: Json
+          ids?: Json
+          order_ids?: Json
+          schedule?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       health_score_history: {
         Row: {
           created_at: string

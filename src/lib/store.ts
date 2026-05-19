@@ -125,15 +125,43 @@ async function persistAction(action: Action) {
 const GATHERED_KEY = "pumped-gathered";
 const LEGACY_TODAY_KEY = `p3m-today-${new Date().toISOString().slice(0, 10)}`;
 
+let cloudSaveTimer: ReturnType<typeof setTimeout> | null = null;
+function persistGatheredToCloud(payload: {
+  ids: string[];
+  schedule: Record<string, number>;
+  durations: Record<string, number>;
+  order: string[];
+}) {
+  if (cloudSaveTimer) clearTimeout(cloudSaveTimer);
+  cloudSaveTimer = setTimeout(async () => {
+    try {
+      const uid = await getUserId();
+      if (!uid) return;
+      await supabase.from("gathered_state").upsert({
+        user_id: uid,
+        ids: payload.ids as any,
+        schedule: payload.schedule as any,
+        durations: payload.durations as any,
+        order_ids: payload.order as any,
+        updated_at: new Date().toISOString(),
+      });
+    } catch (e) {
+      console.error("[gathered] cloud save failed", e);
+    }
+  }, 400);
+}
+
 function saveTodayState(todayIds: Set<string>, scheduleMap: Record<string, number>, durationMap: Record<string, number>, todayOrder: string[]) {
+  const payload = {
+    ids: Array.from(todayIds),
+    schedule: scheduleMap,
+    durations: durationMap,
+    order: todayOrder,
+  };
   try {
-    localStorage.setItem(GATHERED_KEY, JSON.stringify({
-      ids: Array.from(todayIds),
-      schedule: scheduleMap,
-      durations: durationMap,
-      order: todayOrder,
-    }));
+    localStorage.setItem(GATHERED_KEY, JSON.stringify(payload));
   } catch {}
+  persistGatheredToCloud(payload);
 }
 
 function loadTodayState(): { todayIds: Set<string>; scheduleMap: Record<string, number>; durationMap: Record<string, number>; todayOrder: string[] } {
@@ -263,6 +291,42 @@ export const useAppStore = create<AppState>()((set, get) => ({
     const mapWaiting = (r: any): WaitingItem => ({ id: r.id, description: r.description, fromWhom: r.from_whom, projectWP: r.project_wp, askedOn: r.asked_on, dueBy: r.due_by, status: r.status, notes: r.notes, linkedProjectId: r.linked_project_id || undefined });
     const mapInbox = (r: any): InboxItem => ({ id: r.id, task: r.task, priority: r.priority, dueDate: r.due_date, project: r.project, notes: r.notes, source: r.source, createdAt: r.created_at });
     const mapSOP = (r: any): SOPItem => ({ id: r.id, when: r.trigger_when, instruction: r.instruction });
+
+    // Hydrate gathered state from cloud (overrides localStorage so it syncs across devices)
+    try {
+      const { data: gathered } = await supabase
+        .from("gathered_state")
+        .select("*")
+        .maybeSingle();
+      if (gathered) {
+        const ids: string[] = Array.isArray(gathered.ids) ? gathered.ids as any : [];
+        const schedule = (gathered.schedule || {}) as Record<string, number>;
+        const durations = (gathered.durations || {}) as Record<string, number>;
+        const order: string[] = Array.isArray(gathered.order_ids) ? gathered.order_ids as any : ids;
+        try {
+          localStorage.setItem(GATHERED_KEY, JSON.stringify({ ids, schedule, durations, order }));
+        } catch {}
+        set({
+          todayIds: new Set(ids),
+          scheduleMap: schedule,
+          durationMap: durations,
+          todayOrder: order,
+        });
+      } else {
+        // No cloud row yet — push current local state up so it syncs going forward
+        const s = get();
+        if (s.todayIds.size > 0) {
+          persistGatheredToCloud({
+            ids: Array.from(s.todayIds),
+            schedule: s.scheduleMap,
+            durations: s.durationMap,
+            order: s.todayOrder,
+          });
+        }
+      }
+    } catch (e) {
+      console.error("[gathered] cloud load failed", e);
+    }
 
     const mappedSOP = (sopItems || []).map(mapSOP);
     

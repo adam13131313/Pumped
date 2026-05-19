@@ -134,6 +134,324 @@ export type Database = {
           },
         ]
       }
+      attachments: {
+        Row: {
+          action_id: string | null
+          created_at: string
+          id: string
+          mime_type: string
+          organisation_id: string
+          original_filename: string
+          size_bytes: number
+          storage_path: string
+          uploader_id: string | null
+          waiting_item_id: string | null
+          wbs_node_id: string | null
+        }
+        Insert: {
+          action_id?: string | null
+          created_at?: string
+          id?: string
+          mime_type: string
+          organisation_id: string
+          original_filename: string
+          size_bytes: number
+          storage_path: string
+          uploader_id?: string | null
+          waiting_item_id?: string | null
+          wbs_node_id?: string | null
+        }
+        Update: {
+          action_id?: string | null
+          created_at?: string
+          id?: string
+          mime_type?: string
+          organisation_id?: string
+          original_filename?: string
+          size_bytes?: number
+          storage_path?: string
+          uploader_id?: string | null
+          waiting_item_id?: string | null
+          wbs_node_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attachments_organisation_id_action_id_fkey"
+            columns: ["organisation_id", "action_id"]
+            isOneToOne: false
+            referencedRelation: "actions"
+            referencedColumns: ["organisation_id", "id"]
+          },
+          {
+            foreignKeyName: "attachments_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attachments_organisation_id_waiting_item_id_fkey"
+            columns: ["organisation_id", "waiting_item_id"]
+            isOneToOne: false
+            referencedRelation: "waiting_items"
+            referencedColumns: ["organisation_id", "id"]
+          },
+          {
+            foreignKeyName: "attachments_organisation_id_wbs_node_id_fkey"
+            columns: ["organisation_id", "wbs_node_id"]
+            isOneToOne: false
+            referencedRelation: "wbs_nodes"
+            referencedColumns: ["organisation_id", "id"]
+          },
+        ]
+      }
+      comments: {
+        Row: {
+          action_id: string | null
+          author_id: string | null
+          content: string
+          created_at: string
+          edited: boolean
+          id: string
+          organisation_id: string
+          parent_comment_id: string | null
+          updated_at: string
+          waiting_item_id: string | null
+          wbs_node_id: string | null
+        }
+        Insert: {
+          action_id?: string | null
+          author_id?: string | null
+          content: string
+          created_at?: string
+          edited?: boolean
+          id?: string
+          organisation_id: string
+          parent_comment_id?: string | null
+          updated_at?: string
+          waiting_item_id?: string | null
+          wbs_node_id?: string | null
+        }
+        Update: {
+          action_id?: string | null
+          author_id?: string | null
+          content?: string
+          created_at?: string
+          edited?: boolean
+          id?: string
+          organisation_id?: string
+          parent_comment_id?: string | null
+          updated_at?: string
+          waiting_item_id?: string | null
+          wbs_node_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comments_organisation_id_action_id_fkey"
+            columns: ["organisation_id", "action_id"]
+            isOneToOne: false
+            referencedRelation: "actions"
+            referencedColumns: ["organisation_id", "id"]
+          },
+          {
+            foreignKeyName: "comments_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comments_organisation_id_waiting_item_id_fkey"
+            columns: ["organisation_id", "waiting_item_id"]
+            isOneToOne: false
+            referencedRelation: "waiting_items"
+            referencedColumns: ["organisation_id", "id"]
+          },
+          {
+            foreignKeyName: "comments_organisation_id_wbs_node_id_fkey"
+            columns: ["organisation_id", "wbs_node_id"]
+            isOneToOne: false
+            referencedRelation: "wbs_nodes"
+            referencedColumns: ["organisation_id", "id"]
+          },
+          {
+            foreignKeyName: "comments_parent_comment_id_fkey"
+            columns: ["parent_comment_id"]
+            isOneToOne: false
+            referencedRelation: "comments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_send_log: {
+        Row: {
+          created_at: string
+          error_message: string | null
+          id: string
+          message_id: string | null
+          metadata: Json | null
+          recipient_email: string
+          status: string
+          template_name: string
+        }
+        Insert: {
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          message_id?: string | null
+          metadata?: Json | null
+          recipient_email: string
+          status: string
+          template_name: string
+        }
+        Update: {
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          message_id?: string | null
+          metadata?: Json | null
+          recipient_email?: string
+          status?: string
+          template_name?: string
+        }
+        Relationships: []
+      }
+      email_send_state: {
+        Row: {
+          auth_email_ttl_minutes: number
+          batch_size: number
+          id: number
+          retry_after_until: string | null
+          send_delay_ms: number
+          transactional_email_ttl_minutes: number
+          updated_at: string
+        }
+        Insert: {
+          auth_email_ttl_minutes?: number
+          batch_size?: number
+          id?: number
+          retry_after_until?: string | null
+          send_delay_ms?: number
+          transactional_email_ttl_minutes?: number
+          updated_at?: string
+        }
+        Update: {
+          auth_email_ttl_minutes?: number
+          batch_size?: number
+          id?: number
+          retry_after_until?: string | null
+          send_delay_ms?: number
+          transactional_email_ttl_minutes?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      email_unsubscribe_tokens: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          token: string
+          used_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          token: string
+          used_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          token?: string
+          used_at?: string | null
+        }
+        Relationships: []
+      }
+      feature_suggestions: {
+        Row: {
+          created_at: string
+          description: string
+          github_issue_url: string | null
+          id: string
+          organisation_id: string
+          title: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          description?: string
+          github_issue_url?: string | null
+          id?: string
+          organisation_id: string
+          title: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          github_issue_url?: string | null
+          id?: string
+          organisation_id?: string
+          title?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feature_suggestions_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gathered_state: {
+        Row: {
+          created_at: string
+          durations: Json
+          id: string
+          order_ids: string[]
+          organisation_id: string
+          schedule: Json
+          task_ids: string[]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          durations?: Json
+          id?: string
+          order_ids?: string[]
+          organisation_id: string
+          schedule?: Json
+          task_ids?: string[]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          durations?: Json
+          id?: string
+          order_ids?: string[]
+          organisation_id?: string
+          schedule?: Json
+          task_ids?: string[]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gathered_state_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       health_score_history: {
         Row: {
           components: Json
@@ -350,6 +668,41 @@ export type Database = {
           },
         ]
       }
+      kb_chat_messages: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          organisation_id: string
+          role: Database["public"]["Enums"]["kb_chat_role"]
+          user_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          organisation_id: string
+          role: Database["public"]["Enums"]["kb_chat_role"]
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          organisation_id?: string
+          role?: Database["public"]["Enums"]["kb_chat_role"]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kb_chat_messages_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       memberships: {
         Row: {
           created_at: string
@@ -472,6 +825,33 @@ export type Database = {
           id?: string
           name?: string
           slug?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          display_name: string | null
+          id: string
+          preferences: Json
+          updated_at: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          id: string
+          preferences?: Json
+          updated_at?: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          preferences?: Json
           updated_at?: string
         }
         Relationships: []
@@ -612,6 +992,71 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      sop_items: {
+        Row: {
+          created_at: string
+          id: string
+          instruction: string
+          organisation_id: string
+          owner_user_id: string
+          position: number
+          trigger_when: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          instruction: string
+          organisation_id: string
+          owner_user_id: string
+          position?: number
+          trigger_when: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          instruction?: string
+          organisation_id?: string
+          owner_user_id?: string
+          position?: number
+          trigger_when?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sop_items_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      suppressed_emails: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          metadata: Json | null
+          reason: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          metadata?: Json | null
+          reason: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          metadata?: Json | null
+          reason?: string
+        }
+        Relationships: []
       }
       waiting_items: {
         Row: {
@@ -852,6 +1297,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      delete_email: {
+        Args: { message_id: number; queue_name: string }
+        Returns: boolean
+      }
+      enqueue_email: {
+        Args: { payload: Json; queue_name: string }
+        Returns: number
+      }
       has_org_role: {
         Args: {
           _org_id: string
@@ -860,12 +1313,31 @@ export type Database = {
         Returns: boolean
       }
       is_org_member: { Args: { _org_id: string }; Returns: boolean }
+      move_to_dlq: {
+        Args: {
+          dlq_name: string
+          message_id: number
+          payload: Json
+          source_queue: string
+        }
+        Returns: number
+      }
+      read_email_batch: {
+        Args: { batch_size: number; queue_name: string; vt: number }
+        Returns: {
+          message: Json
+          msg_id: number
+          read_ct: number
+        }[]
+      }
     }
     Enums: {
       action_priority: "high" | "medium" | "low"
       action_status: "not_started" | "in_progress" | "complete" | "blocked"
       dependency_type: "fs" | "ff" | "ss" | "sf"
+      domain_entity_kind: "action" | "waiting_item" | "wbs_node"
       inbox_event_type: "created" | "promoted" | "deleted"
+      kb_chat_role: "user" | "assistant" | "system"
       membership_role: "owner" | "admin" | "member"
       node_type: "portfolio" | "programme" | "project" | "work_package"
       project_status: "active" | "on_hold" | "complete"
@@ -1003,7 +1475,9 @@ export const Constants = {
       action_priority: ["high", "medium", "low"],
       action_status: ["not_started", "in_progress", "complete", "blocked"],
       dependency_type: ["fs", "ff", "ss", "sf"],
+      domain_entity_kind: ["action", "waiting_item", "wbs_node"],
       inbox_event_type: ["created", "promoted", "deleted"],
+      kb_chat_role: ["user", "assistant", "system"],
       membership_role: ["owner", "admin", "member"],
       node_type: ["portfolio", "programme", "project", "work_package"],
       project_status: ["active", "on_hold", "complete"],

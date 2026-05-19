@@ -28,26 +28,33 @@ import { useAppStore } from "@/lib/store";
 import type { Action } from "@/lib/types";
 
 function buildAction(overrides: Partial<Action> = {}): Action {
+  const now = new Date().toISOString();
   return {
     id: crypto.randomUUID(),
+    organisationId: "00000000-0000-0000-0000-000000000000",
+    wbsNodeId: null,
+    assignedTo: null,
+    createdBy: null,
     task: "Test task",
-    project: "",
-    workPackage: "",
-    startDate: "",
-    dueDate: "",
-    priority: "Medium",
-    status: "Not Started",
+    priority: "medium",
+    status: "not_started",
+    startDate: null,
+    dueDate: null,
+    completedAt: null,
     notes: "",
     labels: [],
+    notStartedSince: null,
+    archivedAt: null,
+    createdAt: now,
+    updatedAt: now,
     ...overrides,
-  } as Action;
+  };
 }
 
 describe("store.addAction persistence", () => {
   beforeEach(() => {
     insertResult.error = null;
     insertSpy.mockClear();
-    // Reset actions list
     useAppStore.setState({ actions: [] });
   });
 
@@ -59,10 +66,8 @@ describe("store.addAction persistence", () => {
     const action = buildAction({ task: "Persisted task" });
     useAppStore.getState().addAction(action);
 
-    // Optimistic update applies immediately.
     expect(useAppStore.getState().actions).toHaveLength(1);
 
-    // Wait for the async persist promise to resolve.
     await new Promise((r) => setTimeout(r, 0));
 
     expect(insertSpy).toHaveBeenCalledTimes(1);
@@ -78,7 +83,7 @@ describe("store.addAction persistence", () => {
 
     expect(useAppStore.getState().actions).toHaveLength(1);
 
-    // Wait for the rejection + rollback.
+    // Two microtask flushes: one for getUser().then, one for insert().then
     await new Promise((r) => setTimeout(r, 0));
     await new Promise((r) => setTimeout(r, 0));
 

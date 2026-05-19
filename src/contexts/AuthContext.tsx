@@ -23,6 +23,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const loadAllData = useAppStore((s) => s.loadAllData);
+  const resetTenancy = useAppStore((s) => s.resetTenancy);
   const loadedUserIdRef = useRef<string | null>(null);
   const loadingUserIdRef = useRef<string | null>(null);
 
@@ -31,6 +32,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!userId) {
       loadedUserIdRef.current = null;
       loadingUserIdRef.current = null;
+      resetTenancy();
       return;
     }
     if (loadedUserIdRef.current === userId || loadingUserIdRef.current === userId) return;
@@ -40,19 +42,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .then(() => {
         loadedUserIdRef.current = userId;
       })
+      .catch((err) => {
+        console.error("loadAllData failed", err);
+      })
       .finally(() => {
         if (loadingUserIdRef.current === userId) loadingUserIdRef.current = null;
       });
   };
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        setSession(session);
-        setLoading(false);
-        loadSessionData(session);
-      }
-    );
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      setLoading(false);
+      loadSessionData(session);
+    });
 
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
@@ -65,6 +68,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     await supabase.auth.signOut();
+    resetTenancy();
+    loadedUserIdRef.current = null;
   };
 
   return (

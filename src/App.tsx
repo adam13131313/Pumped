@@ -23,6 +23,7 @@ import AuthPage from "@/pages/AuthPage";
 import ResetPasswordPage from "@/pages/ResetPasswordPage";
 import Landing from "@/pages/Landing";
 import NotFound from "./pages/NotFound";
+import OrgBootstrapPage from "@/pages/OrgBootstrapPage";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 const queryClient = new QueryClient();
@@ -37,6 +38,7 @@ const isDevEnvironment = () => {
 function ProtectedRoutes() {
   const { session, loading } = useAuth();
   const dataLoaded = useAppStore((s) => s.dataLoaded);
+  const needsOrgBootstrap = useAppStore((s) => s.needsOrgBootstrap);
   const isDev = isDevEnvironment();
 
   if (!isDev && (loading || (session && !dataLoaded))) {
@@ -49,6 +51,12 @@ function ProtectedRoutes() {
 
   if (!isDev && !session) {
     return <Navigate to="/landing" replace />;
+  }
+
+  // Freshly signed-up user with no membership yet → first-org bootstrap.
+  // Lives outside AppShell because no nav surface makes sense yet.
+  if (needsOrgBootstrap) {
+    return <OrgBootstrapPage />;
   }
 
   return (

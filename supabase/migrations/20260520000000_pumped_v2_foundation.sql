@@ -732,6 +732,10 @@ CREATE TABLE public.waiting_items (
   created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
 
+  -- Composite unique enables (organisation_id, id) FK references from
+  -- attachments / comments (see 20260520010000_pumped_v2_supplements.sql).
+  UNIQUE (organisation_id, id),
+
   FOREIGN KEY (organisation_id, wbs_node_id)
     REFERENCES public.wbs_nodes(organisation_id, id) ON DELETE SET NULL,
 

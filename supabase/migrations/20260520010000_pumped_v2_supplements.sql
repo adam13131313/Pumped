@@ -18,6 +18,21 @@
 
 
 -- ----------------------------------------------------------------------------
+-- 0. Foundation back-fill
+-- ----------------------------------------------------------------------------
+-- The original v2 foundation migration didn't include UNIQUE (organisation_id, id)
+-- on waiting_items, so composite FKs from attachments / comments fail to apply.
+-- The foundation file has since been fixed; for already-applied databases this
+-- ALTER catches us up. Idempotent.
+
+DO $$ BEGIN
+  ALTER TABLE public.waiting_items
+    ADD CONSTRAINT waiting_items_org_id_key UNIQUE (organisation_id, id);
+EXCEPTION WHEN duplicate_table OR duplicate_object THEN NULL;
+END $$;
+
+
+-- ----------------------------------------------------------------------------
 -- 1. Additional enums
 -- ----------------------------------------------------------------------------
 

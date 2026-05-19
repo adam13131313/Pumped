@@ -426,6 +426,13 @@ interface AppState {
   setGatheredTaskDuration: (taskId: string, duration: number) => void;
   unscheduleGatheredTask: (taskId: string) => void;
   clearGathered: () => void;
+
+  // Today convenience — derived from `gathered.taskIds`. Pages use this
+  // shape because "gather a single task" is the common interaction.
+  todayIds: Set<string>;
+  addToday: (id: string) => void;
+  removeToday: (id: string) => void;
+  clearToday: () => void;
 }
 
 // ============================================================================
@@ -470,6 +477,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
     sopItems: [],
     webhookSources: [],
     gathered: null,
+    todayIds: new Set(),
     globalFilter: defaultGlobalFilter,
   }),
 
@@ -566,6 +574,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
       sopItems: (sopRows ?? []).map(mapSop),
       webhookSources: (sourceRows ?? []).map(mapWebhookSource),
       gathered: gatheredRow ? mapGathered(gatheredRow) : null,
+      todayIds: new Set(gatheredRow ? mapGathered(gatheredRow).taskIds : []),
     });
   },
 
@@ -1149,6 +1158,31 @@ export const useAppStore = create<AppState>()((set, get) => ({
   clearGathered: () => {
     upsertGathered(set, get, { taskIds: [], orderIds: [], schedule: {}, durations: {} });
   },
+
+  // Today convenience — kept in lockstep with `gathered.taskIds` via
+  // upsertGathered. Reads stay cheap (a Set ref); writes go through the
+  // debounced persistence path so the UI feels instant.
+  todayIds: new Set<string>(),
+  addToday: (id) => {
+    const g = get().gathered;
+    const existing = g?.taskIds ?? [];
+    if (existing.includes(id)) return;
+    const taskIds = [...existing, id];
+    const orderIds = [...(g?.orderIds ?? []), id];
+    upsertGathered(set, get, { taskIds, orderIds });
+  },
+  removeToday: (id) => {
+    const g = get().gathered;
+    if (!g) return;
+    const taskIds = g.taskIds.filter((x) => x !== id);
+    const orderIds = g.orderIds.filter((x) => x !== id);
+    const schedule = { ...g.schedule }; delete schedule[id];
+    const durations = { ...g.durations }; delete durations[id];
+    upsertGathered(set, get, { taskIds, orderIds, schedule, durations });
+  },
+  clearToday: () => {
+    upsertGathered(set, get, { taskIds: [], orderIds: [], schedule: {}, durations: {} });
+  },
 }));
 
 // ============================================================================
@@ -1188,7 +1222,7 @@ function upsertGathered(
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
-  set({ gathered: merged });
+  set({ gathered: merged, todayIds: new Set(merged.taskIds) });
   pendingGatheredPatch = { userId, organisationId: org.id, payload: merged };
 
   if (gatheredSaveTimer) clearTimeout(gatheredSaveTimer);

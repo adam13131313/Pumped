@@ -2,7 +2,7 @@ import { useState, useRef, useCallback, useEffect, DragEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useAppStore } from "@/lib/store";
 import { useFilteredData } from "@/hooks/useFilteredData";
-import { InboxItem, Priority } from "@/lib/types";
+import type { ActionPriority, ActionStatus, InboxItem, Action } from "@/lib/types";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -14,43 +14,72 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Inbox, FileText, Mic, Link, Upload, Sparkles, Trash2, ArrowRight,
-  MicOff, Loader2, PenLine, X, Check, GripVertical, Table as TableIcon, Download, FileSpreadsheet
+  MicOff, Loader2, PenLine, X, Check,
 } from "lucide-react";
 import { toast } from "sonner";
-import {
-  parseCSV, parseXLSX, autoMapColumns, rowsToTasks, ColumnMapping, ProposedTask,
-  downloadCSVTemplate, downloadXLSXTemplate,
-} from "@/lib/csvImport";
-import { TaskStatus, Action } from "@/lib/types";
+import { NodePicker, nodePath } from "@/components/NodePicker";
+
+// v2 InboxPage. Replaces v1's project/workPackage string fields with
+// wbsNodeId UUID via NodePicker. CSV/XLSX upload is deferred (csvImport stub
+// throws until phase 4.5 lands the new mapper).
+
+const PRIORITY_LABEL: Record<ActionPriority, string> = { high: "High", medium: "Medium", low: "Low" };
+const PRIORITIES: ActionPriority[] = ["high", "medium", "low"];
+
+interface ProposedDraft {
+  task: string;
+  priority: ActionPriority;
+  status: ActionStatus;
+  startDate: string;
+  dueDate: string;
+  wbsNodeId: string | null;
+  notes: string;
+  labels: string[];
+}
+
+const priorityFromAny = (raw: unknown): ActionPriority => {
+  const s = String(raw ?? "").toLowerCase();
+  return s === "high" || s === "low" ? s : "medium";
+};
+const statusFromAny = (raw: unknown): ActionStatus => {
+  const s = String(raw ?? "").toLowerCase().replace(/\s+/g, "_");
+  if (s === "in_progress" || s === "complete" || s === "blocked") return s;
+  return "not_started";
+};
 
 export default function InboxPage() {
-  const { addInboxItems, bulkUpdateInboxItems, deleteInboxItem, bulkDeleteInboxItems, promoteInboxToActions, bulkAddActions, projects, workPackages, programmes } = useAppStore();
+  const addInboxItems = useAppStore((s) => s.addInboxItems);
+  const bulkUpdateInboxItems = useAppStore((s) => s.bulkUpdateInboxItems);
+  const deleteInboxItem = useAppStore((s) => s.deleteInboxItem);
+  const bulkDeleteInboxItems = useAppStore((s) => s.bulkDeleteInboxItems);
+  const promoteInboxToActions = useAppStore((s) => s.promoteInboxToActions);
+  const bulkAddActions = useAppStore((s) => s.bulkAddActions);
+  const wbsNodes = useAppStore((s) => s.wbsNodes);
+  const currentOrg = useAppStore((s) => s.currentOrg);
+  const currentMembership = useAppStore((s) => s.currentMembership);
+
   const { inboxItems } = useFilteredData();
+
   const [textInput, setTextInput] = useState("");
   const [isExtracting, setIsExtracting] = useState(false);
-  const [proposedTasks, setProposedTasks] = useState<ProposedTask[]>([]);
+  const [proposedTasks, setProposedTasks] = useState<ProposedDraft[]>([]);
   const [summary, setSummary] = useState("");
   const [showPreview, setShowPreview] = useState(false);
   const [sourceLabel, setSourceLabel] = useState("notes");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [isDragging, setIsDragging] = useState(false);
 
-  // Bulk edit state
   const [bulkEditMode, setBulkEditMode] = useState(false);
   const [bulkPriority, setBulkPriority] = useState<string>("");
-  const [bulkProject, setBulkProject] = useState<string>("");
+  const [bulkNodeId, setBulkNodeId] = useState<string | null>(null);
 
-  // Voice recording state
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
 
-  // File upload
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const dragCounterRef = useRef(0);
 
-  // Focus on a specific item when navigated from command palette via ?focus=<id>
   const [focusId, setFocusId] = useState<string | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   useEffect(() => {
@@ -67,59 +96,26 @@ export default function InboxPage() {
     return () => clearTimeout(t);
   }, [searchParams, setSearchParams]);
 
-  // CSV mapping state
-  const [csvRows, setCsvRows] = useState<string[][] | null>(null);
-  const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
-  const [csvHasHeader, setCsvHasHeader] = useState(true);
-  const [csvMapping, setCsvMapping] = useState<ColumnMapping | null>(null);
-  const [csvFileName, setCsvFileName] = useState("");
+  const nodeNameById = (id: string | null) => {
+    if (!id) return "";
+    const path = nodePath(wbsNodes, id);
+    return path.map((n) => n.name).join(" › ");
+  };
 
-  const projectNames = projects.map((p) => p.name).filter(Boolean);
-  const workPackageNames = Array.from(new Set(workPackages.map((w) => w.workPackage).filter(Boolean)));
-
-  // Build a flattened Programme → Project → Work Package reference reflecting
-  // the user's current setup so downloaded templates stay in sync with the app.
-  const wbsRows = (() => {
-    const rows: { programme: string; project: string; workPackage: string }[] = [];
-    const progName = (id: string) => programmes.find((pr) => pr.id === id)?.name ?? "";
-    const wpsByProject = new Map<string, string[]>();
-    for (const wp of workPackages) {
-      if (!wp.workPackage) continue;
-      const list = wpsByProject.get(wp.project) ?? [];
-      list.push(wp.workPackage);
-      wpsByProject.set(wp.project, list);
-    }
-    if (projects.length === 0 && workPackages.length === 0) return rows;
-    for (const p of projects) {
-      const wps = wpsByProject.get(p.name) ?? [];
-      if (wps.length === 0) {
-        rows.push({ programme: progName(p.programmeId), project: p.name, workPackage: "" });
-      } else {
-        for (const w of wps) rows.push({ programme: progName(p.programmeId), project: p.name, workPackage: w });
-      }
-    }
-    // Orphan work packages (project not in projects list)
-    for (const [proj, wps] of wpsByProject) {
-      if (!projects.find((p) => p.name === proj)) {
-        for (const w of wps) rows.push({ programme: "", project: proj, workPackage: w });
-      }
-    }
-    return rows;
-  })();
-
-  // Normalize tasks coming from AI (older shape) into full ProposedTask shape
-  const normalizeProposed = (raw: any[]): ProposedTask[] =>
-    (raw || []).map((t) => ({
-      task: t.task ?? "",
-      priority: t.priority ?? "Medium",
-      status: t.status ?? "Not Started",
-      startDate: t.startDate ?? "",
-      dueDate: t.dueDate ?? "",
-      project: t.project ?? "",
-      workPackage: t.workPackage ?? "",
-      notes: t.notes ?? "",
-      labels: Array.isArray(t.labels) ? t.labels : [],
-    }));
+  const normalizeProposed = (raw: unknown[]): ProposedDraft[] =>
+    (raw || []).map((t) => {
+      const r = (t ?? {}) as Record<string, unknown>;
+      return {
+        task: String(r.task ?? ""),
+        priority: priorityFromAny(r.priority),
+        status: statusFromAny(r.status),
+        startDate: String(r.startDate ?? ""),
+        dueDate: String(r.dueDate ?? ""),
+        wbsNodeId: typeof r.wbsNodeId === "string" ? r.wbsNodeId : null,
+        notes: String(r.notes ?? ""),
+        labels: Array.isArray(r.labels) ? (r.labels as string[]) : [],
+      };
+    });
 
   const extractTasks = useCallback(async (text: string, source: string) => {
     if (!text.trim()) {
@@ -130,159 +126,65 @@ export default function InboxPage() {
     setSourceLabel(source);
     try {
       const { data, error } = await supabase.functions.invoke("extract-tasks", {
-        body: { text, sourceType: source, existingProjects: projectNames },
+        body: { text, sourceType: source },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
       setProposedTasks((prev) => [...prev, ...normalizeProposed(data.tasks)]);
       setSummary(data.summary || "");
       setShowPreview(true);
-    } catch (e: any) {
-      toast.error(e.message || "Failed to extract tasks");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to extract tasks");
     } finally {
       setIsExtracting(false);
     }
-  }, [projectNames]);
-
-  const finalizeImport = useCallback((rows: string[][], file: File, sourceTag: string) => {
-    if (rows.length === 0) {
-      toast.error("File appears to be empty");
-      return;
-    }
-    const headers = rows[0];
-    const mapping = autoMapColumns(headers);
-    setCsvRows(rows);
-    setCsvHeaders(headers);
-    setCsvHasHeader(true);
-    setCsvMapping(mapping);
-    setCsvFileName(file.name);
-    setSourceLabel(sourceTag);
-
-    if (mapping.task < 0) {
-      toast.warning("Couldn't auto-detect a task column. Please choose one below.", { duration: 4000 });
-      setShowPreview(true);
-      return;
-    }
-    const tasks = rowsToTasks(rows, mapping, true, projectNames, workPackageNames);
-    if (tasks.length === 0) {
-      toast.warning("No rows with task content found. Adjust column mapping.");
-      setShowPreview(true);
-      return;
-    }
-    setProposedTasks(tasks);
-    setSummary(`Imported ${tasks.length} rows from ${file.name}. Review the column mapping below if needed.`);
-    setShowPreview(true);
-    toast.success(`Parsed ${tasks.length} tasks from ${file.name}`);
-  }, [projectNames, workPackageNames]);
-
-  const handleCsvFile = useCallback((file: File, text: string, delimiter?: "," | "\t") => {
-    let toParse = text;
-    if (delimiter === "\t") {
-      toParse = text
-        .split(/\r?\n/)
-        .map((line) =>
-          line.split("\t").map((c) => `"${c.replace(/"/g, '""')}"`).join(",")
-        )
-        .join("\n");
-    }
-    const rows = parseCSV(toParse);
-    finalizeImport(rows, file, "csv: " + file.name);
-  }, [finalizeImport]);
-
-  const handleXlsxFile = useCallback(async (file: File) => {
-    try {
-      const rows = await parseXLSX(file);
-      finalizeImport(rows, file, "xlsx: " + file.name);
-    } catch (e: any) {
-      toast.error(e.message || "Could not read XLSX file");
-    }
-  }, [finalizeImport]);
-
-  const remapCsv = useCallback((next: ColumnMapping, hasHeader: boolean) => {
-    if (!csvRows) return;
-    setCsvMapping(next);
-    setCsvHasHeader(hasHeader);
-    if (next.task < 0) return;
-    const tasks = rowsToTasks(csvRows, next, hasHeader, projectNames, workPackageNames);
-    setProposedTasks(tasks);
-    setSummary(`Imported ${tasks.length} rows from ${csvFileName}.`);
-  }, [csvRows, projectNames, workPackageNames, csvFileName]);
+  }, []);
 
   const readFileContent = async (file: File) => {
+    const name = file.name.toLowerCase();
+    if (/\.(csv|tsv|xlsx|xls)$/.test(name)) {
+      toast.warning("Spreadsheet import is being rewritten. Paste the rows as text for now.");
+      return;
+    }
     try {
-      const name = file.name.toLowerCase();
-      if (name.endsWith(".xlsx") || name.endsWith(".xls")) {
-        await handleXlsxFile(file);
-        return;
-      }
       const text = await file.text();
-      if (name.endsWith(".csv")) { handleCsvFile(file, text, ","); return; }
-      if (name.endsWith(".tsv")) { handleCsvFile(file, text, "\t"); return; }
       setTextInput(text);
       extractTasks(text, "file: " + file.name);
     } catch {
-      toast.error("Could not read file. Try CSV, XLSX, TSV, or TXT.");
+      toast.error("Could not read file. Try TXT or MD.");
     }
   };
-
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    await readFileContent(file);
-    if (fileInputRef.current) fileInputRef.current.value = "";
-  };
-
-
-
 
   const handleDragEnter = (e: DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     dragCounterRef.current++;
-    if (e.dataTransfer.types.includes("Files")) {
-      setIsDragging(true);
-    }
+    if (e.dataTransfer.types.includes("Files")) setIsDragging(true);
   };
-
   const handleDragLeave = (e: DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     dragCounterRef.current--;
-    if (dragCounterRef.current === 0) {
-      setIsDragging(false);
-    }
+    if (dragCounterRef.current === 0) setIsDragging(false);
   };
-
-  const handleDragOver = (e: DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-  };
-
+  const handleDragOver = (e: DragEvent) => { e.preventDefault(); e.stopPropagation(); };
   const handleDrop = async (e: DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(false);
     dragCounterRef.current = 0;
     const files = e.dataTransfer.files;
-    if (files.length > 0) {
-      await readFileContent(files[0]);
-    }
+    if (files.length > 0) await readFileContent(files[0]);
   };
 
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          sampleRate: 44100,
-        },
+        audio: { echoCancellation: true, noiseSuppression: true, sampleRate: 44100 },
       });
       const mimeType = MediaRecorder.isTypeSupported("audio/webm")
         ? "audio/webm"
-        : MediaRecorder.isTypeSupported("audio/mp4")
-          ? "audio/mp4"
-          : "";
+        : MediaRecorder.isTypeSupported("audio/mp4") ? "audio/mp4" : "";
       const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
       chunksRef.current = [];
       recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
@@ -321,7 +223,7 @@ export default function InboxPage() {
           method: "POST",
           headers: { Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}` },
           body: formData,
-        }
+        },
       );
       if (!resp.ok) throw new Error("Transcription failed");
       const data = await resp.json();
@@ -330,8 +232,8 @@ export default function InboxPage() {
       setTextInput(transcript);
       toast.success("Audio transcribed!");
       extractTasks(transcript, "voice memo");
-    } catch (e: any) {
-      toast.error(e.message || "Transcription failed");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Transcription failed");
     } finally {
       setIsTranscribing(false);
     }
@@ -342,64 +244,79 @@ export default function InboxPage() {
     setProposedTasks([]);
     setSummary("");
     setTextInput("");
-    setCsvRows(null);
-    setCsvHeaders([]);
-    setCsvMapping(null);
-    setCsvFileName("");
   };
 
   const acceptProposed = () => {
+    if (!currentOrg) {
+      toast.error("No active organisation");
+      return;
+    }
     const now = new Date().toISOString();
     const items: InboxItem[] = proposedTasks.map((t) => ({
       id: crypto.randomUUID(),
+      organisationId: currentOrg.id,
+      sourceId: null,
+      wbsNodeId: t.wbsNodeId,
+      promotedToActionId: null,
       task: t.task,
       priority: t.priority,
-      dueDate: t.dueDate,
-      project: t.project,
+      dueDate: t.dueDate || null,
       notes: t.notes,
-      source: sourceLabel,
+      externalId: null,
+      externalUrl: null,
+      promotedAt: null,
+      createdBy: currentMembership?.userId ?? null,
       createdAt: now,
+      updatedAt: now,
     }));
     addInboxItems(items);
     resetPreviewState();
-    toast.success(`${items.length} tasks added to inbox`);
+    toast.success(`${items.length} tasks added to inbox`, { description: `via ${sourceLabel}` });
   };
 
   const acceptAsActions = () => {
+    if (!currentOrg) {
+      toast.error("No active organisation");
+      return;
+    }
+    const now = new Date().toISOString();
     const newActions: Action[] = proposedTasks.map((t) => ({
       id: crypto.randomUUID(),
+      organisationId: currentOrg.id,
+      wbsNodeId: t.wbsNodeId,
+      assignedTo: currentMembership?.userId ?? null,
+      createdBy: currentMembership?.userId ?? null,
       task: t.task,
-      project: t.project,
-      workPackage: t.workPackage,
-      startDate: t.startDate,
-      dueDate: t.dueDate,
       priority: t.priority,
       status: t.status,
+      startDate: t.startDate || null,
+      dueDate: t.dueDate || null,
+      completedAt: null,
       notes: t.notes,
-      labels: t.labels ?? [],
+      labels: t.labels,
+      notStartedSince: null,
+      archivedAt: null,
+      createdAt: now,
+      updatedAt: now,
     }));
     bulkAddActions(newActions);
     resetPreviewState();
     toast.success(`${newActions.length} tasks added to My Actions`);
   };
 
-  const cancelPreview = () => {
-    resetPreviewState();
-  };
-
+  const cancelPreview = () => resetPreviewState();
 
   const removeProposed = (idx: number) => {
     setProposedTasks((prev) => prev.filter((_, i) => i !== idx));
   };
-
-  const updateProposed = (idx: number, updates: Partial<ProposedTask>) => {
+  const updateProposed = (idx: number, updates: Partial<ProposedDraft>) => {
     setProposedTasks((prev) => prev.map((t, i) => (i === idx ? { ...t, ...updates } : t)));
   };
 
   const toggleSelect = (id: string) => {
     setSelected((prev) => {
       const n = new Set(prev);
-      n.has(id) ? n.delete(id) : n.add(id);
+      if (n.has(id)) n.delete(id); else n.add(id);
       return n;
     });
   };
@@ -423,19 +340,19 @@ export default function InboxPage() {
   const applyBulkEdit = () => {
     const ids = Array.from(selected);
     const updates: Partial<InboxItem> = {};
-    if (bulkPriority) updates.priority = bulkPriority as Priority;
-    if (bulkProject) updates.project = bulkProject === "__none__" ? "" : bulkProject;
+    if (bulkPriority) updates.priority = bulkPriority as ActionPriority;
+    if (bulkNodeId !== null) updates.wbsNodeId = bulkNodeId;
     if (Object.keys(updates).length > 0) {
       bulkUpdateInboxItems(ids, updates);
     }
     toast.success(`${ids.length} items updated`);
     setBulkEditMode(false);
     setBulkPriority("");
-    setBulkProject("");
+    setBulkNodeId(null);
   };
 
-  const priorityColor = (p: Priority) =>
-    p === "High" ? "destructive" : p === "Medium" ? "default" : "secondary";
+  const priorityVariant = (p: ActionPriority) =>
+    p === "high" ? "destructive" : p === "medium" ? "default" : "secondary";
 
   return (
     <div className="space-y-6">
@@ -447,7 +364,6 @@ export default function InboxPage() {
         )}
       </div>
 
-      {/* Capture area */}
       <div
         onDragEnter={handleDragEnter}
         onDragLeave={handleDragLeave}
@@ -460,7 +376,7 @@ export default function InboxPage() {
             <div className="text-center">
               <Upload className="h-10 w-10 mx-auto mb-2 text-primary" />
               <p className="text-lg font-medium text-primary">Drop file here</p>
-              <p className="text-sm text-muted-foreground">TXT, CSV, MD supported</p>
+              <p className="text-sm text-muted-foreground">TXT or MD supported</p>
             </div>
           </div>
         )}
@@ -515,36 +431,12 @@ export default function InboxPage() {
                 </TabsContent>
 
                 <TabsContent value="file" className="space-y-3 mt-0">
-                  <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
-                    <p className="text-sm font-medium flex items-center gap-2">
-                      <FileSpreadsheet className="h-4 w-4" /> Need a starter file?
+                  <div className="rounded-lg border bg-amber-500/5 border-amber-500/30 p-4 text-sm">
+                    <p className="font-medium">Spreadsheet import is being rewritten</p>
+                    <p className="text-muted-foreground mt-1">
+                      CSV/XLSX upload with column-mapping is on hold while the v2 WBS hierarchy lands.
+                      Paste rows as text under the Notes tab — the extractor will still pick them up.
                     </p>
-                    <p className="text-xs text-muted-foreground">
-                      Download a pre-formatted template with all task fields. The Excel version includes dropdowns
-                      for Priority, Status, your Projects, and Work Packages.
-                    </p>
-                    <div className="flex flex-wrap gap-2 pt-1">
-                      <Button size="sm" variant="default" onClick={() =>
-                        downloadXLSXTemplate({ projects: projectNames, workPackages: workPackageNames, wbs: wbsRows })
-                      }>
-                        <Download className="h-4 w-4 mr-2" />Excel template (.xlsx)
-                      </Button>
-                      <Button size="sm" variant="outline" onClick={() =>
-                        downloadCSVTemplate({ projects: projectNames, workPackages: workPackageNames, wbs: wbsRows })
-                      }>
-                        <Download className="h-4 w-4 mr-2" />Plain CSV template
-                      </Button>
-                    </div>
-                  </div>
-
-                  <div className="rounded-lg border-2 border-dashed border-muted-foreground/25 p-8 text-center">
-                    <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground/50" />
-                    <p className="text-sm text-muted-foreground mb-3">Drag & drop a file here, or click to browse</p>
-                    <input ref={fileInputRef} type="file" accept=".txt,.csv,.md,.tsv,.xlsx,.xls" onChange={handleFileUpload} className="hidden" />
-                    <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
-                      <Upload className="h-4 w-4 mr-2" />Choose File
-                    </Button>
-                    <p className="text-xs text-muted-foreground mt-2">.xlsx, .csv & .tsv are auto-parsed with column mapping. .txt & .md use AI extraction.</p>
                   </div>
                 </TabsContent>
 
@@ -573,7 +465,6 @@ export default function InboxPage() {
         </Card>
       </div>
 
-      {/* Preview dialog (inline) */}
       {showPreview && (
         <Card className="border-primary/50">
           <CardHeader>
@@ -584,84 +475,35 @@ export default function InboxPage() {
                 <Button size="sm" variant="outline" onClick={acceptProposed} disabled={proposedTasks.length === 0}>
                   <Check className="h-4 w-4 mr-1" />Add to Inbox
                 </Button>
-                {csvRows && (
-                  <Button size="sm" onClick={acceptAsActions} disabled={proposedTasks.length === 0}>
-                    <ArrowRight className="h-4 w-4 mr-1" />Add as Actions
-                  </Button>
-                )}
+                <Button size="sm" onClick={acceptAsActions} disabled={proposedTasks.length === 0}>
+                  <ArrowRight className="h-4 w-4 mr-1" />Add as Actions
+                </Button>
               </div>
             </div>
             {summary && <p className="text-sm text-muted-foreground mt-1">{summary}</p>}
-            {csvRows && csvMapping && (
-              <div className="mt-3 rounded-md border bg-muted/30 p-3 space-y-2">
-                <div className="flex items-center gap-2 text-sm font-medium">
-                  <TableIcon className="h-4 w-4" /> Column mapping
-                  <label className="ml-auto flex items-center gap-1.5 text-xs font-normal text-muted-foreground">
-                    <Checkbox
-                      checked={csvHasHeader}
-                      onCheckedChange={(v) => remapCsv(csvMapping, !!v)}
-                    />
-                    First row is header
-                  </label>
-                </div>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
-                  {([
-                    ["task", "Task *"],
-                    ["priority", "Priority"],
-                    ["status", "Status"],
-                    ["startDate", "Start Date"],
-                    ["dueDate", "Due Date"],
-                    ["project", "Project"],
-                    ["workPackage", "Work Package"],
-                    ["notes", "Notes"],
-                    ["labels", "Labels"],
-                  ] as const).map(([key, label]) => (
-                    <div key={key} className="space-y-1">
-                      <span className="text-xs text-muted-foreground">{label}</span>
-                      <Select
-                        value={String(csvMapping[key])}
-                        onValueChange={(v) => remapCsv({ ...csvMapping, [key]: parseInt(v) }, csvHasHeader)}
-                      >
-                        <SelectTrigger className="h-8"><SelectValue placeholder="—" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="-1">— None —</SelectItem>
-                          {csvHeaders.map((h, i) => (
-                            <SelectItem key={i} value={String(i)}>
-                              {csvHasHeader ? (h || `Column ${i + 1}`) : `Column ${i + 1}`}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </CardHeader>
           <CardContent className="space-y-2">
             {proposedTasks.map((t, i) => (
               <div key={i} className="flex items-start gap-3 rounded-lg border p-3">
                 <div className="flex-1 space-y-2">
                   <Input value={t.task} onChange={(e) => updateProposed(i, { task: e.target.value })} className="font-medium" />
-                  <div className="flex flex-wrap gap-2">
-                    <Select value={t.priority} onValueChange={(v) => updateProposed(i, { priority: v as Priority })}>
+                  <div className="flex flex-wrap gap-2 items-center">
+                    <Select value={t.priority} onValueChange={(v) => updateProposed(i, { priority: v as ActionPriority })}>
                       <SelectTrigger className="w-28 h-8"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="High">High</SelectItem>
-                        <SelectItem value="Medium">Medium</SelectItem>
-                        <SelectItem value="Low">Low</SelectItem>
+                        {PRIORITIES.map((p) => <SelectItem key={p} value={p}>{PRIORITY_LABEL[p]}</SelectItem>)}
                       </SelectContent>
                     </Select>
                     <Input type="date" value={t.dueDate} onChange={(e) => updateProposed(i, { dueDate: e.target.value })} className="w-40 h-8" />
-                    <Select value={t.project || "__none__"} onValueChange={(v) => updateProposed(i, { project: v === "__none__" ? "" : v })}>
-                      <SelectTrigger className="w-44 h-8"><SelectValue placeholder="No project" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none__">No project</SelectItem>
-                        {projectNames.map((name) => (
-                          <SelectItem key={name} value={name}>{name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <div className="w-56">
+                      <NodePicker
+                        value={t.wbsNodeId}
+                        onChange={(id) => updateProposed(i, { wbsNodeId: id })}
+                        includeNone
+                        noneLabel="(unassigned)"
+                        placeholder="Link to WBS…"
+                      />
+                    </div>
                   </div>
                   {t.notes && <p className="text-xs text-muted-foreground">{t.notes}</p>}
                 </div>
@@ -672,7 +514,6 @@ export default function InboxPage() {
         </Card>
       )}
 
-      {/* Inbox items */}
       {inboxItems.length > 0 && (
         <Card>
           <CardHeader>
@@ -689,7 +530,7 @@ export default function InboxPage() {
             {selected.size > 0 && (
               <div className="flex gap-2 items-center pt-2 flex-wrap">
                 <span className="text-sm text-muted-foreground">{selected.size} selected</span>
-                <Button size="sm" variant="outline" onClick={() => { setBulkEditMode(!bulkEditMode); setBulkPriority(""); setBulkProject(""); }}>
+                <Button size="sm" variant="outline" onClick={() => { setBulkEditMode(!bulkEditMode); setBulkPriority(""); setBulkNodeId(null); }}>
                   <PenLine className="h-4 w-4 mr-1" />Bulk Edit
                 </Button>
                 <Button size="sm" onClick={promoteSelected}>
@@ -701,31 +542,27 @@ export default function InboxPage() {
               </div>
             )}
             {bulkEditMode && selected.size > 0 && (
-              <div className="flex gap-2 items-end pt-2 flex-wrap rounded-md border border-border p-3 bg-muted/30">
+              <div className="flex gap-3 items-end pt-2 flex-wrap rounded-md border border-border p-3 bg-muted/30">
                 <div className="space-y-1">
                   <span className="text-xs text-muted-foreground">Priority</span>
                   <Select value={bulkPriority} onValueChange={setBulkPriority}>
-                    <SelectTrigger className="w-28 h-8"><SelectValue placeholder="No change" /></SelectTrigger>
+                    <SelectTrigger className="w-32 h-8"><SelectValue placeholder="No change" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="High">High</SelectItem>
-                      <SelectItem value="Medium">Medium</SelectItem>
-                      <SelectItem value="Low">Low</SelectItem>
+                      {PRIORITIES.map((p) => <SelectItem key={p} value={p}>{PRIORITY_LABEL[p]}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-1">
-                  <span className="text-xs text-muted-foreground">Project</span>
-                  <Select value={bulkProject} onValueChange={setBulkProject}>
-                    <SelectTrigger className="w-44 h-8"><SelectValue placeholder="No change" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">No project</SelectItem>
-                      {projectNames.map((name) => (
-                        <SelectItem key={name} value={name}>{name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                <div className="space-y-1 w-56">
+                  <span className="text-xs text-muted-foreground">Linked to</span>
+                  <NodePicker
+                    value={bulkNodeId}
+                    onChange={(id) => setBulkNodeId(id)}
+                    includeNone
+                    noneLabel="(unassigned)"
+                    placeholder="No change"
+                  />
                 </div>
-                <Button size="sm" onClick={applyBulkEdit} disabled={!bulkPriority && !bulkProject}>
+                <Button size="sm" onClick={applyBulkEdit} disabled={!bulkPriority && bulkNodeId === null}>
                   <Check className="h-4 w-4 mr-1" />Apply
                 </Button>
                 <Button size="sm" variant="ghost" onClick={() => setBulkEditMode(false)}>
@@ -744,11 +581,12 @@ export default function InboxPage() {
                 <Checkbox checked={selected.has(item.id)} onCheckedChange={() => toggleSelect(item.id)} />
                 <div className="flex-1 min-w-0">
                   <p className="font-medium truncate">{item.task}</p>
-                  <div className="flex gap-2 mt-1 flex-wrap">
-                    <Badge variant={priorityColor(item.priority)} className="text-xs">{item.priority}</Badge>
-                    {item.project && <Badge variant="outline" className="text-xs">{item.project}</Badge>}
+                  <div className="flex gap-2 mt-1 flex-wrap items-center">
+                    <Badge variant={priorityVariant(item.priority)} className="text-xs">{PRIORITY_LABEL[item.priority]}</Badge>
+                    {item.wbsNodeId && (
+                      <Badge variant="outline" className="text-xs">{nodeNameById(item.wbsNodeId)}</Badge>
+                    )}
                     {item.dueDate && <span className="text-xs text-muted-foreground">{item.dueDate}</span>}
-                    <span className="text-xs text-muted-foreground">via {item.source}</span>
                   </div>
                 </div>
                 <div className="flex gap-1">

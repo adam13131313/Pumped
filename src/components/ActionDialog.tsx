@@ -1,20 +1,37 @@
-import { useState, useMemo, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { X, Tag } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Action, Priority, TaskStatus } from "@/lib/types";
+import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
 import { useAppStore } from "@/lib/store";
 import { actionSchema, firstZodError } from "@/lib/schemas";
-import { toast } from "sonner";
+import type { Action, ActionPriority, ActionStatus } from "@/lib/types";
+import { NodePicker } from "@/components/NodePicker";
 import { NotesWithLinks } from "@/components/NotesWithLinks";
 import { TaskAttachments } from "@/components/TaskAttachments";
 import { TaskComments } from "@/components/TaskComments";
-import { Badge } from "@/components/ui/badge";
 import { DuplicateHint } from "@/components/DuplicateHint";
+
+// v2 ActionDialog: replaces the v1 three-cascading-dropdown UI
+// (Programme/Project/WorkPackage) with a single NodePicker bound to
+// wbsNodeId. Status/priority are lowercase to match Postgres enums.
 
 interface ActionDialogProps {
   open: boolean;
@@ -22,138 +39,90 @@ interface ActionDialogProps {
   action?: Action | null;
   onSave: (action: Action) => void;
   onDelete?: (id: string) => void;
-  onDelegate?: (id: string, toWhom: string) => void;
+  onDelegate?: (id: string, params: { fromWhomText?: string | null }) => void;
 }
 
-const priorities: Priority[] = ["High", "Medium", "Low"];
-const statuses: TaskStatus[] = ["Not Started", "In Progress", "Blocked", "Complete"];
+const PRIORITY_LABEL: Record<ActionPriority, string> = {
+  high: "High", medium: "Medium", low: "Low",
+};
+const STATUS_LABEL: Record<ActionStatus, string> = {
+  not_started: "Not Started",
+  in_progress: "In Progress",
+  blocked: "Blocked",
+  complete: "Complete",
+};
 
-export function ActionDialog({ open, onOpenChange, action, onSave, onDelete, onDelegate }: ActionDialogProps) {
+const PRIORITIES: ActionPriority[] = ["high", "medium", "low"];
+const STATUSES: ActionStatus[] = ["not_started", "in_progress", "blocked", "complete"];
+
+interface FormState {
+  task: string;
+  wbsNodeId: string | null;
+  startDate: string;
+  dueDate: string;
+  priority: ActionPriority;
+  status: ActionStatus;
+  notes: string;
+  labels: string[];
+}
+
+const emptyForm = (): FormState => ({
+  task: "",
+  wbsNodeId: null,
+  startDate: "",
+  dueDate: "",
+  priority: "medium",
+  status: "not_started",
+  notes: "",
+  labels: [],
+});
+
+export function ActionDialog({
+  open, onOpenChange, action, onSave, onDelete, onDelegate,
+}: ActionDialogProps) {
   const isEdit = !!action;
+  const globalFilter = useAppStore((s) => s.globalFilter);
+  const currentOrg = useAppStore((s) => s.currentOrg);
+  const currentMembership = useAppStore((s) => s.currentMembership);
+
+  const [form, setForm] = useState<FormState>(emptyForm());
+  const [labelInput, setLabelInput] = useState("");
   const [showDelegate, setShowDelegate] = useState(false);
   const [delegateTo, setDelegateTo] = useState("");
-  const programmes = useAppStore((s) => s.programmes);
-  const projects = useAppStore((s) => s.projects);
-  const workPackages = useAppStore((s) => s.workPackages);
-  const globalFilter = useAppStore((s) => s.globalFilter);
 
-  const emptyForm: Partial<Action> = { task: "", project: "", workPackage: "", startDate: "", dueDate: "", priority: "Medium", status: "Not Started", notes: "", labels: [] };
-  const [labelInput, setLabelInput] = useState("");
-  const [form, setForm] = useState<Partial<Action>>(action ?? emptyForm);
-  const [selectedProgrammeId, setSelectedProgrammeId] = useState("");
-  const [selectedProjectId, setSelectedProjectId] = useState("");
-
-  // Derive initial programme/project IDs from the action or global filter
   useEffect(() => {
-    if (open) {
-      setShowDelegate(false);
-      setDelegateTo("");
-
-      if (action) {
-        setForm(action);
-        const proj = projects.find((p) => p.name === action.project);
-        if (proj) {
-          setSelectedProjectId(proj.id);
-          setSelectedProgrammeId(proj.programmeId || "");
-        } else {
-          setSelectedProjectId("");
-          setSelectedProgrammeId("");
-        }
-      } else {
-        // New task: pre-populate from global filter
-        let prefillProjectId = globalFilter.projectId || "";
-        const prefillWPId = globalFilter.workPackageId || "";
-
-        // If WP is selected, derive project from it
-        const wp = prefillWPId ? workPackages.find((w) => w.id === prefillWPId) : null;
-        if (wp && !prefillProjectId) {
-          const derivedProj = projects.find((p) => p.name === wp.project);
-          if (derivedProj) prefillProjectId = derivedProj.id;
-        }
-
-        const proj = prefillProjectId ? projects.find((p) => p.id === prefillProjectId) : null;
-
-        // Derive programme from project if not explicitly set
-        const prefillProgrammeId = globalFilter.programmeId || proj?.programmeId || "";
-
-        setSelectedProgrammeId(prefillProgrammeId);
-        setSelectedProjectId(prefillProjectId);
-        setForm({
-          ...emptyForm,
-          project: proj?.name ?? "",
-          workPackage: wp?.workPackage ?? "",
-        });
-      }
-    }
-  }, [open, action]);
-
-  // Filtered projects based on selected programme
-  const filteredProjects = useMemo(() => {
-    if (!selectedProgrammeId) return projects;
-    return projects.filter((p) => p.programmeId === selectedProgrammeId);
-  }, [projects, selectedProgrammeId]);
-
-  // Filtered work packages based on selected project
-  const filteredWPs = useMemo(() => {
-    if (!selectedProjectId) return workPackages;
-    const proj = projects.find((p) => p.id === selectedProjectId);
-    if (!proj) return workPackages;
-    return workPackages.filter((wp) => wp.project === proj.name);
-  }, [workPackages, selectedProjectId, projects]);
-
-  const handleProgrammeChange = (val: string) => {
-    const id = val === "__none__" ? "" : val;
-    setSelectedProgrammeId(id);
-    // Reset project & WP if they don't belong to the new programme
-    if (id) {
-      const proj = projects.find((p) => p.id === selectedProjectId);
-      if (proj && proj.programmeId !== id) {
-        setSelectedProjectId("");
-        setForm((f) => ({ ...f, project: "", workPackage: "" }));
-      }
-    }
-  };
-
-  const handleProjectChange = (val: string) => {
-    if (val === "__none__") {
-      setSelectedProjectId("");
-      setForm((f) => ({ ...f, project: "", workPackage: "" }));
-    } else {
-      const proj = projects.find((p) => p.id === val);
-      setSelectedProjectId(val);
-      setForm((f) => ({ ...f, project: proj?.name ?? "", workPackage: "" }));
-      // Auto-set programme if not set
-      if (proj?.programmeId && !selectedProgrammeId) {
-        setSelectedProgrammeId(proj.programmeId);
-      }
-    }
-  };
-
-  const handleWPChange = (val: string) => {
-    if (val === "__none__") {
-      setForm((f) => ({ ...f, workPackage: "" }));
-    } else {
-      const wp = workPackages.find((w) => w.id === val);
-      if (wp) {
-        setForm((f) => ({ ...f, workPackage: wp.workPackage, project: wp.project }));
-        // Auto-set project selection
-        const proj = projects.find((p) => p.name === wp.project);
-        if (proj) {
-          setSelectedProjectId(proj.id);
-          if (proj.programmeId && !selectedProgrammeId) {
-            setSelectedProgrammeId(proj.programmeId);
-          }
-        }
-      }
-    }
-  };
-
-  const handleOpen = (o: boolean) => {
-    if (o && action) setForm(action);
-    else if (o) setForm(emptyForm);
+    if (!open) return;
     setShowDelegate(false);
     setDelegateTo("");
-    onOpenChange(o);
+    if (action) {
+      setForm({
+        task: action.task,
+        wbsNodeId: action.wbsNodeId,
+        startDate: action.startDate ?? "",
+        dueDate: action.dueDate ?? "",
+        priority: action.priority,
+        status: action.status,
+        notes: action.notes,
+        labels: action.labels ?? [],
+      });
+    } else {
+      // New action: pre-populate wbsNodeId from the global filter if any.
+      setForm({
+        ...emptyForm(),
+        wbsNodeId: !globalFilter.unassigned ? globalFilter.nodeId : null,
+      });
+    }
+  }, [open, action, globalFilter]);
+
+  const addLabel = () => {
+    const label = labelInput.trim();
+    if (label && !form.labels.includes(label)) {
+      setForm({ ...form, labels: [...form.labels, label] });
+    }
+    setLabelInput("");
+  };
+  const removeLabel = (label: string) => {
+    setForm({ ...form, labels: form.labels.filter((l) => l !== label) });
   };
 
   const handleSave = () => {
@@ -162,139 +131,127 @@ export function ActionDialog({ open, onOpenChange, action, onSave, onDelete, onD
       toast.error(firstZodError(parsed.error));
       return;
     }
-    // The schema fills in defaults at runtime; the TS output type for
-    // .default() in this zod version still includes undefined, so spread
-    // with explicit fallbacks instead of ...parsed.data.
+    if (!currentOrg) {
+      toast.error("No active organisation");
+      return;
+    }
     const d = parsed.data;
+    const now = new Date().toISOString();
     onSave({
       id: action?.id ?? crypto.randomUUID(),
+      organisationId: currentOrg.id,
+      wbsNodeId: d.wbsNodeId ?? null,
+      assignedTo: action?.assignedTo ?? currentMembership?.userId ?? null,
+      createdBy: action?.createdBy ?? currentMembership?.userId ?? null,
       task: d.task,
-      project: d.project ?? "",
-      workPackage: d.workPackage ?? "",
-      startDate: d.startDate ?? "",
-      dueDate: d.dueDate ?? "",
-      priority: d.priority ?? "Medium",
-      status: d.status ?? "Not Started",
+      priority: d.priority ?? "medium",
+      status: d.status ?? "not_started",
+      startDate: d.startDate ? d.startDate : null,
+      dueDate: d.dueDate ? d.dueDate : null,
+      completedAt: action?.completedAt ?? null,
       notes: d.notes ?? "",
       labels: d.labels ?? [],
+      notStartedSince: action?.notStartedSince ?? null,
+      archivedAt: action?.archivedAt ?? null,
+      createdAt: action?.createdAt ?? now,
+      updatedAt: now,
     });
     onOpenChange(false);
   };
 
-  const addLabel = () => {
-    const label = labelInput.trim();
-    if (label && !(form.labels ?? []).includes(label)) {
-      setForm({ ...form, labels: [...(form.labels ?? []), label] });
-    }
-    setLabelInput("");
-  };
-
-  const removeLabel = (label: string) => {
-    setForm({ ...form, labels: (form.labels ?? []).filter((l) => l !== label) });
-  };
-
-  // Find current WP id for the select value
-  const currentWPId = useMemo(() => {
-    if (!form.workPackage) return "__none__";
-    const wp = workPackages.find((w) => w.workPackage === form.workPackage);
-    return wp?.id ?? "__none__";
-  }, [form.workPackage, workPackages]);
-
   return (
-    <Dialog open={open} onOpenChange={handleOpen}>
-      <DialogContent className="sm:max-w-lg">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEdit ? "Edit Action" : "New Action"}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-2">
           <div>
             <Label htmlFor="task">Task *</Label>
-            <Textarea id="task" value={form.task ?? ""} onChange={(e) => setForm({ ...form, task: e.target.value })} className="mt-1" rows={2} maxLength={500} />
-            <DuplicateHint query={form.task ?? ""} excludeActionId={action?.id} />
-          </div>
-
-          {/* Hierarchy selectors */}
-          {programmes.length > 0 && (
-            <div>
-              <Label>Programme</Label>
-              <Select value={selectedProgrammeId || "__none__"} onValueChange={handleProgrammeChange}>
-                <SelectTrigger className="mt-1"><SelectValue placeholder="All programmes" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">None</SelectItem>
-                  {programmes.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-
-          <div>
-            <Label>Project</Label>
-            <Select value={selectedProjectId || "__none__"} onValueChange={handleProjectChange}>
-              <SelectTrigger className="mt-1"><SelectValue placeholder="None" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">None</SelectItem>
-                {filteredProjects.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Textarea
+              id="task"
+              value={form.task}
+              onChange={(e) => setForm({ ...form, task: e.target.value })}
+              className="mt-1"
+              rows={2}
+              maxLength={500}
+              autoFocus
+            />
+            <DuplicateHint query={form.task} excludeActionId={action?.id} />
           </div>
 
           <div>
-            <Label>Work Package</Label>
-            <Select value={currentWPId} onValueChange={handleWPChange}>
-              <SelectTrigger className="mt-1"><SelectValue placeholder="None" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">None</SelectItem>
-                {filteredWPs.map((wp) => (
-                  <SelectItem key={wp.id} value={wp.id}>{wp.workPackage}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label htmlFor="action-node">Linked to</Label>
+            <NodePicker
+              id="action-node"
+              value={form.wbsNodeId}
+              onChange={(id) => setForm({ ...form, wbsNodeId: id })}
+              includeNone
+              noneLabel="(unassigned)"
+              placeholder="Choose a portfolio, programme, project, or WP"
+              className="mt-1"
+            />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label htmlFor="start">Start Date</Label>
-              <Input id="start" type="date" value={form.startDate ?? ""} onChange={(e) => setForm({ ...form, startDate: e.target.value })} className="mt-1" />
+              <Label htmlFor="start">Start date</Label>
+              <Input
+                id="start"
+                type="date"
+                value={form.startDate}
+                onChange={(e) => setForm({ ...form, startDate: e.target.value })}
+                className="mt-1"
+              />
             </div>
             <div>
-              <Label htmlFor="due">Due Date</Label>
-              <Input id="due" type="date" value={form.dueDate ?? ""} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} className="mt-1" />
+              <Label htmlFor="due">Due date</Label>
+              <Input
+                id="due"
+                type="date"
+                value={form.dueDate}
+                onChange={(e) => setForm({ ...form, dueDate: e.target.value })}
+                className="mt-1"
+              />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+
+          <div className="grid grid-cols-2 gap-3">
             <div>
               <Label>Priority</Label>
-              <Select value={form.priority} onValueChange={(v) => setForm({ ...form, priority: v as Priority })}>
+              <Select value={form.priority} onValueChange={(v) => setForm({ ...form, priority: v as ActionPriority })}>
                 <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                <SelectContent>{priorities.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
+                <SelectContent>
+                  {PRIORITIES.map((p) => <SelectItem key={p} value={p}>{PRIORITY_LABEL[p]}</SelectItem>)}
+                </SelectContent>
               </Select>
             </div>
             <div>
               <Label>Status</Label>
-              <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v as TaskStatus })}>
+              <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v as ActionStatus })}>
                 <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                <SelectContent>{statuses.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                <SelectContent>
+                  {STATUSES.map((s) => <SelectItem key={s} value={s}>{STATUS_LABEL[s]}</SelectItem>)}
+                </SelectContent>
               </Select>
             </div>
           </div>
+
           <div>
             <Label htmlFor="notes">Notes</Label>
             <NotesWithLinks
-              value={form.notes ?? ""}
+              value={form.notes}
               onChange={(next) => setForm({ ...form, notes: next })}
               rows={2}
               maxLength={1000}
               placeholder="Add notes. Paste a URL — it'll appear as a link chip below."
             />
           </div>
+
           <div>
             <Label className="flex items-center gap-1.5"><Tag className="h-3.5 w-3.5" /> Labels</Label>
             <div className="flex flex-wrap gap-1.5 mt-1.5">
-              {(form.labels ?? []).map((label) => (
+              {form.labels.map((label) => (
                 <Badge key={label} variant="secondary" className="gap-1 pr-1">
                   {label}
                   <button type="button" onClick={() => removeLabel(label)} className="rounded-full hover:bg-muted-foreground/20 p-0.5">
@@ -317,15 +274,15 @@ export function ActionDialog({ open, onOpenChange, action, onSave, onDelete, onD
               </Button>
             </div>
           </div>
-          <div>
-            <Label>Attachments</Label>
-            <div className="mt-1">
-              <TaskAttachments itemId={isEdit ? action?.id : undefined} itemType="action" isNew={!isEdit} />
-          </div>
-          <TaskComments itemId={isEdit ? action?.id : undefined} itemType="action" />
+
+          {isEdit && action && (
+            <>
+              <TaskAttachments actionId={action.id} />
+              <TaskComments actionId={action.id} />
+            </>
+          )}
         </div>
-        </div>
-        <DialogFooter className="flex justify-between">
+        <DialogFooter className="flex flex-wrap justify-between gap-2">
           <div className="flex gap-2">
             {isEdit && onDelete && (
               <Button variant="destructive" size="sm" onClick={() => { onDelete(action!.id); onOpenChange(false); }}>
@@ -340,8 +297,20 @@ export function ActionDialog({ open, onOpenChange, action, onSave, onDelete, onD
           </div>
           {showDelegate ? (
             <div className="flex gap-2 items-center ml-auto">
-              <Input placeholder="Assigned to…" value={delegateTo} onChange={(e) => setDelegateTo(e.target.value)} className="w-40" />
-              <Button size="sm" disabled={!delegateTo.trim()} onClick={() => { onDelegate!(action!.id, delegateTo.trim()); onOpenChange(false); }}>
+              <Input
+                placeholder="Delegated to (name)"
+                value={delegateTo}
+                onChange={(e) => setDelegateTo(e.target.value)}
+                className="w-40"
+              />
+              <Button
+                size="sm"
+                disabled={!delegateTo.trim()}
+                onClick={() => {
+                  onDelegate!(action!.id, { fromWhomText: delegateTo.trim() });
+                  onOpenChange(false);
+                }}
+              >
                 Confirm
               </Button>
               <Button variant="ghost" size="sm" onClick={() => setShowDelegate(false)}>Cancel</Button>
@@ -349,7 +318,7 @@ export function ActionDialog({ open, onOpenChange, action, onSave, onDelete, onD
           ) : (
             <div className="flex gap-2 ml-auto">
               <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-              <Button onClick={handleSave} disabled={!form.task?.trim()}>Save</Button>
+              <Button onClick={handleSave} disabled={!form.task.trim()}>Save</Button>
             </div>
           )}
         </DialogFooter>

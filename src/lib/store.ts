@@ -77,6 +77,7 @@ interface AppState {
   addInboxItem: (item: InboxItem) => void;
   addInboxItems: (items: InboxItem[]) => void;
   updateInboxItem: (id: string, updates: Partial<InboxItem>) => void;
+  bulkUpdateInboxItems: (ids: string[], updates: Partial<InboxItem>) => void;
   deleteInboxItem: (id: string) => void;
   bulkDeleteInboxItems: (ids: string[]) => void;
   promoteInboxToActions: (ids: string[]) => void;
@@ -858,6 +859,13 @@ export const useAppStore = create<AppState>()((set, get) => ({
     runWrite(
       "Inbox update could not be saved",
       supabase.from("inbox_items").update(buildDbUpdate(updates, inboxFields)).eq("id", id),
+    );
+  },
+  bulkUpdateInboxItems: (ids, updates) => {
+    set((s) => ({ inboxItems: s.inboxItems.map((i) => (ids.includes(i.id) ? { ...i, ...updates } : i)) }));
+    runWrite(
+      "Bulk inbox update could not be saved",
+      supabase.from("inbox_items").update(buildDbUpdate(updates, inboxFields)).in("id", ids),
     );
   },
   deleteInboxItem: (id) => {

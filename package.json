@@ -1,5 +1,5 @@
 {
-  "name": "vite_react_shadcn_ts",
+  "name": "pumped",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -52,7 +52,6 @@
     "exceljs": "^4.4.0",
     "framer-motion": "^12.38.0",
     "input-otp": "^1.4.2",
-    "jspdf": "^4.2.0",
     "lucide-react": "^0.462.0",
     "next-themes": "^0.3.0",
     "react": "^18.3.1",

@@ -553,23 +553,51 @@ export const useAppStore = create<AppState>()((set, get) => ({
     // They used to run inline here; that added 2-7s of cold-start latency on
     // large tenants and scaled with row count.
 
+    // Hard limit on the per-table fetch so a runaway dataset can't blow up
+    // the initial payload. Ordering by created_at DESC means the newest rows
+    // are always present — if the user is over the limit, the oldest rows
+    // are what get clipped. A real paginated load is the proper long-term
+    // fix; until then, a console warning fires below when a table hits the
+    // limit so we can see who's getting close.
+    const ROW_LIMIT = 10000;
+
     const [
       { data: programmes },
       { data: projects },
       { data: workPackages },
-      { data: actions },
-      { data: waitingItems },
-      { data: inboxItems },
+      { data: actions, count: actionsCount },
+      { data: waitingItems, count: waitingCount },
+      { data: inboxItems, count: inboxCount },
       { data: sopItems },
     ] = await Promise.all([
       supabase.from("programmes").select("*"),
       supabase.from("projects").select("*"),
       supabase.from("work_packages").select("*"),
-      supabase.from("actions").select("*").eq("archived", false),
-      supabase.from("waiting_items").select("*"),
-      supabase.from("inbox_items").select("*"),
+      supabase.from("actions")
+        .select("*", { count: "estimated" })
+        .eq("archived", false)
+        .order("created_at", { ascending: false })
+        .limit(ROW_LIMIT),
+      supabase.from("waiting_items")
+        .select("*", { count: "estimated" })
+        .order("created_at", { ascending: false })
+        .limit(ROW_LIMIT),
+      supabase.from("inbox_items")
+        .select("*", { count: "estimated" })
+        .order("created_at", { ascending: false })
+        .limit(ROW_LIMIT),
       supabase.from("sop_items").select("*"),
     ]);
+
+    for (const [name, loaded, total] of [
+      ["actions", actions?.length ?? 0, actionsCount ?? 0],
+      ["waiting_items", waitingItems?.length ?? 0, waitingCount ?? 0],
+      ["inbox_items", inboxItems?.length ?? 0, inboxCount ?? 0],
+    ] as const) {
+      if (loaded >= ROW_LIMIT && total > loaded) {
+        console.warn(`[store] ${name}: loaded ${loaded} of ~${total} rows (limit hit). Older rows are not visible until pagination ships.`);
+      }
+    }
 
     const mapProgramme = (r: any): Programme => ({ id: r.id, name: r.name, description: r.description });
     const mapProject = (r: any): Project => ({ id: r.id, name: r.name, description: r.description, programmeId: r.programme_id, status: r.status });

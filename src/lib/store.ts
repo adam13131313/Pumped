@@ -125,15 +125,43 @@ async function persistAction(action: Action) {
 const GATHERED_KEY = "pumped-gathered";
 const LEGACY_TODAY_KEY = `p3m-today-${new Date().toISOString().slice(0, 10)}`;
 
+let cloudSaveTimer: ReturnType<typeof setTimeout> | null = null;
+function persistGatheredToCloud(payload: {
+  ids: string[];
+  schedule: Record<string, number>;
+  durations: Record<string, number>;
+  order: string[];
+}) {
+  if (cloudSaveTimer) clearTimeout(cloudSaveTimer);
+  cloudSaveTimer = setTimeout(async () => {
+    try {
+      const uid = await getUserId();
+      if (!uid) return;
+      await supabase.from("gathered_state").upsert({
+        user_id: uid,
+        ids: payload.ids as any,
+        schedule: payload.schedule as any,
+        durations: payload.durations as any,
+        order_ids: payload.order as any,
+        updated_at: new Date().toISOString(),
+      });
+    } catch (e) {
+      console.error("[gathered] cloud save failed", e);
+    }
+  }, 400);
+}
+
 function saveTodayState(todayIds: Set<string>, scheduleMap: Record<string, number>, durationMap: Record<string, number>, todayOrder: string[]) {
+  const payload = {
+    ids: Array.from(todayIds),
+    schedule: scheduleMap,
+    durations: durationMap,
+    order: todayOrder,
+  };
   try {
-    localStorage.setItem(GATHERED_KEY, JSON.stringify({
-      ids: Array.from(todayIds),
-      schedule: scheduleMap,
-      durations: durationMap,
-      order: todayOrder,
-    }));
+    localStorage.setItem(GATHERED_KEY, JSON.stringify(payload));
   } catch {}
+  persistGatheredToCloud(payload);
 }
 
 function loadTodayState(): { todayIds: Set<string>; scheduleMap: Record<string, number>; durationMap: Record<string, number>; todayOrder: string[] } {

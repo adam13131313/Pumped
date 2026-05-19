@@ -379,29 +379,73 @@ const GATHERED_KEY = "pumped-gathered";
 const LEGACY_TODAY_KEY = `p3m-today-${new Date().toISOString().slice(0, 10)}`;
 
 let cloudSaveTimer: ReturnType<typeof setTimeout> | null = null;
+let pendingGatheredPayload: {
+  ids: string[];
+  schedule: Record<string, number>;
+  durations: Record<string, number>;
+  order: string[];
+} | null = null;
+
+async function writeGatheredNow(payload: {
+  ids: string[];
+  schedule: Record<string, number>;
+  durations: Record<string, number>;
+  order: string[];
+}) {
+  try {
+    const uid = await getUserId();
+    if (!uid) return;
+    await supabase.from("gathered_state").upsert({
+      user_id: uid,
+      ids: payload.ids as any,
+      schedule: payload.schedule as any,
+      durations: payload.durations as any,
+      order_ids: payload.order as any,
+      updated_at: new Date().toISOString(),
+    });
+  } catch (e) {
+    console.error("[gathered] cloud save failed", e);
+  }
+}
+
 function persistGatheredToCloud(payload: {
   ids: string[];
   schedule: Record<string, number>;
   durations: Record<string, number>;
   order: string[];
 }) {
+  pendingGatheredPayload = payload;
   if (cloudSaveTimer) clearTimeout(cloudSaveTimer);
-  cloudSaveTimer = setTimeout(async () => {
-    try {
-      const uid = await getUserId();
-      if (!uid) return;
-      await supabase.from("gathered_state").upsert({
-        user_id: uid,
-        ids: payload.ids as any,
-        schedule: payload.schedule as any,
-        durations: payload.durations as any,
-        order_ids: payload.order as any,
-        updated_at: new Date().toISOString(),
-      });
-    } catch (e) {
-      console.error("[gathered] cloud save failed", e);
-    }
+  cloudSaveTimer = setTimeout(() => {
+    cloudSaveTimer = null;
+    const p = pendingGatheredPayload;
+    pendingGatheredPayload = null;
+    if (p) void writeGatheredNow(p);
   }, 400);
+}
+
+// Flush any pending gathered-state save synchronously. Hooked to pagehide /
+// visibilitychange below so a debounced write isn't lost when the user closes
+// the tab or navigates away within the 400ms window. localStorage already has
+// the value — this is what makes cross-device sync survive a fast close.
+function flushPendingGathered() {
+  if (!pendingGatheredPayload) return;
+  if (cloudSaveTimer) {
+    clearTimeout(cloudSaveTimer);
+    cloudSaveTimer = null;
+  }
+  const p = pendingGatheredPayload;
+  pendingGatheredPayload = null;
+  void writeGatheredNow(p);
+}
+
+if (typeof window !== "undefined") {
+  // pagehide fires reliably on iOS Safari (where beforeunload doesn't);
+  // visibilitychange covers tab switches and PWA backgrounding.
+  window.addEventListener("pagehide", flushPendingGathered);
+  window.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") flushPendingGathered();
+  });
 }
 
 function saveTodayState(todayIds: Set<string>, scheduleMap: Record<string, number>, durationMap: Record<string, number>, todayOrder: string[]) {

@@ -292,6 +292,42 @@ export const useAppStore = create<AppState>()((set, get) => ({
     const mapInbox = (r: any): InboxItem => ({ id: r.id, task: r.task, priority: r.priority, dueDate: r.due_date, project: r.project, notes: r.notes, source: r.source, createdAt: r.created_at });
     const mapSOP = (r: any): SOPItem => ({ id: r.id, when: r.trigger_when, instruction: r.instruction });
 
+    // Hydrate gathered state from cloud (overrides localStorage so it syncs across devices)
+    try {
+      const { data: gathered } = await supabase
+        .from("gathered_state")
+        .select("*")
+        .maybeSingle();
+      if (gathered) {
+        const ids: string[] = Array.isArray(gathered.ids) ? gathered.ids as any : [];
+        const schedule = (gathered.schedule || {}) as Record<string, number>;
+        const durations = (gathered.durations || {}) as Record<string, number>;
+        const order: string[] = Array.isArray(gathered.order_ids) ? gathered.order_ids as any : ids;
+        try {
+          localStorage.setItem(GATHERED_KEY, JSON.stringify({ ids, schedule, durations, order }));
+        } catch {}
+        set({
+          todayIds: new Set(ids),
+          scheduleMap: schedule,
+          durationMap: durations,
+          todayOrder: order,
+        });
+      } else {
+        // No cloud row yet — push current local state up so it syncs going forward
+        const s = get();
+        if (s.todayIds.size > 0) {
+          persistGatheredToCloud({
+            ids: Array.from(s.todayIds),
+            schedule: s.scheduleMap,
+            durations: s.durationMap,
+            order: s.todayOrder,
+          });
+        }
+      }
+    } catch (e) {
+      console.error("[gathered] cloud load failed", e);
+    }
+
     const mappedSOP = (sopItems || []).map(mapSOP);
     
     // If user has no SOP items yet, seed with defaults

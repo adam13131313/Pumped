@@ -240,14 +240,11 @@ export default function ProjectsPage() {
   };
 
   const handleSaveProject = (p: Project) => {
-    if (editProject) {
-      if (editProject.name !== p.name) {
-        workPackages.filter((wp) => wp.project === editProject.name).forEach((wp) => store.updateWorkPackage(wp.id, { project: p.name }));
-      }
-      store.updateProject(p.id, p);
-    } else {
-      store.addProject(p);
-    }
+    // Rename propagation to dependent WPs/actions/waiting/inbox rows lives in
+    // store.updateProject (cf. propagateProjectRename) so every caller benefits,
+    // not just this page.
+    if (editProject) store.updateProject(p.id, p);
+    else store.addProject(p);
   };
 
   const handleSaveWP = (wp: WorkPackage) => {

@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { Lock, ArrowRight, Loader2, CheckCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
@@ -14,7 +14,6 @@ export default function ResetPasswordPage() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [isRecovery, setIsRecovery] = useState(false);
-  const { toast } = useToast();
   const navigate = useNavigate();
 
   const [verifying, setVerifying] = useState(true);
@@ -68,20 +67,20 @@ export default function ResetPasswordPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (password !== confirmPassword) {
-      toast({ title: "Passwords don't match", variant: "destructive" });
+      toast.error("Passwords don't match");
       return;
     }
     if (password.length < 6) {
-      toast({ title: "Password must be at least 6 characters", variant: "destructive" });
+      toast.error("Password must be at least 6 characters");
       return;
     }
     setLoading(true);
     const { error } = await supabase.auth.updateUser({ password });
     if (error) {
-      toast({ title: "Failed to reset password", description: error.message, variant: "destructive" });
+      toast.error("Failed to reset password", { description: error.message });
     } else {
       setSuccess(true);
-      toast({ title: "Password updated successfully" });
+      toast.success("Password updated successfully");
       setTimeout(() => navigate("/"), 2000);
     }
     setLoading(false);

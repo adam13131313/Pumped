@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { Mail, Lock, ArrowRight, Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
 
@@ -14,7 +14,6 @@ export default function AuthPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const { toast } = useToast();
 
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,9 +22,9 @@ export default function AuthPage() {
       redirectTo: `${window.location.origin}/reset-password`,
     });
     if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast.error("Error", { description: error.message });
     } else {
-      toast({ title: "Check your email", description: "We've sent you a password reset link." });
+      toast.success("Check your email", { description: "We've sent you a password reset link." });
     }
     setLoading(false);
   };
@@ -37,7 +36,7 @@ export default function AuthPage() {
     if (isLogin) {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
-        toast({ title: "Login failed", description: error.message, variant: "destructive" });
+        toast.error("Login failed", { description: error.message });
       }
     } else {
       const { error } = await supabase.auth.signUp({
@@ -46,10 +45,9 @@ export default function AuthPage() {
         options: { emailRedirectTo: window.location.origin },
       });
       if (error) {
-        toast({ title: "Sign up failed", description: error.message, variant: "destructive" });
+        toast.error("Sign up failed", { description: error.message });
       } else {
-        toast({
-          title: "Check your email",
+        toast.success("Check your email", {
           description: "We've sent you a confirmation link to verify your account.",
         });
       }

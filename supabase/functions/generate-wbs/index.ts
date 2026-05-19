@@ -46,6 +46,16 @@ function extractAndParseJson(raw: string): any {
   throw new Error("Could not parse AI response as valid JSON. Please try again.");
 }
 
+// Defensive bounds: prevents any authenticated user from driving the model
+// with multi-MB images or runaway document arrays. Well above a realistic
+// brief + a handful of supporting screenshots.
+const MAX_DOCUMENTS = 20;
+const MAX_DOCUMENT_TOTAL_CHARS = 200_000;
+const MAX_IMAGES = 5;
+const MAX_IMAGE_DATA_URL_LEN = 4 * 1024 * 1024; // ~3MB raw after base64 overhead
+const MAX_CONTEXT_LEN = 20_000;
+const MAX_ITERATE_PROMPT_LEN = 4_000;
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -55,7 +65,42 @@ serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
-    const combinedText = (documentTexts as string[]).join("\n\n---\n\n");
+    const docs = Array.isArray(documentTexts) ? documentTexts as string[] : [];
+    if (docs.length > MAX_DOCUMENTS) {
+      return new Response(JSON.stringify({ error: `Too many documents (max ${MAX_DOCUMENTS})` }), {
+        status: 413, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const combinedText = docs.join("\n\n---\n\n");
+    if (combinedText.length > MAX_DOCUMENT_TOTAL_CHARS) {
+      return new Response(JSON.stringify({ error: `Documents exceed ${MAX_DOCUMENT_TOTAL_CHARS} characters total` }), {
+        status: 413, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (Array.isArray(images)) {
+      if (images.length > MAX_IMAGES) {
+        return new Response(JSON.stringify({ error: `Too many images (max ${MAX_IMAGES})` }), {
+          status: 413, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      for (const img of images as Array<{ name?: string; dataUrl?: string }>) {
+        if (typeof img?.dataUrl === "string" && img.dataUrl.length > MAX_IMAGE_DATA_URL_LEN) {
+          return new Response(JSON.stringify({ error: `Image '${img.name ?? "(unnamed)"}' too large` }), {
+            status: 413, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+      }
+    }
+    if (typeof additionalContext === "string" && additionalContext.length > MAX_CONTEXT_LEN) {
+      return new Response(JSON.stringify({ error: `Additional context exceeds ${MAX_CONTEXT_LEN} characters` }), {
+        status: 413, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (typeof iteratePrompt === "string" && iteratePrompt.length > MAX_ITERATE_PROMPT_LEN) {
+      return new Response(JSON.stringify({ error: `Refinement prompt exceeds ${MAX_ITERATE_PROMPT_LEN} characters` }), {
+        status: 413, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     const systemPrompt = `You are a project planning expert. Analyze the provided project documents, images, and/or context and produce a Work Breakdown Structure (WBS) with initial tasks.
 

@@ -24,7 +24,7 @@ import {
 import { TaskStatus, Action } from "@/lib/types";
 
 export default function InboxPage() {
-  const { addInboxItems, updateInboxItem, deleteInboxItem, bulkDeleteInboxItems, promoteInboxToActions, bulkAddActions, projects, workPackages, programmes } = useAppStore();
+  const { addInboxItems, bulkUpdateInboxItems, deleteInboxItem, bulkDeleteInboxItems, promoteInboxToActions, bulkAddActions, projects, workPackages, programmes } = useAppStore();
   const { inboxItems } = useFilteredData();
   const [textInput, setTextInput] = useState("");
   const [isExtracting, setIsExtracting] = useState(false);
@@ -422,14 +422,12 @@ export default function InboxPage() {
 
   const applyBulkEdit = () => {
     const ids = Array.from(selected);
-    ids.forEach((id) => {
-      const updates: Partial<InboxItem> = {};
-      if (bulkPriority) updates.priority = bulkPriority as Priority;
-      if (bulkProject) updates.project = bulkProject === "__none__" ? "" : bulkProject;
-      if (Object.keys(updates).length > 0) {
-        updateInboxItem(id, updates);
-      }
-    });
+    const updates: Partial<InboxItem> = {};
+    if (bulkPriority) updates.priority = bulkPriority as Priority;
+    if (bulkProject) updates.project = bulkProject === "__none__" ? "" : bulkProject;
+    if (Object.keys(updates).length > 0) {
+      bulkUpdateInboxItems(ids, updates);
+    }
     toast.success(`${ids.length} items updated`);
     setBulkEditMode(false);
     setBulkPriority("");

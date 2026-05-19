@@ -8,6 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Action, Priority, TaskStatus } from "@/lib/types";
 import { useAppStore } from "@/lib/store";
+import { actionSchema, firstZodError } from "@/lib/schemas";
+import { toast } from "sonner";
 import { NotesWithLinks } from "@/components/NotesWithLinks";
 import { TaskAttachments } from "@/components/TaskAttachments";
 import { TaskComments } from "@/components/TaskComments";
@@ -155,18 +157,26 @@ export function ActionDialog({ open, onOpenChange, action, onSave, onDelete, onD
   };
 
   const handleSave = () => {
-    if (!form.task?.trim()) return;
+    const parsed = actionSchema.safeParse(form);
+    if (!parsed.success) {
+      toast.error(firstZodError(parsed.error));
+      return;
+    }
+    // The schema fills in defaults at runtime; the TS output type for
+    // .default() in this zod version still includes undefined, so spread
+    // with explicit fallbacks instead of ...parsed.data.
+    const d = parsed.data;
     onSave({
       id: action?.id ?? crypto.randomUUID(),
-      task: form.task?.trim() ?? "",
-      project: form.project?.trim() ?? "",
-      workPackage: form.workPackage?.trim() ?? "",
-      startDate: form.startDate ?? "",
-      dueDate: form.dueDate ?? "",
-      priority: form.priority ?? "Medium",
-      status: form.status ?? "Not Started",
-      notes: form.notes?.trim() ?? "",
-      labels: form.labels ?? [],
+      task: d.task,
+      project: d.project ?? "",
+      workPackage: d.workPackage ?? "",
+      startDate: d.startDate ?? "",
+      dueDate: d.dueDate ?? "",
+      priority: d.priority ?? "Medium",
+      status: d.status ?? "Not Started",
+      notes: d.notes ?? "",
+      labels: d.labels ?? [],
     });
     onOpenChange(false);
   };

@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import {
   Copy, Loader2, Plus, Trash2, Plug, AlertTriangle, RefreshCw, Send, ChevronDown, ChevronRight, Zap, Sparkles,
 } from "lucide-react";
@@ -74,7 +74,6 @@ function jsSnippet(token: string) {
 
 export default function IntegrationsPage() {
   const { user } = useAuth();
-  const { toast } = useToast();
   const [sources, setSources] = useState<Source[]>([]);
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState("");
@@ -89,7 +88,7 @@ export default function IntegrationsPage() {
       .from("ingest_sources")
       .select("id, name, slug, token_prefix, last_received_at, created_at")
       .order("created_at", { ascending: false });
-    if (error) toast({ title: "Failed to load sources", description: error.message, variant: "destructive" });
+    if (error) toast.error("Failed to load sources", { description: error.message });
     else setSources(data ?? []);
     setLoading(false);
   };
@@ -101,7 +100,7 @@ export default function IntegrationsPage() {
     if (!user || !name.trim()) return;
     const slug = slugify(name);
     if (!slug) {
-      toast({ title: "Invalid name", description: "Use letters/numbers", variant: "destructive" });
+      toast.error("Invalid name", { description: "Use letters/numbers" });
       return;
     }
     setCreating(true);
@@ -121,7 +120,7 @@ export default function IntegrationsPage() {
       .single();
     setCreating(false);
     if (error || !data) {
-      toast({ title: "Failed to create source", description: error?.message, variant: "destructive" });
+      toast.error("Failed to create source", { description: error?.message });
       return;
     }
     setNewToken({ token, name: name.trim(), sourceId: data.id });
@@ -140,7 +139,7 @@ export default function IntegrationsPage() {
       .update({ token_hash: tokenHash, token_prefix: tokenPrefix })
       .eq("id", source.id);
     if (error) {
-      toast({ title: "Regenerate failed", description: error.message, variant: "destructive" });
+      toast.error("Regenerate failed", { description: error.message });
       return;
     }
     setNewToken({ token, name: source.name, sourceId: source.id });
@@ -151,7 +150,7 @@ export default function IntegrationsPage() {
   const handleDelete = async (id: string) => {
     if (!confirm("Delete this source? Existing inbox items remain, but the token will stop working.")) return;
     const { error } = await supabase.from("ingest_sources").delete().eq("id", id);
-    if (error) toast({ title: "Delete failed", description: error.message, variant: "destructive" });
+    if (error) toast.error("Delete failed", { description: error.message });
     else load();
   };
 
@@ -174,23 +173,19 @@ export default function IntegrationsPage() {
       });
       const body = await res.json().catch(() => ({}));
       if (res.ok) {
-        toast({ title: "Test sent ✓", description: "Check your Rapid Capture inbox." });
+        toast.success("Test sent ✓", { description: "Check your Rapid Capture inbox." });
       } else {
-        toast({
-          title: `Test failed (${res.status})`,
-          description: body?.error ?? "Unknown error",
-          variant: "destructive",
-        });
+        toast.error(`Test failed (${res.status})`, { description: body?.error ?? "Unknown error" });
       }
     } catch (e) {
-      toast({ title: "Test failed", description: e instanceof Error ? e.message : "Network error", variant: "destructive" });
+      toast.error("Test failed", { description: e instanceof Error ? e.message : "Network error" });
     }
     setTesting(false);
   };
 
   const copy = (text: string, label = "Copied") => {
     navigator.clipboard.writeText(text);
-    toast({ title: label });
+    toast.success(label);
   };
 
   return (

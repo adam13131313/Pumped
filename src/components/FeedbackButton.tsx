@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { supabase } from "@/integrations/supabase/client";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 type FeedbackType = "bug" | "feature" | "other";
 
@@ -44,7 +44,7 @@ export function FeedbackButton() {
 
   const submit = async () => {
     if (!title.trim()) {
-      toast({ title: "Add a short title", variant: "destructive" });
+      toast.error("Add a short title");
       return;
     }
     setSubmitting(true);
@@ -52,10 +52,8 @@ export function FeedbackButton() {
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData?.session?.access_token;
       if (!accessToken) {
-        toast({
-          title: "Please sign in",
+        toast.error("Please sign in", {
           description: "You need to be signed in to send feedback.",
-          variant: "destructive",
         });
         setSubmitting(false);
         return;
@@ -74,18 +72,15 @@ export function FeedbackButton() {
       );
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-      toast({
-        title: "Sent!",
+      toast.success("Sent!", {
         description: data?.github_issue_url
           ? "Created a GitHub issue for the team."
           : "Saved — the team will review it.",
       });
       setOpen(false);
     } catch (e) {
-      toast({
-        title: "Could not send",
+      toast.error("Could not send", {
         description: e instanceof Error ? e.message : "Unknown error",
-        variant: "destructive",
       });
     } finally {
       setSubmitting(false);

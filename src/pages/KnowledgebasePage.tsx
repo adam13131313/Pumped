@@ -10,7 +10,7 @@ import {
   FileText, Inbox, Search, Filter, Paperclip, Smartphone, Send, Bot, User, Lightbulb, Loader2, Trash2, Plug,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 const sections = [
   { id: "actions", icon: CheckSquare, title: "My Actions (with Gathered focus)", content: `My Actions is your personal task list and your daily command centre — everything you need to do, all in one place. The old separate Dashboard has been folded in here.\n\n**Key features:**\n- Add new actions with a title, project, work package, due date, and priority.\n- Update status: Not Started → In Progress → Complete.\n- Delegate an action to someone else — it moves automatically to Waiting For.\n- Filter by project or priority to focus on what matters.\n\n**Gathered (your daily focus):**\n- Click the sparkle/gather icon on any action to add it to your **Gathered** set — these are the items you're focused on now.\n- Gathered tasks **persist over time** until you scatter them — they don't reset at midnight.\n- Use the **"Gathered only"** toggle in the filter bar to see just your focus list (with a live count badge).\n- **Scatter all** clears the whole gathered set; or scatter individual items by clicking the gather icon again.\n- Multi-select supports bulk **Gather** / **Scatter** from the selection toolbar.` },
@@ -29,7 +29,6 @@ const sections = [
 type Msg = { id: string; role: "user" | "assistant"; content: string; created_at: string };
 
 export default function KnowledgebasePage() {
-  const { toast } = useToast();
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -66,7 +65,7 @@ export default function KnowledgebasePage() {
       if (data?.error) throw new Error(data.error);
       setMessages((m) => [...m, { id: `tmp-a-${Date.now()}`, role: "assistant", content: data.reply, created_at: new Date().toISOString() }]);
     } catch (e) {
-      toast({ title: "Chat failed", description: e instanceof Error ? e.message : "Unknown error", variant: "destructive" });
+      toast.error("Chat failed", { description: e instanceof Error ? e.message : "Unknown error" });
     } finally {
       setSending(false);
     }
@@ -75,7 +74,7 @@ export default function KnowledgebasePage() {
   const clearChat = async () => {
     const { error } = await supabase.from("kb_chat_messages").delete().not("id", "is", null);
     if (error) {
-      toast({ title: "Could not clear chat", description: error.message, variant: "destructive" });
+      toast.error("Could not clear chat", { description: error.message });
       return;
     }
     setMessages([]);
@@ -91,7 +90,7 @@ export default function KnowledgebasePage() {
 
   const submitSuggestion = async () => {
     if (suggestTitle.trim().length < 3) {
-      toast({ title: "Title too short", variant: "destructive" });
+      toast.error("Title too short");
       return;
     }
     setSubmittingSuggest(true);
@@ -101,15 +100,14 @@ export default function KnowledgebasePage() {
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-      toast({
-        title: "Suggestion sent!",
+      toast.success("Suggestion sent!", {
         description: data?.github_issue_url ? "Created a GitHub issue for the team." : "Saved — the team will review it.",
       });
       setSuggestOpen(false);
       setSuggestTitle("");
       setSuggestDesc("");
     } catch (e) {
-      toast({ title: "Could not send", description: e instanceof Error ? e.message : "Unknown error", variant: "destructive" });
+      toast.error("Could not send", { description: e instanceof Error ? e.message : "Unknown error" });
     } finally {
       setSubmittingSuggest(false);
     }

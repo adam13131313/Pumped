@@ -5,13 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { Mail, Lock, Loader2, ArrowRight } from "lucide-react";
 
 
 export default function SettingsPage() {
   const { user } = useAuth();
-  const { toast } = useToast();
 
   // Email change
   const [newEmail, setNewEmail] = useState("");
@@ -30,10 +29,9 @@ export default function SettingsPage() {
       email: newEmail,
     });
     if (error) {
-      toast({ title: "Failed to update email", description: error.message, variant: "destructive" });
+      toast.error("Failed to update email", { description: error.message });
     } else {
-      toast({
-        title: "Confirmation sent",
+      toast.success("Confirmation sent", {
         description: "Check both your old and new email addresses to confirm the change.",
       });
       setNewEmail("");
@@ -44,19 +42,19 @@ export default function SettingsPage() {
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newPassword !== confirmPassword) {
-      toast({ title: "Passwords don't match", variant: "destructive" });
+      toast.error("Passwords don't match");
       return;
     }
     if (newPassword.length < 6) {
-      toast({ title: "Password must be at least 6 characters", variant: "destructive" });
+      toast.error("Password must be at least 6 characters");
       return;
     }
     setPasswordLoading(true);
     const { error } = await supabase.auth.updateUser({ password: newPassword });
     if (error) {
-      toast({ title: "Failed to update password", description: error.message, variant: "destructive" });
+      toast.error("Failed to update password", { description: error.message });
     } else {
-      toast({ title: "Password updated successfully" });
+      toast.success("Password updated successfully");
       setNewPassword("");
       setConfirmPassword("");
     }

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { Copy, Loader2, Plus, Trash2, Plug } from "lucide-react";
 
 type Source = {
@@ -37,7 +37,6 @@ function generateToken() {
 
 export default function IngestSourcesSection() {
   const { user } = useAuth();
-  const { toast } = useToast();
   const [sources, setSources] = useState<Source[]>([]);
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState("");
@@ -50,7 +49,7 @@ export default function IngestSourcesSection() {
       .from("ingest_sources")
       .select("id, name, slug, token_prefix, last_received_at, created_at")
       .order("created_at", { ascending: false });
-    if (error) toast({ title: "Failed to load sources", description: error.message, variant: "destructive" });
+    if (error) toast.error("Failed to load sources", { description: error.message });
     else setSources(data ?? []);
     setLoading(false);
   };
@@ -62,7 +61,7 @@ export default function IngestSourcesSection() {
     if (!user || !name.trim()) return;
     const slug = slugify(name);
     if (!slug) {
-      toast({ title: "Invalid name", description: "Use letters/numbers", variant: "destructive" });
+      toast.error("Invalid name", { description: "Use letters/numbers" });
       return;
     }
     setCreating(true);
@@ -78,7 +77,7 @@ export default function IngestSourcesSection() {
     });
     setCreating(false);
     if (error) {
-      toast({ title: "Failed to create source", description: error.message, variant: "destructive" });
+      toast.error("Failed to create source", { description: error.message });
       return;
     }
     setNewToken({ token, name: name.trim() });
@@ -89,13 +88,13 @@ export default function IngestSourcesSection() {
   const handleDelete = async (id: string) => {
     if (!confirm("Delete this source? Existing inbox items remain, but the token will stop working.")) return;
     const { error } = await supabase.from("ingest_sources").delete().eq("id", id);
-    if (error) toast({ title: "Delete failed", description: error.message, variant: "destructive" });
+    if (error) toast.error("Delete failed", { description: error.message });
     else load();
   };
 
   const copy = (text: string) => {
     navigator.clipboard.writeText(text);
-    toast({ title: "Copied" });
+    toast.success("Copied");
   };
 
   return (

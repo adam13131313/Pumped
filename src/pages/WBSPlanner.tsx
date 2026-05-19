@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { Upload, Sparkles, Trash2, Plus, Check, FileText, X, Loader2 } from "lucide-react";
 
 interface WBSAction {
@@ -41,7 +41,6 @@ interface WBSResult {
 }
 
 export default function WBSPlanner() {
-  const { toast } = useToast();
   const store = useAppStore();
 
   const [files, setFiles] = useState<File[]>([]);
@@ -103,7 +102,7 @@ export default function WBSPlanner() {
 
   const handleGenerate = async () => {
     if (files.length === 0 && !additionalContext.trim()) {
-      toast({ title: "Please upload at least one document or provide context", variant: "destructive" });
+      toast.error("Please upload at least one document or provide context");
       return;
     }
 
@@ -139,9 +138,9 @@ export default function WBSPlanner() {
       // Handle legacy single-programme format
       const result = normalizeWBSResult(data);
       setWbs(result);
-      toast({ title: "Work breakdown structure generated!" });
+      toast.success("Work breakdown structure generated!");
     } catch (e: any) {
-      toast({ title: "Generation failed", description: e.message, variant: "destructive" });
+      toast.error("Generation failed", { description: e.message });
     } finally {
       setLoading(false);
     }
@@ -316,7 +315,7 @@ export default function WBSPlanner() {
     });
 
     setAccepted(true);
-    toast({ title: "Work breakdown structure accepted and added to your projects!" });
+    toast.success("Work breakdown structure accepted and added to your projects!");
   };
 
   const handleIterate = async () => {
@@ -356,9 +355,9 @@ export default function WBSPlanner() {
       const result = normalizeWBSResult(data);
       setWbs(result);
       setIteratePrompt("");
-      toast({ title: "WBS refined!" });
+      toast.success("WBS refined!");
     } catch (e: any) {
-      toast({ title: "Refinement failed", description: e.message, variant: "destructive" });
+      toast.error("Refinement failed", { description: e.message });
     } finally {
       setIterating(false);
     }

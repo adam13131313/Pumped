@@ -10,8 +10,16 @@ import { StalledHighList } from "@/components/dashboard/StalledHighList";
 import { VelocityChartWithCreated } from "@/components/dashboard/VelocityChart";
 import { WorkloadHeatmap } from "@/components/dashboard/WorkloadHeatmap";
 import { WaitingRiskMatrix } from "@/components/dashboard/WaitingRiskMatrix";
+import { RagTrendChart, WPCompletionBars } from "@/components/dashboard/RagTrendChart";
 import { WidgetTitle } from "@/components/dashboard/WidgetTitle";
 import { Gauge } from "lucide-react";
+import type { RagStatus } from "@/lib/types";
+
+interface RagHistoryRow {
+  wbs_node_id: string;
+  to_status: RagStatus;
+  recorded_at: string;
+}
 
 // v2 dashboard. Scope is keyed off useDashboardScope's nodeIdSet + predicates,
 // so widgets no longer need their own subtree-walking logic. Server-only
@@ -29,18 +37,21 @@ export default function DashboardPage() {
   const [actionMeta, setActionMeta] = useState<{ createdAt: Map<string, string>; notStartedSince: Map<string, string> }>({ createdAt: new Map(), notStartedSince: new Map() });
   const [inboxLagDays, setInboxLagDays] = useState<number | null>(null);
   const [routine7, setRoutine7] = useState<{ count: number; target: number }>({ count: 0, target: 0 });
+  const [ragHistory, setRagHistory] = useState<RagHistoryRow[]>([]);
 
   useEffect(() => {
     if (!currentOrg) return;
     let cancelled = false;
     (async () => {
       const sevenAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
-      const [actMeta, routinesRes, compsRes] = await Promise.all([
+      const [actMeta, routinesRes, compsRes, ragRes] = await Promise.all([
         supabase.from("actions").select("id,created_at,not_started_since").eq("organisation_id", currentOrg.id),
         supabase.from("routines").select("id,frequency_type,frequency_config").is("archived_at", null).eq("organisation_id", currentOrg.id),
         supabase.from("routine_completions").select("completed_date").gte("completed_date", sevenAgo).eq("organisation_id", currentOrg.id),
+        supabase.from("rag_status_history").select("wbs_node_id,to_status,recorded_at").eq("organisation_id", currentOrg.id).order("recorded_at", { ascending: true }),
       ]);
       if (cancelled) return;
+      setRagHistory((ragRes.data ?? []) as RagHistoryRow[]);
 
       const ca = new Map<string, string>();
       const ns = new Map<string, string>();
@@ -101,6 +112,11 @@ export default function DashboardPage() {
   }), [scopedActions, scopedWaiting, scopedNodes, scopedInbox, routine7, inboxLagDays]);
 
   const counts = scope.countsByType;
+  const scopedWorkPackages = useMemo(
+    () => scopedNodes.filter((n) => n.nodeType === "work_package" && !n.archivedAt),
+    [scopedNodes],
+  );
+  const isGlobalOrProgramme = scope.level === "global" || scope.level === "programme" || scope.level === "portfolio";
 
   return (
     <div className="space-y-5 pb-12">
@@ -174,27 +190,43 @@ export default function DashboardPage() {
           <CardContent><WorkloadHeatmap actions={scopedActions} /></CardContent>
         </Card>
         <Card>
+          <CardHeader className="pb-2">
+            <WidgetTitle
+              title={isGlobalOrProgramme ? "Project RAG trend" : "Work-package completion"}
+              info={isGlobalOrProgramme ? "Counts of work packages at each RAG status over the last 8 weeks." : "Percent of actions complete in each work package within this scope."}
+            />
+          </CardHeader>
+          <CardContent>
+            {isGlobalOrProgramme
+              ? <RagTrendChart history={ragHistory} nodeIdSet={scope.nodeIdSet} />
+              : <WPCompletionBars workPackages={scopedWorkPackages} actions={scopedActions} />}
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        <Card>
           <CardHeader className="pb-2"><WidgetTitle title="Waiting For risk matrix" info="Each dot is a pending waiting item. Top-left = chase now." /></CardHeader>
           <CardContent>
             <WaitingRiskMatrix waitingItems={scopedWaiting} wbsNodes={wbsNodes} />
           </CardContent>
         </Card>
+        <Card>
+          <CardHeader className="pb-2"><WidgetTitle title="At a glance" info="Quick scope summary." /></CardHeader>
+          <CardContent>
+            <dl className="grid grid-cols-2 sm:grid-cols-3 gap-y-2 text-sm">
+              <dt className="text-muted-foreground">Portfolios</dt><dd className="font-mono">{counts.portfolio}</dd>
+              <dt className="text-muted-foreground">Programmes</dt><dd className="font-mono">{counts.programme}</dd>
+              <dt className="text-muted-foreground">Projects</dt><dd className="font-mono">{counts.project}</dd>
+              <dt className="text-muted-foreground">Work packages</dt><dd className="font-mono">{counts.work_package}</dd>
+              <dt className="text-muted-foreground">Active actions</dt><dd className="font-mono">{scopedActions.length}</dd>
+              <dt className="text-muted-foreground">Pending waiting</dt><dd className="font-mono">{scopedWaiting.filter((w) => w.status === "pending").length}</dd>
+              <dt className="text-muted-foreground">Inbox items</dt><dd className="font-mono">{scopedInbox.length}</dd>
+            </dl>
+          </CardContent>
+        </Card>
       </div>
 
-      <Card>
-        <CardHeader className="pb-2"><WidgetTitle title="At a glance" info="Quick scope summary." /></CardHeader>
-        <CardContent>
-          <dl className="grid grid-cols-2 sm:grid-cols-3 gap-y-2 text-sm">
-            <dt className="text-muted-foreground">Portfolios</dt><dd className="font-mono">{counts.portfolio}</dd>
-            <dt className="text-muted-foreground">Programmes</dt><dd className="font-mono">{counts.programme}</dd>
-            <dt className="text-muted-foreground">Projects</dt><dd className="font-mono">{counts.project}</dd>
-            <dt className="text-muted-foreground">Work packages</dt><dd className="font-mono">{counts.work_package}</dd>
-            <dt className="text-muted-foreground">Active actions</dt><dd className="font-mono">{scopedActions.length}</dd>
-            <dt className="text-muted-foreground">Pending waiting</dt><dd className="font-mono">{scopedWaiting.filter((w) => w.status === "pending").length}</dd>
-            <dt className="text-muted-foreground">Inbox items</dt><dd className="font-mono">{scopedInbox.length}</dd>
-          </dl>
-        </CardContent>
-      </Card>
     </div>
   );
 }

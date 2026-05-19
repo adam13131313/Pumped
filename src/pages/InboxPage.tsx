@@ -125,8 +125,11 @@ export default function InboxPage() {
     setIsExtracting(true);
     setSourceLabel(source);
     try {
+      const existingNodes = wbsNodes
+        .filter((n) => !n.archivedAt)
+        .map((n) => ({ id: n.id, path: nodePath(wbsNodes, n.id).map((p) => p.name).join(" › ") }));
       const { data, error } = await supabase.functions.invoke("extract-tasks", {
-        body: { text, sourceType: source },
+        body: { text, sourceType: source, existingNodes },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
@@ -138,7 +141,7 @@ export default function InboxPage() {
     } finally {
       setIsExtracting(false);
     }
-  }, []);
+  }, [wbsNodes]);
 
   const readFileContent = async (file: File) => {
     const name = file.name.toLowerCase();

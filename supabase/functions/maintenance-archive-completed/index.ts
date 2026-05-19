@@ -47,14 +47,14 @@ Deno.serve(async (req) => {
   const { error: backfillErr, count: backfilled } = await supabase
     .from("actions")
     .update({ completed_at: nowIso }, { count: "exact" })
-    .eq("status", "Complete")
+    .eq("status", "complete")
     .is("completed_at", null);
 
   const { error: archiveErr, count: archived } = await supabase
     .from("actions")
-    .update({ archived: true }, { count: "exact" })
-    .eq("archived", false)
-    .eq("status", "Complete")
+    .update({ archived_at: nowIso }, { count: "exact" })
+    .is("archived_at", null)
+    .eq("status", "complete")
     .not("completed_at", "is", null)
     .lt("completed_at", archiveCutoff);
 

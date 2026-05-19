@@ -1,5 +1,7 @@
-// Weekly health-score snapshot. Iterates all users, computes score, upserts into health_score_history.
+// Weekly health-score snapshot. v2: iterate every (organisation, member),
+// compute score for that membership, upsert into health_score_history.
 // Internal cron-invoked function. verify_jwt = false.
+
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 
 const corsHeaders = {
@@ -16,18 +18,15 @@ function mondayOf(d: Date): string {
   return mon.toISOString().slice(0, 10);
 }
 
-interface ActionRow { status: string; due_date: string; completed_at: string | null; archived: boolean; }
-interface WaitingRow { status: string; due_by: string; }
-interface WPRow { rag_status: string; }
-interface InboxRow { id: string; created_at: string; }
-interface InboxEvent { inbox_item_id: string; event: string; event_at: string; created_at_snapshot: string | null; }
-interface RoutineRow { id: string; archived_at: string | null; frequency_type: string; frequency_config: any; }
-interface RoutineCompletion { routine_id: string; completed_date: string; }
+interface ActionRow { status: string; due_date: string | null; completed_at: string | null; archived_at: string | null }
+interface WaitingRow { status: string; due_by: string | null }
+interface WbsRow { node_type: string; rag_status: string | null; archived_at: string | null }
+interface RoutineRow { id: string; archived_at: string | null; frequency_type: string; frequency_config: { days?: number[]; target?: number } | null }
 
 function computeScore(opts: {
   actions: ActionRow[];
   waiting: WaitingRow[];
-  wps: WPRow[];
+  wbsNodes: WbsRow[];
   routineCompletionsLast7: number;
   routineTargetLast7: number;
   inboxLagAvgDays: number | null;
@@ -47,7 +46,7 @@ function computeScore(opts: {
   }
   const onTime = Math.round(onTimeRatio * 30);
 
-  const overdue = opts.waiting.filter((w) => w.status === "Pending" && w.due_by && new Date(w.due_by) < today).length;
+  const overdue = opts.waiting.filter((w) => w.status === "pending" && w.due_by && new Date(w.due_by) < today).length;
   const overdueWaiting = -Math.min(15, overdue * 3);
 
   let routine = 0;
@@ -56,7 +55,7 @@ function computeScore(opts: {
     routine = Math.round(ratio * 20);
   }
 
-  const reds = opts.wps.filter((wp) => wp.rag_status === "Red").length;
+  const reds = opts.wbsNodes.filter((n) => n.node_type === "work_package" && n.rag_status === "red").length;
   const rag = -Math.min(10, reds * 2);
 
   let inboxLag = 0;
@@ -66,7 +65,10 @@ function computeScore(opts: {
 
   const base = 62;
   const score = Math.max(0, Math.min(100, base + onTime + overdueWaiting + routine + rag + inboxLag));
-  return { score, onTime, overdueWaiting, routine, rag, inboxLag };
+  return {
+    score,
+    components: { base, onTime, overdueWaiting, routine, rag, inboxLag },
+  };
 }
 
 Deno.serve(async (req: Request) => {
@@ -78,76 +80,68 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    // Get distinct users from actions/waiting/wps
-    const { data: profiles, error: profErr } = await supabase.from("profiles").select("user_id");
-    if (profErr) throw profErr;
-    const userIds = Array.from(new Set((profiles ?? []).map((p: any) => p.user_id).filter(Boolean)));
+    const { data: memberships, error: memErr } = await supabase
+      .from("memberships")
+      .select("organisation_id, user_id");
+    if (memErr) throw memErr;
 
     const week = mondayOf(new Date());
-    const sevenAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+    const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
     let processed = 0;
 
-    for (const userId of userIds) {
-      const [actionsRes, waitingRes, wpsRes, inboxRes, eventsRes, routinesRes, completionsRes] = await Promise.all([
-        supabase.from("actions").select("status,due_date,completed_at,archived").eq("user_id", userId).eq("archived", false),
-        supabase.from("waiting_items").select("status,due_by").eq("user_id", userId),
-        supabase.from("work_packages").select("rag_status").eq("user_id", userId),
-        supabase.from("inbox_items").select("id,created_at").eq("user_id", userId).gte("created_at", sevenAgo),
-        supabase.from("inbox_item_events").select("inbox_item_id,event,event_at,created_at_snapshot").eq("user_id", userId).eq("event", "promoted").gte("event_at", sevenAgo),
-        supabase.from("routines").select("id,archived_at,frequency_type,frequency_config").eq("user_id", userId).is("archived_at", null),
-        supabase.from("routine_completions").select("routine_id,completed_date").eq("user_id", userId).gte("completed_date", new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10)),
+    for (const m of memberships ?? []) {
+      const orgId = m.organisation_id as string;
+      const userId = m.user_id as string;
+
+      const [actionsRes, waitingRes, wbsRes, routinesRes, completionsRes] = await Promise.all([
+        supabase.from("actions").select("status,due_date,completed_at,archived_at")
+          .eq("organisation_id", orgId).is("archived_at", null),
+        supabase.from("waiting_items").select("status,due_by").eq("organisation_id", orgId),
+        supabase.from("wbs_nodes").select("node_type,rag_status,archived_at").eq("organisation_id", orgId).is("archived_at", null),
+        supabase.from("routines").select("id,archived_at,frequency_type,frequency_config")
+          .eq("organisation_id", orgId).is("archived_at", null),
+        supabase.from("routine_completions").select("routine_id,completed_date")
+          .eq("organisation_id", orgId).eq("user_id", userId).gte("completed_date", sevenDaysAgo),
       ]);
 
       const actions = (actionsRes.data ?? []) as ActionRow[];
       const waiting = (waitingRes.data ?? []) as WaitingRow[];
-      const wps = (wpsRes.data ?? []) as WPRow[];
-      const events = (eventsRes.data ?? []) as InboxEvent[];
+      const wbsNodes = (wbsRes.data ?? []) as WbsRow[];
 
-      // Inbox lag avg days from promoted events in last 7 days
-      let inboxLagAvgDays: number | null = null;
-      const lags = events
-        .map((e) => {
-          if (!e.created_at_snapshot) return null;
-          const ms = new Date(e.event_at).getTime() - new Date(e.created_at_snapshot).getTime();
-          return ms / 86400000;
-        })
-        .filter((v): v is number => v !== null && v >= 0);
-      if (lags.length > 0) inboxLagAvgDays = lags.reduce((a, b) => a + b, 0) / lags.length;
-
-      // Routine target: simple heuristic — daily routines = 7, weekly = 1, monthly = 0.25
       const routines = (routinesRes.data ?? []) as RoutineRow[];
       const routineTargetLast7 = routines.reduce((sum, r) => {
+        const cfg = r.frequency_config ?? {};
         if (r.frequency_type === "daily") return sum + 7;
-        if (r.frequency_type === "weekly") return sum + 1;
-        return sum + 0.25;
+        if (r.frequency_type === "weekly_days") return sum + (Array.isArray(cfg.days) ? cfg.days.length : 0);
+        if (r.frequency_type === "weekly_count") return sum + (cfg.target ?? 1);
+        return sum;
       }, 0);
       const routineCompletionsLast7 = (completionsRes.data ?? []).length;
 
+      // Inbox lag is deferred: v1's inbox_item_events table is gone in v2.
       const result = computeScore({
-        actions,
-        waiting,
-        wps,
+        actions, waiting, wbsNodes,
         routineCompletionsLast7,
         routineTargetLast7: Math.round(routineTargetLast7),
-        inboxLagAvgDays,
+        inboxLagAvgDays: null,
       });
 
-      // Upsert by (user_id, recorded_week)
-      await supabase
+      const { error: upErr } = await supabase
         .from("health_score_history")
         .upsert(
           {
+            organisation_id: orgId,
             user_id: userId,
-            recorded_week: week,
             score: result.score,
-            on_time_component: result.onTime,
-            overdue_waiting_component: result.overdueWaiting,
-            routine_component: result.routine,
-            rag_component: result.rag,
-            inbox_lag_component: result.inboxLag,
+            components: result.components,
+            recorded_week: week,
           },
-          { onConflict: "user_id,recorded_week" },
+          { onConflict: "organisation_id,user_id,recorded_week" },
         );
+      if (upErr) {
+        console.error("upsert error", { orgId, userId, upErr });
+        continue;
+      }
       processed++;
     }
 

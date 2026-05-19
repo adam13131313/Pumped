@@ -106,54 +106,45 @@ serve(async (req) => {
 
 CRITICAL RULES:
 - You MUST faithfully reflect the information provided by the user. Do NOT invent, hallucinate, or fabricate project names, descriptions, or details.
-- If the user provides an image showing specific projects, use EXACTLY those project names and descriptions. Do not make up new ones.
-- If the user instructs you to group projects under specific programmes, follow their instructions exactly.
+- If the user provides an image showing specific projects, use EXACTLY those project names and descriptions.
 - Only add work packages and actions that are reasonable next steps for the actual projects shown/described.
 - If information is unclear, use generic but honest placeholders rather than fabricating details.
 
 Return a JSON object with this exact structure:
 {
-  "programmes": [
+  "nodes": [
     {
-      "name": "string - programme name as specified by user",
-      "description": "string - programme description",
-      "projects": [
-        {
-          "name": "string - exact project name from user's input",
-          "description": "string - project description from user's input",
-          "workPackages": [
-            {
-              "name": "string - work package name",
-              "lead": "string - suggested lead or empty",
-              "dueDate": "string - suggested due date YYYY-MM-DD or empty",
-              "description": "string - what this work package covers",
-              "actions": [
-                {
-                  "task": "string - specific actionable task",
-                  "priority": "High" | "Medium" | "Low",
-                  "dueDate": "string - YYYY-MM-DD or empty"
-                }
-              ]
-            }
-          ]
-        }
-      ]
+      "ref":         "string — stable local id you choose (e.g. 'p1', 'prog-mvp')",
+      "parentRef":   "string | null — ref of the parent node, or null for top-level",
+      "nodeType":    "portfolio" | "programme" | "project" | "work_package",
+      "name":        "string",
+      "description": "string",
+      "lead":        "string — work_package only; suggested lead or empty",
+      "dueDate":     "string — work_package only; YYYY-MM-DD or empty"
+    }
+  ],
+  "actions": [
+    {
+      "nodeRef":  "string — ref of the work_package this action belongs to",
+      "task":     "string — specific, actionable task starting with a verb",
+      "priority": "high" | "medium" | "low",
+      "dueDate":  "string — YYYY-MM-DD or empty"
     }
   ]
 }
 
-Rules:
-- Group projects under programmes EXACTLY as instructed by the user
-- Use the EXACT project names and descriptions from the user's documents/images
-- If the user specifies multiple programmes, create multiple programme objects
-- If no programme grouping is needed, use a single programme with an empty name
-- Each project should have 2-5 work packages
-- Each work package should have 2-4 initial actions (specific, actionable tasks)
-- Actions should be concrete next steps, not vague descriptions
-- If documents mention specific people, assign them as leads
-- If dates are mentioned, use them
-- If a current WBS is provided with a refinement request, modify and improve the existing structure based on the user's feedback
-- Return ONLY the JSON, no markdown fences, no extra text`;
+Hierarchy rules:
+- portfolio is optional and can only have programme children (or no parent).
+- programme parents are portfolios (or null).
+- project parents are programmes (or null if no programme).
+- work_package parents are projects.
+- Each project should have 2-5 work packages.
+- Each work package should have 2-4 initial actions (specific, actionable tasks).
+
+Format rules:
+- All priority/nodeType values MUST be lowercase exactly as listed.
+- If a current WBS is provided with a refinement request, modify and improve the existing structure based on the user's feedback.
+- Return ONLY the JSON, no markdown fences, no extra text.`;
 
     // Build multimodal user message content
     const userParts: any[] = [];

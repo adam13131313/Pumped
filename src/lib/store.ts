@@ -219,6 +219,140 @@ function runWriteWithUid(
   );
 }
 
+// Project/WP rename + delete cascade helpers ---------------------------------
+//
+// Until project/WP linkage moves from name strings to UUID FKs (separate
+// migration), every action/waiting/inbox row that references a project or
+// work package by NAME has to be kept in sync by application code. Without
+// this, renaming a project orphans every dependent row (it disappears from
+// filtered views) and deleting one leaves dangling string references.
+//
+// `set` and `get` are accepted as parameters so these can live in module
+// scope alongside the other supabase helpers.
+
+type StoreSet = (
+  partial: AppState | Partial<AppState> | ((state: AppState) => AppState | Partial<AppState>),
+) => void;
+
+function escapeLike(s: string): string {
+  return s.replace(/[\\%_]/g, "\\$&");
+}
+
+function propagateProjectRename(oldName: string, newName: string, set: StoreSet) {
+  set((s) => ({
+    workPackages: s.workPackages.map((wp) => wp.project === oldName ? { ...wp, project: newName } : wp),
+    actions: s.actions.map((a) => a.project === oldName ? { ...a, project: newName } : a),
+    inboxItems: s.inboxItems.map((i) => i.project === oldName ? { ...i, project: newName } : i),
+    waitingItems: s.waitingItems.map((w) => {
+      if (!w.projectWP) return w;
+      const parts = w.projectWP.split(" / ");
+      if (parts[0] !== oldName) return w;
+      return { ...w, projectWP: [newName, ...parts.slice(1)].join(" / ") };
+    }),
+  }));
+
+  runWrite("Project rename propagation (work packages)", supabase.from("work_packages").update({ project: newName }).eq("project", oldName));
+  runWrite("Project rename propagation (actions)", supabase.from("actions").update({ project: newName }).eq("project", oldName));
+  runWrite("Project rename propagation (inbox)", supabase.from("inbox_items").update({ project: newName }).eq("project", oldName));
+  runWrite("Project rename propagation (waiting)", supabase.from("waiting_items").update({ project_wp: newName }).eq("project_wp", oldName));
+
+  // waiting_items with "oldName / WPName" suffix — needs a per-row rewrite
+  // because the JS client can't express UPDATE SET col = REPLACE(col, ...).
+  void (async () => {
+    const { data: matches, error } = await supabase
+      .from("waiting_items")
+      .select("id, project_wp")
+      .like("project_wp", `${escapeLike(oldName)} / %`);
+    if (error) {
+      notifySaveError("Waiting item rename propagation failed", error);
+      return;
+    }
+    if (!matches || matches.length === 0) return;
+    await Promise.all(matches.map((m: { id: string; project_wp: string }) => {
+      const newProjectWP = newName + m.project_wp.slice(oldName.length);
+      return supabase.from("waiting_items").update({ project_wp: newProjectWP }).eq("id", m.id);
+    }));
+  })();
+}
+
+function cascadeProjectDelete(projectName: string, set: StoreSet) {
+  set((s) => ({
+    workPackages: s.workPackages.filter((wp) => wp.project !== projectName),
+    actions: s.actions.map((a) => a.project === projectName ? { ...a, project: "", workPackage: "" } : a),
+    inboxItems: s.inboxItems.map((i) => i.project === projectName ? { ...i, project: "" } : i),
+    waitingItems: s.waitingItems.map((w) => {
+      if (!w.projectWP) return w;
+      const parts = w.projectWP.split(" / ");
+      return parts[0] === projectName ? { ...w, projectWP: "" } : w;
+    }),
+  }));
+
+  runWrite("Project cascade (delete WPs)", supabase.from("work_packages").delete().eq("project", projectName));
+  runWrite("Project cascade (clear actions)", supabase.from("actions").update({ project: "", work_package: "" }).eq("project", projectName));
+  runWrite("Project cascade (clear inbox)", supabase.from("inbox_items").update({ project: "" }).eq("project", projectName));
+  runWrite("Project cascade (clear waiting exact)", supabase.from("waiting_items").update({ project_wp: "" }).eq("project_wp", projectName));
+
+  void (async () => {
+    const { data: matches, error } = await supabase
+      .from("waiting_items")
+      .select("id")
+      .like("project_wp", `${escapeLike(projectName)} / %`);
+    if (error) {
+      notifySaveError("Waiting items cascade failed", error);
+      return;
+    }
+    if (!matches || matches.length === 0) return;
+    const ids = matches.map((m: { id: string }) => m.id);
+    await supabase.from("waiting_items").update({ project_wp: "" }).in("id", ids);
+  })();
+}
+
+function propagateWPRename(projectName: string, oldWP: string, newWP: string, set: StoreSet) {
+  set((s) => ({
+    actions: s.actions.map((a) => a.project === projectName && a.workPackage === oldWP ? { ...a, workPackage: newWP } : a),
+    waitingItems: s.waitingItems.map((w) => {
+      if (!w.projectWP) return w;
+      const parts = w.projectWP.split(" / ");
+      if (parts[0] === projectName && parts[1] === oldWP) {
+        return { ...w, projectWP: `${projectName} / ${newWP}` };
+      }
+      return w;
+    }),
+  }));
+
+  runWrite(
+    "WP rename propagation (actions)",
+    supabase.from("actions").update({ work_package: newWP }).eq("project", projectName).eq("work_package", oldWP),
+  );
+  runWrite(
+    "WP rename propagation (waiting)",
+    supabase.from("waiting_items").update({ project_wp: `${projectName} / ${newWP}` }).eq("project_wp", `${projectName} / ${oldWP}`),
+  );
+}
+
+function cascadeWPDelete(projectName: string, wpName: string, set: StoreSet) {
+  set((s) => ({
+    actions: s.actions.map((a) => a.project === projectName && a.workPackage === wpName ? { ...a, workPackage: "" } : a),
+    waitingItems: s.waitingItems.map((w) => {
+      if (!w.projectWP) return w;
+      const parts = w.projectWP.split(" / ");
+      if (parts[0] === projectName && parts[1] === wpName) {
+        return { ...w, projectWP: projectName };
+      }
+      return w;
+    }),
+  }));
+
+  runWrite(
+    "WP cascade (clear actions)",
+    supabase.from("actions").update({ work_package: "" }).eq("project", projectName).eq("work_package", wpName),
+  );
+  runWrite(
+    "WP cascade (waiting)",
+    supabase.from("waiting_items").update({ project_wp: projectName }).eq("project_wp", `${projectName} / ${wpName}`),
+  );
+}
+
 async function persistAction(action: Action) {
   const uid = await getUserId();
   const { error } = await supabase.from("actions").insert({
@@ -518,11 +652,15 @@ export const useAppStore = create<AppState>()((set, get) => ({
     );
   },
   updateProject: (id, updates) => {
+    const before = get().projects.find((p) => p.id === id);
     set((s) => ({ projects: s.projects.map((p) => (p.id === id ? { ...p, ...updates } : p)) }));
     runWrite(
       "Project update could not be saved",
       supabase.from("projects").update(buildDbUpdate(updates, projectFields)).eq("id", id),
     );
+    if (updates.name !== undefined && before && updates.name !== before.name) {
+      propagateProjectRename(before.name, updates.name, set);
+    }
   },
   deleteProject: (id) => {
     const before = get().projects.find((p) => p.id === id);
@@ -532,6 +670,9 @@ export const useAppStore = create<AppState>()((set, get) => ({
       supabase.from("projects").delete().eq("id", id),
       before ? () => set((s) => ({ projects: [...s.projects, before] })) : undefined,
     );
+    if (before) {
+      cascadeProjectDelete(before.name, set);
+    }
   },
 
   // --- Actions ---
@@ -604,11 +745,22 @@ export const useAppStore = create<AppState>()((set, get) => ({
     );
   },
   updateWorkPackage: (id, updates) => {
+    const before = get().workPackages.find((wp) => wp.id === id);
     set((s) => ({ workPackages: s.workPackages.map((wp) => (wp.id === id ? { ...wp, ...updates } : wp)) }));
     runWrite(
       "Work package update could not be saved",
       supabase.from("work_packages").update(buildDbUpdate(updates, workPackageFields)).eq("id", id),
     );
+    if (
+      updates.workPackage !== undefined &&
+      before &&
+      updates.workPackage !== before.workPackage
+    ) {
+      // Use the (possibly new) project as the scope, so a simultaneous WP-name
+      // and project change still resolves to the right row set.
+      const projectScope = updates.project ?? before.project;
+      propagateWPRename(projectScope, before.workPackage, updates.workPackage, set);
+    }
   },
   deleteWorkPackage: (id) => {
     const before = get().workPackages.find((wp) => wp.id === id);
@@ -618,6 +770,9 @@ export const useAppStore = create<AppState>()((set, get) => ({
       supabase.from("work_packages").delete().eq("id", id),
       before ? () => set((s) => ({ workPackages: [...s.workPackages, before] })) : undefined,
     );
+    if (before) {
+      cascadeWPDelete(before.project, before.workPackage, set);
+    }
   },
 
   // --- Waiting Items ---

@@ -408,7 +408,7 @@ export default function MyActions() {
           No actions match your filters.
         </div>
       ) : view === "list" ? (
-        <ListView actions={actions} onEdit={handleEdit} selected={selected} onToggle={toggleSelect} onToggleAll={toggleAll} />
+        <ListView actions={actions} onEdit={handleEdit} selected={selected} onToggle={toggleSelect} onToggleAll={toggleAll} workPackages={workPackages} onApplyWP={(id, project, workPackage) => updateAction(id, { project, workPackage })} />
       ) : (
         <KanbanView
           actions={actions}

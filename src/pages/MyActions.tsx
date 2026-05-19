@@ -513,7 +513,7 @@ function ListView({ actions, onEdit, selected, onToggle, onToggleAll, workPackag
             {actions.map((a) => {
               const gathered = todayIds.has(a.id);
               const isSelected = selected.has(a.id);
-              const unassigned = !a.workPackage;
+              const unassigned = !(a.workPackage ?? "").trim();
               const suggestion = suggestions[a.id];
               const isLoading = loadingId === a.id;
               return (
@@ -613,7 +613,7 @@ function ListView({ actions, onEdit, selected, onToggle, onToggleAll, workPackag
         {actions.map((a) => {
           const gathered = todayIds.has(a.id);
           const isSelected = selected.has(a.id);
-          const unassigned = !a.workPackage;
+          const unassigned = !(a.workPackage ?? "").trim();
           const suggestion = suggestions[a.id];
           const isLoading = loadingId === a.id;
           return (

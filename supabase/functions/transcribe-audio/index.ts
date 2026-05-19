@@ -16,6 +16,12 @@ function uint8ToBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
+// Defensive cap: a 25 MB audio file is comfortably more than an hour of
+// compressed voice memo; well below model input limits but bounds what any
+// authenticated user can push at the LLM in one call.
+const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
+const ALLOWED_MIME_PREFIXES = ["audio/"];
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -31,10 +37,20 @@ serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    if (audioFile.size > MAX_AUDIO_BYTES) {
+      return new Response(JSON.stringify({ error: `Audio file exceeds ${MAX_AUDIO_BYTES / 1024 / 1024} MB` }), {
+        status: 413, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const mimeType = audioFile.type || "audio/webm";
+    if (!ALLOWED_MIME_PREFIXES.some((p) => mimeType.startsWith(p))) {
+      return new Response(JSON.stringify({ error: `Unsupported MIME type: ${mimeType}` }), {
+        status: 415, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     const arrayBuffer = await audioFile.arrayBuffer();
     const base64 = uint8ToBase64(new Uint8Array(arrayBuffer));
-    const mimeType = audioFile.type || "audio/webm";
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",

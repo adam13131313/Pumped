@@ -6,6 +6,12 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+// Defensive bounds so any authenticated user can't drive arbitrarily large
+// LLM calls. Below the model's context window and well above a realistic
+// meeting note / email thread.
+const MAX_TEXT_LEN = 50_000;
+const MAX_EXISTING_PROJECTS = 200;
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -20,6 +26,18 @@ serve(async (req) => {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+    if (text.length > MAX_TEXT_LEN) {
+      return new Response(
+        JSON.stringify({ error: `Text exceeds ${MAX_TEXT_LEN} characters` }),
+        { status: 413, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+    if (Array.isArray(existingProjects) && existingProjects.length > MAX_EXISTING_PROJECTS) {
+      return new Response(
+        JSON.stringify({ error: `Too many existing projects (max ${MAX_EXISTING_PROJECTS})` }),
+        { status: 413, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
 
     const projectList = Array.isArray(existingProjects) && existingProjects.length > 0

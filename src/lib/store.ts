@@ -105,6 +105,18 @@ function notifySaveError(message: string, error: unknown) {
   toast.error(message, { description });
 }
 
+// Matches the ingest-task edge function's 5000-char cap on notes. Forms already
+// limit user input below this; this is the defensive bound for programmatic
+// paths (AI extraction, future imports) so LinkRenderer's URL regex can never
+// be fed an unbounded blob.
+const NOTES_MAX_LENGTH = 5000;
+
+function clampNotesField<T extends { notes?: string }>(patch: T): T {
+  if (typeof patch.notes !== "string" || patch.notes.length <= NOTES_MAX_LENGTH) return patch;
+  console.warn(`[store] notes truncated from ${patch.notes.length} to ${NOTES_MAX_LENGTH} chars`);
+  return { ...patch, notes: patch.notes.slice(0, NOTES_MAX_LENGTH) };
+}
+
 // Maps a Partial<T> domain patch into a snake-case DB update payload, dropping
 // any field not present in `fieldMap`. Replaces the 8+ duplicated `dbUpdates: any`
 // blocks that previously had to be kept in sync by hand — that drift was the
@@ -356,18 +368,19 @@ function cascadeWPDelete(projectName: string, wpName: string, set: StoreSet) {
 
 async function persistAction(action: Action) {
   const uid = await getUserId();
+  const safe = clampNotesField(action);
   const { error } = await supabase.from("actions").insert({
-    id: action.id,
+    id: safe.id,
     user_id: uid,
-    task: action.task,
-    project: action.project,
-    work_package: action.workPackage,
-    start_date: action.startDate,
-    due_date: action.dueDate,
-    priority: action.priority,
-    status: action.status,
-    notes: action.notes,
-    labels: action.labels || [],
+    task: safe.task,
+    project: safe.project,
+    work_package: safe.workPackage,
+    start_date: safe.startDate,
+    due_date: safe.dueDate,
+    priority: safe.priority,
+    status: safe.status,
+    notes: safe.notes,
+    labels: safe.labels || [],
   });
   if (error) throw error;
 }
@@ -750,16 +763,17 @@ export const useAppStore = create<AppState>()((set, get) => ({
 
   // --- Actions ---
   addAction: (action) => {
-    set((s) => ({ actions: [...s.actions, action] }));
-    persistAction(action).catch((error) => {
-      set((s) => ({ actions: s.actions.filter((a) => a.id !== action.id) }));
+    const safe = clampNotesField(action);
+    set((s) => ({ actions: [...s.actions, safe] }));
+    persistAction(safe).catch((error) => {
+      set((s) => ({ actions: s.actions.filter((a) => a.id !== safe.id) }));
       notifySaveError("Action could not be saved", error);
     });
   },
   updateAction: (id, updates) => {
     // Track completed_at when status changes to Complete
     const currentAction = get().actions.find((a) => a.id === id);
-    const patch: Partial<Action> & { completedAt?: string | null } = { ...updates };
+    const patch: Partial<Action> & { completedAt?: string | null } = clampNotesField({ ...updates });
     if (updates.status === "Complete" && currentAction?.status !== "Complete") {
       patch.completedAt = new Date().toISOString();
     } else if (updates.status && updates.status !== "Complete") {
@@ -781,10 +795,11 @@ export const useAppStore = create<AppState>()((set, get) => ({
     );
   },
   bulkUpdateActions: (ids, updates) => {
-    set((s) => ({ actions: s.actions.map((a) => (ids.includes(a.id) ? { ...a, ...updates } : a)) }));
+    const safe = clampNotesField(updates);
+    set((s) => ({ actions: s.actions.map((a) => (ids.includes(a.id) ? { ...a, ...safe } : a)) }));
     runWrite(
       "Bulk action update could not be saved",
-      supabase.from("actions").update(buildDbUpdate(updates, actionFields)).in("id", ids),
+      supabase.from("actions").update(buildDbUpdate(safe, actionFields)).in("id", ids),
     );
   },
   bulkDeleteActions: (ids) => {
@@ -850,28 +865,30 @@ export const useAppStore = create<AppState>()((set, get) => ({
 
   // --- Waiting Items ---
   addWaitingItem: (item) => {
-    set((s) => ({ waitingItems: [...s.waitingItems, item] }));
+    const safe = clampNotesField(item);
+    set((s) => ({ waitingItems: [...s.waitingItems, safe] }));
     runWriteWithUid(
       "Waiting item could not be saved",
       (uid) => supabase.from("waiting_items").insert({
-        id: item.id,
+        id: safe.id,
         user_id: uid,
-        description: item.description,
-        from_whom: item.fromWhom,
-        project_wp: item.projectWP,
-        asked_on: item.askedOn,
-        due_by: item.dueBy,
-        status: item.status,
-        notes: item.notes,
-        linked_project_id: item.linkedProjectId || null,
+        description: safe.description,
+        from_whom: safe.fromWhom,
+        project_wp: safe.projectWP,
+        asked_on: safe.askedOn,
+        due_by: safe.dueBy,
+        status: safe.status,
+        notes: safe.notes,
+        linked_project_id: safe.linkedProjectId || null,
       } as any),
-      () => set((s) => ({ waitingItems: s.waitingItems.filter((x) => x.id !== item.id) })),
+      () => set((s) => ({ waitingItems: s.waitingItems.filter((x) => x.id !== safe.id) })),
     );
   },
   updateWaitingItem: (id, updates) => {
-    set((s) => ({ waitingItems: s.waitingItems.map((w) => (w.id === id ? { ...w, ...updates } : w)) }));
+    const safe = clampNotesField(updates);
+    set((s) => ({ waitingItems: s.waitingItems.map((w) => (w.id === id ? { ...w, ...safe } : w)) }));
     // linked_project_id needs the empty-string-to-null coercion preserved
-    const dbUpdate = buildDbUpdate(updates, waitingFields);
+    const dbUpdate = buildDbUpdate(safe, waitingFields);
     if ("linked_project_id" in dbUpdate && !dbUpdate.linked_project_id) {
       dbUpdate.linked_project_id = null;
     }
@@ -892,28 +909,30 @@ export const useAppStore = create<AppState>()((set, get) => ({
 
   // --- Inbox Items ---
   addInboxItem: (item) => {
-    set((s) => ({ inboxItems: [...s.inboxItems, item] }));
+    const safe = clampNotesField(item);
+    set((s) => ({ inboxItems: [...s.inboxItems, safe] }));
     runWriteWithUid(
       "Inbox item could not be saved",
       (uid) => supabase.from("inbox_items").insert({
-        id: item.id,
+        id: safe.id,
         user_id: uid,
-        task: item.task,
-        priority: item.priority,
-        due_date: item.dueDate,
-        project: item.project,
-        notes: item.notes,
-        source: item.source,
+        task: safe.task,
+        priority: safe.priority,
+        due_date: safe.dueDate,
+        project: safe.project,
+        notes: safe.notes,
+        source: safe.source,
       }),
-      () => set((s) => ({ inboxItems: s.inboxItems.filter((x) => x.id !== item.id) })),
+      () => set((s) => ({ inboxItems: s.inboxItems.filter((x) => x.id !== safe.id) })),
     );
   },
   addInboxItems: (items) => {
-    set((s) => ({ inboxItems: [...s.inboxItems, ...items] }));
-    const newIds = items.map((i) => i.id);
+    const safeItems = items.map(clampNotesField);
+    set((s) => ({ inboxItems: [...s.inboxItems, ...safeItems] }));
+    const newIds = safeItems.map((i) => i.id);
     runWriteWithUid(
       "Inbox items could not be saved",
-      (uid) => supabase.from("inbox_items").insert(items.map((i) => ({
+      (uid) => supabase.from("inbox_items").insert(safeItems.map((i) => ({
         id: i.id,
         user_id: uid,
         task: i.task,
@@ -927,17 +946,19 @@ export const useAppStore = create<AppState>()((set, get) => ({
     );
   },
   updateInboxItem: (id, updates) => {
-    set((s) => ({ inboxItems: s.inboxItems.map((i) => (i.id === id ? { ...i, ...updates } : i)) }));
+    const safe = clampNotesField(updates);
+    set((s) => ({ inboxItems: s.inboxItems.map((i) => (i.id === id ? { ...i, ...safe } : i)) }));
     runWrite(
       "Inbox update could not be saved",
-      supabase.from("inbox_items").update(buildDbUpdate(updates, inboxFields)).eq("id", id),
+      supabase.from("inbox_items").update(buildDbUpdate(safe, inboxFields)).eq("id", id),
     );
   },
   bulkUpdateInboxItems: (ids, updates) => {
-    set((s) => ({ inboxItems: s.inboxItems.map((i) => (ids.includes(i.id) ? { ...i, ...updates } : i)) }));
+    const safe = clampNotesField(updates);
+    set((s) => ({ inboxItems: s.inboxItems.map((i) => (ids.includes(i.id) ? { ...i, ...safe } : i)) }));
     runWrite(
       "Bulk inbox update could not be saved",
-      supabase.from("inbox_items").update(buildDbUpdate(updates, inboxFields)).in("id", ids),
+      supabase.from("inbox_items").update(buildDbUpdate(safe, inboxFields)).in("id", ids),
     );
   },
   deleteInboxItem: (id) => {

@@ -9,8 +9,8 @@ import MyActions from "@/pages/MyActions";
 import DashboardPage from "@/pages/DashboardPage";
 import WaitingFor from "@/pages/WaitingFor";
 import SOPPage from "@/pages/SOPPage";
-import ProjectsPage from "@/pages/ProjectsPage";
-import ProjectDetailPage from "@/pages/ProjectDetailPage";
+import WbsPage from "@/pages/WbsPage";
+import WbsNodeDetailPage from "@/pages/WbsNodeDetailPage";
 import WBSPlanner from "@/pages/WBSPlanner";
 import RoutinesPage from "@/pages/RoutinesPage";
 
@@ -66,8 +66,11 @@ function ProtectedRoutes() {
           <Route path="/" element={<MyActions />} />
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/inbox" element={<InboxPage />} />
-          <Route path="/projects" element={<ProjectsPage />} />
-          <Route path="/projects/:projectId" element={<ProjectDetailPage />} />
+          <Route path="/wbs" element={<WbsPage />} />
+          <Route path="/wbs/:nodeId" element={<WbsNodeDetailPage />} />
+          {/* Legacy routes kept temporarily so deep links don't 404 */}
+          <Route path="/projects" element={<WbsPage />} />
+          <Route path="/projects/:nodeId" element={<WbsNodeDetailPage />} />
           <Route path="/actions" element={<MyActions />} />
 
           <Route path="/waiting" element={<WaitingFor />} />

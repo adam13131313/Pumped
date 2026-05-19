@@ -7,7 +7,7 @@ const tabs = [
   { to: "/", label: "Actions", icon: CheckSquare },
   { to: "/inbox", label: "Capture", icon: Inbox },
   { to: "/waiting", label: "Waiting", icon: Clock },
-  { to: "/projects", label: "Projects", icon: FolderKanban },
+  { to: "/wbs", label: "WBS", icon: FolderKanban },
 ];
 
 export function MobileBottomNav() {

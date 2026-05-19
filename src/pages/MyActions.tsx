@@ -433,11 +433,62 @@ export default function MyActions() {
   );
 }
 
-function ListView({ actions, onEdit, selected, onToggle, onToggleAll }: { actions: Action[]; onEdit: (a: Action) => void; selected: Set<string>; onToggle: (id: string) => void; onToggleAll: () => void }) {
+interface WPSuggestion {
+  id: string;
+  project: string;
+  workPackage: string;
+  confidence?: string;
+  reason?: string;
+}
+
+function ListView({ actions, onEdit, selected, onToggle, onToggleAll, workPackages, onApplyWP }: { actions: Action[]; onEdit: (a: Action) => void; selected: Set<string>; onToggle: (id: string) => void; onToggleAll: () => void; workPackages: import("@/lib/types").WorkPackage[]; onApplyWP: (id: string, project: string, workPackage: string) => void }) {
   const todayIds = useAppStore((s) => s.todayIds);
   const addToday = useAppStore((s) => s.addToday);
   const removeToday = useAppStore((s) => s.removeToday);
   const allSelected = actions.length > 0 && selected.size === actions.length;
+
+  const [loadingId, setLoadingId] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<Record<string, WPSuggestion | null>>({});
+
+  const handleSuggest = async (a: Action) => {
+    if (workPackages.length === 0) {
+      toast.error("No Work Packages exist yet. Create one in the WBS Planner first.");
+      return;
+    }
+    setLoadingId(a.id);
+    try {
+      const { data, error } = await supabase.functions.invoke("suggest-work-package", {
+        body: {
+          task: a.task,
+          notes: a.notes,
+          currentProject: a.project,
+          workPackages: workPackages.map((w) => ({ id: w.id, project: w.project, workPackage: w.workPackage })),
+        },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      if (!data?.suggestion) {
+        toast.info(data?.reason || "No confident match found.");
+        setSuggestions((p) => ({ ...p, [a.id]: null }));
+      } else {
+        setSuggestions((p) => ({ ...p, [a.id]: { ...data.suggestion, confidence: data.confidence, reason: data.reason } }));
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Suggestion failed");
+    } finally {
+      setLoadingId(null);
+    }
+  };
+
+  const acceptSuggestion = (a: Action, s: WPSuggestion) => {
+    onApplyWP(a.id, s.project, s.workPackage);
+    setSuggestions((p) => { const next = { ...p }; delete next[a.id]; return next; });
+    toast.success(`Assigned to "${s.workPackage}"`);
+  };
+
+  const rejectSuggestion = (id: string) => {
+    setSuggestions((p) => { const next = { ...p }; delete next[id]; return next; });
+  };
 
   return (
     <>
@@ -462,8 +513,15 @@ function ListView({ actions, onEdit, selected, onToggle, onToggleAll }: { action
             {actions.map((a) => {
               const gathered = todayIds.has(a.id);
               const isSelected = selected.has(a.id);
+              const unassigned = !a.workPackage;
+              const suggestion = suggestions[a.id];
+              const isLoading = loadingId === a.id;
               return (
-                <tr key={a.id} className={cn("border-b last:border-0 hover:bg-muted/30 transition-colors group cursor-pointer", isSelected && "bg-accent/40")} onClick={() => onEdit(a)}>
+                <tr key={a.id} className={cn(
+                  "border-b last:border-0 hover:bg-muted/30 transition-colors group cursor-pointer",
+                  isSelected && "bg-accent/40",
+                  unassigned && !isSelected && "bg-amber-500/5 border-l-2 border-l-amber-500/60"
+                )} onClick={() => onEdit(a)}>
                   <td className="px-2 py-3" onClick={(e) => e.stopPropagation()}>
                     <Checkbox checked={isSelected} onCheckedChange={() => onToggle(a.id)} aria-label={`Select ${a.task}`} />
                   </td>
@@ -485,12 +543,56 @@ function ListView({ actions, onEdit, selected, onToggle, onToggleAll }: { action
                   </td>
                   <td className="max-w-md px-4 py-3">
                     <p className="font-medium truncate">{a.task}</p>
-                    <div className="flex items-center gap-1 mt-0.5">
-                      {a.workPackage && <span className="text-xs text-muted-foreground">{a.workPackage}</span>}
+                    <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                      {a.workPackage ? (
+                        <span className="text-xs text-muted-foreground">{a.workPackage}</span>
+                      ) : (
+                        <span className="text-[10px] font-medium uppercase tracking-wide text-amber-600 dark:text-amber-500">Unassigned WP</span>
+                      )}
                       {(a.labels?.length ?? 0) > 0 && a.labels.map((l) => (
                         <Badge key={l} variant="outline" className="text-[10px] px-1.5 py-0 h-4 font-normal">{l}</Badge>
                       ))}
                     </div>
+                    {unassigned && (
+                      <div className="mt-2" onClick={(e) => e.stopPropagation()}>
+                        {!suggestion && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs gap-1.5 border-amber-500/40 hover:bg-amber-500/10"
+                            onClick={() => handleSuggest(a)}
+                            disabled={isLoading}
+                          >
+                            {isLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                            {isLoading ? "Thinking…" : "Suggest Work Package"}
+                          </Button>
+                        )}
+                        {suggestion && (
+                          <div className="flex items-start gap-2 rounded-md border border-primary/30 bg-primary/5 p-2">
+                            <Sparkles className="h-3.5 w-3.5 text-primary mt-0.5 flex-shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs">
+                                <span className="text-muted-foreground">Suggested:</span>{" "}
+                                <span className="font-medium">{suggestion.workPackage}</span>
+                                <span className="text-muted-foreground"> · {suggestion.project}</span>
+                                {suggestion.confidence && (
+                                  <span className="ml-1.5 text-[10px] uppercase text-muted-foreground">({suggestion.confidence})</span>
+                                )}
+                              </p>
+                              {suggestion.reason && <p className="text-[11px] text-muted-foreground mt-0.5">{suggestion.reason}</p>}
+                            </div>
+                            <div className="flex gap-1 flex-shrink-0">
+                              <Button size="sm" variant="default" className="h-6 px-2 text-xs gap-1" onClick={() => acceptSuggestion(a, suggestion)}>
+                                <Check className="h-3 w-3" /> Accept
+                              </Button>
+                              <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => rejectSuggestion(a.id)}>
+                                <X className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-muted-foreground text-xs">{a.project || "—"}</td>
                   <td className="px-4 py-3 text-muted-foreground font-mono text-xs">{a.dueDate || "—"}</td>
@@ -511,13 +613,17 @@ function ListView({ actions, onEdit, selected, onToggle, onToggleAll }: { action
         {actions.map((a) => {
           const gathered = todayIds.has(a.id);
           const isSelected = selected.has(a.id);
+          const unassigned = !a.workPackage;
+          const suggestion = suggestions[a.id];
+          const isLoading = loadingId === a.id;
           return (
             <div
               key={a.id}
               onClick={() => onEdit(a)}
               className={cn(
                 "rounded-lg border bg-card p-3 transition-colors active:bg-muted/30 cursor-pointer",
-                isSelected && "bg-accent/40 border-primary/30"
+                isSelected && "bg-accent/40 border-primary/30",
+                unassigned && !isSelected && "border-l-2 border-l-amber-500/60 bg-amber-500/5"
               )}
             >
               <div className="flex items-start gap-2.5">
@@ -535,7 +641,11 @@ function ListView({ actions, onEdit, selected, onToggle, onToggleAll }: { action
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-sm leading-snug">{a.task}</p>
-                  {a.workPackage && <p className="text-xs text-muted-foreground mt-0.5">{a.workPackage}</p>}
+                  {a.workPackage ? (
+                    <p className="text-xs text-muted-foreground mt-0.5">{a.workPackage}</p>
+                  ) : (
+                    <p className="text-[10px] font-medium uppercase tracking-wide text-amber-600 dark:text-amber-500 mt-0.5">Unassigned WP</p>
+                  )}
                   <div className="flex flex-wrap items-center gap-1.5 mt-2">
                     <PriorityBadge priority={a.priority} />
                     <StatusBadge status={a.status} />
@@ -545,6 +655,38 @@ function ListView({ actions, onEdit, selected, onToggle, onToggleAll }: { action
                     {a.project && <span className="text-[10px] text-muted-foreground truncate max-w-[120px]">{a.project}</span>}
                     {a.dueDate && <span className="text-[10px] text-muted-foreground font-mono">{a.dueDate}</span>}
                   </div>
+                  {unassigned && (
+                    <div className="mt-2" onClick={(e) => e.stopPropagation()}>
+                      {!suggestion && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs gap-1.5 border-amber-500/40"
+                          onClick={() => handleSuggest(a)}
+                          disabled={isLoading}
+                        >
+                          {isLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                          {isLoading ? "Thinking…" : "Suggest WP"}
+                        </Button>
+                      )}
+                      {suggestion && (
+                        <div className="rounded-md border border-primary/30 bg-primary/5 p-2 space-y-1.5">
+                          <p className="text-xs">
+                            <span className="text-muted-foreground">Suggested:</span>{" "}
+                            <span className="font-medium">{suggestion.workPackage}</span>
+                          </p>
+                          <div className="flex gap-1.5">
+                            <Button size="sm" variant="default" className="h-6 px-2 text-xs gap-1 flex-1" onClick={() => acceptSuggestion(a, suggestion)}>
+                              <Check className="h-3 w-3" /> Accept
+                            </Button>
+                            <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => rejectSuggestion(a.id)}>
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

@@ -18,18 +18,25 @@
 
 
 -- ----------------------------------------------------------------------------
--- 0. Foundation back-fill
+-- 0. Foundation back-fill — must run BEFORE the attachments / comments tables
 -- ----------------------------------------------------------------------------
 -- The original v2 foundation migration didn't include UNIQUE (organisation_id, id)
--- on waiting_items, so composite FKs from attachments / comments fail to apply.
--- The foundation file has since been fixed; for already-applied databases this
--- ALTER catches us up. Idempotent.
+-- on waiting_items, so composite FKs from attachments / comments fail with
+-- SQLSTATE 42830 ("no unique constraint matching given keys for referenced
+-- table waiting_items"). The foundation file has since been fixed; this block
+-- catches up databases that were created before that fix landed.
+--
+-- Implemented as DROP-then-ADD (instead of a DO block with EXCEPTION) so the
+-- ADD runs unconditionally and any real failure surfaces — no silent swallow.
+-- DROP IF EXISTS handles repeat runs and also clears the old short-name
+-- constraint if a prior attempt left one behind.
 
-DO $$ BEGIN
-  ALTER TABLE public.waiting_items
-    ADD CONSTRAINT waiting_items_org_id_key UNIQUE (organisation_id, id);
-EXCEPTION WHEN duplicate_table OR duplicate_object THEN NULL;
-END $$;
+ALTER TABLE public.waiting_items
+  DROP CONSTRAINT IF EXISTS waiting_items_org_id_key;
+ALTER TABLE public.waiting_items
+  DROP CONSTRAINT IF EXISTS waiting_items_organisation_id_id_key;
+ALTER TABLE public.waiting_items
+  ADD CONSTRAINT waiting_items_organisation_id_id_key UNIQUE (organisation_id, id);
 
 
 -- ----------------------------------------------------------------------------

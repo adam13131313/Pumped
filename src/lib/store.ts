@@ -30,7 +30,7 @@ export interface GlobalFilter {
 interface AppState {
   // Loading state
   dataLoaded: boolean;
-  
+
   todayIds: Set<string>;
   todayOrder: string[]; // ordered list of gathered task ids
   addToday: (id: string) => void;
@@ -53,10 +53,10 @@ interface AppState {
   waitingItems: WaitingItem[];
   inboxItems: InboxItem[];
   sopItems: SOPItem[];
-  
+
   // Data loading
   loadAllData: () => Promise<void>;
-  
+
   addProgramme: (p: Programme) => void;
   updateProgramme: (id: string, updates: Partial<Programme>) => void;
   deleteProgramme: (id: string) => void;
@@ -90,7 +90,8 @@ interface AppState {
 
 const defaultGlobalFilter: GlobalFilter = { programmeId: "", projectId: "", workPackageId: "", unassigned: false };
 
-// Helper to get current user id
+// --- Generic helpers ---------------------------------------------------------
+
 async function getUserId(): Promise<string> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Not authenticated");
@@ -101,6 +102,121 @@ function notifySaveError(message: string, error: unknown) {
   const description = error instanceof Error ? error.message : "Please refresh and try again.";
   console.error(message, error);
   toast.error(message, { description });
+}
+
+// Maps a Partial<T> domain patch into a snake-case DB update payload, dropping
+// any field not present in `fieldMap`. Replaces the 8+ duplicated `dbUpdates: any`
+// blocks that previously had to be kept in sync by hand — that drift was the
+// source of `bulkUpdateActions` silently failing to forward `labels`/`completed_at`.
+type FieldMap<T> = { [K in keyof T]?: string };
+
+function buildDbUpdate<T extends object>(
+  updates: Partial<T>,
+  fieldMap: FieldMap<T>,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const key of Object.keys(updates) as Array<keyof T>) {
+    const dbKey = fieldMap[key];
+    if (dbKey && updates[key] !== undefined) {
+      out[dbKey] = updates[key] as unknown;
+    }
+  }
+  return out;
+}
+
+// Field maps shared between single and bulk variants so they cannot drift.
+const programmeFields: FieldMap<Programme> = {
+  name: "name",
+  description: "description",
+};
+const projectFields: FieldMap<Project> = {
+  name: "name",
+  description: "description",
+  programmeId: "programme_id",
+  status: "status",
+};
+const workPackageFields: FieldMap<WorkPackage> = {
+  project: "project",
+  workPackage: "work_package",
+  wpLead: "wp_lead",
+  startDate: "start_date",
+  dueDate: "due_date",
+  ragStatus: "rag_status",
+  blockers: "blockers",
+  dependencies: "dependencies",
+};
+const actionFields: FieldMap<Action & { completedAt?: string | null }> = {
+  task: "task",
+  project: "project",
+  workPackage: "work_package",
+  startDate: "start_date",
+  dueDate: "due_date",
+  priority: "priority",
+  status: "status",
+  notes: "notes",
+  labels: "labels",
+  completedAt: "completed_at",
+};
+const waitingFields: FieldMap<WaitingItem> = {
+  description: "description",
+  fromWhom: "from_whom",
+  projectWP: "project_wp",
+  askedOn: "asked_on",
+  dueBy: "due_by",
+  status: "status",
+  notes: "notes",
+  linkedProjectId: "linked_project_id",
+};
+const inboxFields: FieldMap<InboxItem> = {
+  task: "task",
+  priority: "priority",
+  dueDate: "due_date",
+  project: "project",
+  notes: "notes",
+  source: "source",
+};
+const sopFields: FieldMap<SOPItem> = {
+  when: "trigger_when",
+  instruction: "instruction",
+};
+
+// Awaits a Supabase query, surfaces failures via toast, and invokes the optional
+// rollback. Mutators stay synchronous (they don't await this) so call sites read
+// unchanged — but errors no longer vanish into a swallowed `.then()`.
+type SbResult = { error: { message?: string } | null };
+
+function runWrite(
+  label: string,
+  query: PromiseLike<SbResult>,
+  rollback?: () => void,
+): void {
+  Promise.resolve(query).then(
+    ({ error }) => {
+      if (error) {
+        rollback?.();
+        notifySaveError(label, error);
+      }
+    },
+    (error) => {
+      rollback?.();
+      notifySaveError(label, error);
+    },
+  );
+}
+
+// As runWrite, but the query depends on the current user id.
+function runWriteWithUid(
+  label: string,
+  build: (uid: string) => PromiseLike<SbResult>,
+  rollback?: () => void,
+): void {
+  getUserId().then(
+    (uid) => runWrite(label, build(uid), rollback),
+    (error) => {
+      rollback?.();
+      notifySaveError(label, error);
+    },
+  );
 }
 
 async function persistAction(action: Action) {
@@ -120,6 +236,8 @@ async function persistAction(action: Action) {
   });
   if (error) throw error;
 }
+
+// --- Gathered ("Today") state -----------------------------------------------
 
 // Persist gathered tasks across sessions (no daily reset). Migrate from old per-day key if present.
 const GATHERED_KEY = "pumped-gathered";
@@ -189,7 +307,7 @@ const initialToday = loadTodayState();
 
 export const useAppStore = create<AppState>()((set, get) => ({
   dataLoaded: false,
-  
+
   todayIds: initialToday.todayIds,
   todayOrder: initialToday.todayOrder,
   addToday: (id) => set((s) => {
@@ -319,7 +437,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
     }
 
     const mappedSOP = (sopItems || []).map(mapSOP);
-    
+
     // If user has no SOP items yet, seed with defaults
     if (mappedSOP.length === 0) {
       const userId = await getUserId();
@@ -352,41 +470,68 @@ export const useAppStore = create<AppState>()((set, get) => ({
   // --- Programmes ---
   addProgramme: (p) => {
     set((s) => ({ programmes: [...s.programmes, p] }));
-    getUserId().then((uid) => supabase.from("programmes").insert({ id: p.id, user_id: uid, name: p.name, description: p.description }).then());
+    runWriteWithUid(
+      "Programme could not be saved",
+      (uid) => supabase.from("programmes").insert({ id: p.id, user_id: uid, name: p.name, description: p.description }),
+      () => set((s) => ({ programmes: s.programmes.filter((x) => x.id !== p.id) })),
+    );
   },
   updateProgramme: (id, updates) => {
     set((s) => ({ programmes: s.programmes.map((p) => (p.id === id ? { ...p, ...updates } : p)) }));
-    const dbUpdates: any = {};
-    if (updates.name !== undefined) dbUpdates.name = updates.name;
-    if (updates.description !== undefined) dbUpdates.description = updates.description;
-    supabase.from("programmes").update(dbUpdates).eq("id", id).then();
+    runWrite(
+      "Programme update could not be saved",
+      supabase.from("programmes").update(buildDbUpdate(updates, programmeFields)).eq("id", id),
+    );
   },
   deleteProgramme: (id) => {
+    const before = get().programmes.find((p) => p.id === id);
+    const affectedProjects = get().projects.filter((p) => p.programmeId === id);
     set((s) => ({
       programmes: s.programmes.filter((p) => p.id !== id),
       projects: s.projects.map((p) => p.programmeId === id ? { ...p, programmeId: "" } : p),
     }));
-    supabase.from("programmes").delete().eq("id", id).then();
-    supabase.from("projects").update({ programme_id: "" }).eq("programme_id", id).then();
+    runWrite(
+      "Programme could not be deleted",
+      supabase.from("programmes").delete().eq("id", id),
+      before
+        ? () => set((s) => ({
+            programmes: [...s.programmes, before],
+            projects: s.projects.map((p) => affectedProjects.some((ap) => ap.id === p.id) ? { ...p, programmeId: id } : p),
+          }))
+        : undefined,
+    );
+    if (affectedProjects.length > 0) {
+      runWrite(
+        "Project unlink could not be saved",
+        supabase.from("projects").update({ programme_id: "" }).eq("programme_id", id),
+      );
+    }
   },
 
   // --- Projects ---
   addProject: (p) => {
     set((s) => ({ projects: [...s.projects, p] }));
-    getUserId().then((uid) => supabase.from("projects").insert({ id: p.id, user_id: uid, name: p.name, description: p.description, programme_id: p.programmeId, status: p.status }).then());
+    runWriteWithUid(
+      "Project could not be saved",
+      (uid) => supabase.from("projects").insert({ id: p.id, user_id: uid, name: p.name, description: p.description, programme_id: p.programmeId, status: p.status }),
+      () => set((s) => ({ projects: s.projects.filter((x) => x.id !== p.id) })),
+    );
   },
   updateProject: (id, updates) => {
     set((s) => ({ projects: s.projects.map((p) => (p.id === id ? { ...p, ...updates } : p)) }));
-    const dbUpdates: any = {};
-    if (updates.name !== undefined) dbUpdates.name = updates.name;
-    if (updates.description !== undefined) dbUpdates.description = updates.description;
-    if (updates.programmeId !== undefined) dbUpdates.programme_id = updates.programmeId;
-    if (updates.status !== undefined) dbUpdates.status = updates.status;
-    supabase.from("projects").update(dbUpdates).eq("id", id).then();
+    runWrite(
+      "Project update could not be saved",
+      supabase.from("projects").update(buildDbUpdate(updates, projectFields)).eq("id", id),
+    );
   },
   deleteProject: (id) => {
+    const before = get().projects.find((p) => p.id === id);
     set((s) => ({ projects: s.projects.filter((p) => p.id !== id) }));
-    supabase.from("projects").delete().eq("id", id).then();
+    runWrite(
+      "Project could not be deleted",
+      supabase.from("projects").delete().eq("id", id),
+      before ? () => set((s) => ({ projects: [...s.projects, before] })) : undefined,
+    );
   },
 
   // --- Actions ---
@@ -400,135 +545,208 @@ export const useAppStore = create<AppState>()((set, get) => ({
   updateAction: (id, updates) => {
     // Track completed_at when status changes to Complete
     const currentAction = get().actions.find((a) => a.id === id);
+    const patch: Partial<Action> & { completedAt?: string | null } = { ...updates };
     if (updates.status === "Complete" && currentAction?.status !== "Complete") {
-      (updates as any).completedAt = new Date().toISOString();
+      patch.completedAt = new Date().toISOString();
     } else if (updates.status && updates.status !== "Complete") {
-      (updates as any).completedAt = null;
+      patch.completedAt = null;
     }
-    set((s) => ({ actions: s.actions.map((a) => (a.id === id ? { ...a, ...updates } : a)) }));
-    const dbUpdates: any = {};
-    if (updates.task !== undefined) dbUpdates.task = updates.task;
-    if (updates.project !== undefined) dbUpdates.project = updates.project;
-    if (updates.workPackage !== undefined) dbUpdates.work_package = updates.workPackage;
-    if (updates.startDate !== undefined) dbUpdates.start_date = updates.startDate;
-    if (updates.dueDate !== undefined) dbUpdates.due_date = updates.dueDate;
-    if (updates.priority !== undefined) dbUpdates.priority = updates.priority;
-    if (updates.status !== undefined) dbUpdates.status = updates.status;
-    if (updates.notes !== undefined) dbUpdates.notes = updates.notes;
-    if (updates.labels !== undefined) dbUpdates.labels = updates.labels;
-    if ((updates as any).completedAt !== undefined) dbUpdates.completed_at = (updates as any).completedAt;
-    supabase.from("actions").update(dbUpdates).eq("id", id).then();
+    set((s) => ({ actions: s.actions.map((a) => (a.id === id ? { ...a, ...patch } : a)) }));
+    runWrite(
+      "Action update could not be saved",
+      supabase.from("actions").update(buildDbUpdate(patch, actionFields)).eq("id", id),
+    );
   },
   deleteAction: (id) => {
+    const before = get().actions.find((a) => a.id === id);
     set((s) => ({ actions: s.actions.filter((a) => a.id !== id) }));
-    supabase.from("actions").delete().eq("id", id).then();
+    runWrite(
+      "Action could not be deleted",
+      supabase.from("actions").delete().eq("id", id),
+      before ? () => set((s) => ({ actions: [...s.actions, before] })) : undefined,
+    );
   },
   bulkUpdateActions: (ids, updates) => {
     set((s) => ({ actions: s.actions.map((a) => (ids.includes(a.id) ? { ...a, ...updates } : a)) }));
-    const dbUpdates: any = {};
-    if (updates.task !== undefined) dbUpdates.task = updates.task;
-    if (updates.project !== undefined) dbUpdates.project = updates.project;
-    if (updates.workPackage !== undefined) dbUpdates.work_package = updates.workPackage;
-    if (updates.startDate !== undefined) dbUpdates.start_date = updates.startDate;
-    if (updates.dueDate !== undefined) dbUpdates.due_date = updates.dueDate;
-    if (updates.priority !== undefined) dbUpdates.priority = updates.priority;
-    if (updates.status !== undefined) dbUpdates.status = updates.status;
-    if (updates.notes !== undefined) dbUpdates.notes = updates.notes;
-    ids.forEach((id) => supabase.from("actions").update(dbUpdates).eq("id", id).then());
+    runWrite(
+      "Bulk action update could not be saved",
+      supabase.from("actions").update(buildDbUpdate(updates, actionFields)).in("id", ids),
+    );
   },
   bulkDeleteActions: (ids) => {
+    const before = get().actions.filter((a) => ids.includes(a.id));
     set((s) => ({ actions: s.actions.filter((a) => !ids.includes(a.id)) }));
-    supabase.from("actions").delete().in("id", ids).then();
+    runWrite(
+      "Bulk action delete could not be saved",
+      supabase.from("actions").delete().in("id", ids),
+      before.length > 0 ? () => set((s) => ({ actions: [...s.actions, ...before] })) : undefined,
+    );
   },
 
   // --- Work Packages ---
   addWorkPackage: (wp) => {
     set((s) => ({ workPackages: [...s.workPackages, wp] }));
-    getUserId().then((uid) => supabase.from("work_packages").insert({ id: wp.id, user_id: uid, project: wp.project, work_package: wp.workPackage, wp_lead: wp.wpLead, start_date: wp.startDate, due_date: wp.dueDate, rag_status: wp.ragStatus, blockers: wp.blockers, dependencies: wp.dependencies as any }).then());
+    runWriteWithUid(
+      "Work package could not be saved",
+      (uid) => supabase.from("work_packages").insert({
+        id: wp.id,
+        user_id: uid,
+        project: wp.project,
+        work_package: wp.workPackage,
+        wp_lead: wp.wpLead,
+        start_date: wp.startDate,
+        due_date: wp.dueDate,
+        rag_status: wp.ragStatus,
+        blockers: wp.blockers,
+        dependencies: wp.dependencies as any,
+      }),
+      () => set((s) => ({ workPackages: s.workPackages.filter((x) => x.id !== wp.id) })),
+    );
   },
   updateWorkPackage: (id, updates) => {
     set((s) => ({ workPackages: s.workPackages.map((wp) => (wp.id === id ? { ...wp, ...updates } : wp)) }));
-    const dbUpdates: any = {};
-    if (updates.project !== undefined) dbUpdates.project = updates.project;
-    if (updates.workPackage !== undefined) dbUpdates.work_package = updates.workPackage;
-    if (updates.wpLead !== undefined) dbUpdates.wp_lead = updates.wpLead;
-    if (updates.startDate !== undefined) dbUpdates.start_date = updates.startDate;
-    if (updates.dueDate !== undefined) dbUpdates.due_date = updates.dueDate;
-    if (updates.ragStatus !== undefined) dbUpdates.rag_status = updates.ragStatus;
-    if (updates.blockers !== undefined) dbUpdates.blockers = updates.blockers;
-    if (updates.dependencies !== undefined) dbUpdates.dependencies = updates.dependencies;
-    supabase.from("work_packages").update(dbUpdates).eq("id", id).then();
+    runWrite(
+      "Work package update could not be saved",
+      supabase.from("work_packages").update(buildDbUpdate(updates, workPackageFields)).eq("id", id),
+    );
   },
   deleteWorkPackage: (id) => {
+    const before = get().workPackages.find((wp) => wp.id === id);
     set((s) => ({ workPackages: s.workPackages.filter((wp) => wp.id !== id) }));
-    supabase.from("work_packages").delete().eq("id", id).then();
+    runWrite(
+      "Work package could not be deleted",
+      supabase.from("work_packages").delete().eq("id", id),
+      before ? () => set((s) => ({ workPackages: [...s.workPackages, before] })) : undefined,
+    );
   },
 
   // --- Waiting Items ---
   addWaitingItem: (item) => {
     set((s) => ({ waitingItems: [...s.waitingItems, item] }));
-    getUserId().then((uid) => supabase.from("waiting_items").insert({ id: item.id, user_id: uid, description: item.description, from_whom: item.fromWhom, project_wp: item.projectWP, asked_on: item.askedOn, due_by: item.dueBy, status: item.status, notes: item.notes, linked_project_id: item.linkedProjectId || null } as any).then());
+    runWriteWithUid(
+      "Waiting item could not be saved",
+      (uid) => supabase.from("waiting_items").insert({
+        id: item.id,
+        user_id: uid,
+        description: item.description,
+        from_whom: item.fromWhom,
+        project_wp: item.projectWP,
+        asked_on: item.askedOn,
+        due_by: item.dueBy,
+        status: item.status,
+        notes: item.notes,
+        linked_project_id: item.linkedProjectId || null,
+      } as any),
+      () => set((s) => ({ waitingItems: s.waitingItems.filter((x) => x.id !== item.id) })),
+    );
   },
   updateWaitingItem: (id, updates) => {
     set((s) => ({ waitingItems: s.waitingItems.map((w) => (w.id === id ? { ...w, ...updates } : w)) }));
-    const dbUpdates: any = {};
-    if (updates.description !== undefined) dbUpdates.description = updates.description;
-    if (updates.fromWhom !== undefined) dbUpdates.from_whom = updates.fromWhom;
-    if (updates.projectWP !== undefined) dbUpdates.project_wp = updates.projectWP;
-    if (updates.askedOn !== undefined) dbUpdates.asked_on = updates.askedOn;
-    if (updates.dueBy !== undefined) dbUpdates.due_by = updates.dueBy;
-    if (updates.status !== undefined) dbUpdates.status = updates.status;
-    if (updates.notes !== undefined) dbUpdates.notes = updates.notes;
-    if (updates.linkedProjectId !== undefined) dbUpdates.linked_project_id = updates.linkedProjectId || null;
-    supabase.from("waiting_items").update(dbUpdates).eq("id", id).then();
+    // linked_project_id needs the empty-string-to-null coercion preserved
+    const dbUpdate = buildDbUpdate(updates, waitingFields);
+    if ("linked_project_id" in dbUpdate && !dbUpdate.linked_project_id) {
+      dbUpdate.linked_project_id = null;
+    }
+    runWrite(
+      "Waiting item update could not be saved",
+      supabase.from("waiting_items").update(dbUpdate).eq("id", id),
+    );
   },
   deleteWaitingItem: (id) => {
+    const before = get().waitingItems.find((w) => w.id === id);
     set((s) => ({ waitingItems: s.waitingItems.filter((w) => w.id !== id) }));
-    supabase.from("waiting_items").delete().eq("id", id).then();
+    runWrite(
+      "Waiting item could not be deleted",
+      supabase.from("waiting_items").delete().eq("id", id),
+      before ? () => set((s) => ({ waitingItems: [...s.waitingItems, before] })) : undefined,
+    );
   },
 
   // --- Inbox Items ---
   addInboxItem: (item) => {
     set((s) => ({ inboxItems: [...s.inboxItems, item] }));
-    getUserId().then((uid) => supabase.from("inbox_items").insert({ id: item.id, user_id: uid, task: item.task, priority: item.priority, due_date: item.dueDate, project: item.project, notes: item.notes, source: item.source }).then());
+    runWriteWithUid(
+      "Inbox item could not be saved",
+      (uid) => supabase.from("inbox_items").insert({
+        id: item.id,
+        user_id: uid,
+        task: item.task,
+        priority: item.priority,
+        due_date: item.dueDate,
+        project: item.project,
+        notes: item.notes,
+        source: item.source,
+      }),
+      () => set((s) => ({ inboxItems: s.inboxItems.filter((x) => x.id !== item.id) })),
+    );
   },
   addInboxItems: (items) => {
     set((s) => ({ inboxItems: [...s.inboxItems, ...items] }));
-    getUserId().then((uid) => {
-      const rows = items.map((i) => ({ id: i.id, user_id: uid, task: i.task, priority: i.priority, due_date: i.dueDate, project: i.project, notes: i.notes, source: i.source }));
-      supabase.from("inbox_items").insert(rows).then();
-    });
+    const newIds = items.map((i) => i.id);
+    runWriteWithUid(
+      "Inbox items could not be saved",
+      (uid) => supabase.from("inbox_items").insert(items.map((i) => ({
+        id: i.id,
+        user_id: uid,
+        task: i.task,
+        priority: i.priority,
+        due_date: i.dueDate,
+        project: i.project,
+        notes: i.notes,
+        source: i.source,
+      }))),
+      () => set((s) => ({ inboxItems: s.inboxItems.filter((x) => !newIds.includes(x.id)) })),
+    );
   },
   updateInboxItem: (id, updates) => {
     set((s) => ({ inboxItems: s.inboxItems.map((i) => (i.id === id ? { ...i, ...updates } : i)) }));
-    const dbUpdates: any = {};
-    if (updates.task !== undefined) dbUpdates.task = updates.task;
-    if (updates.priority !== undefined) dbUpdates.priority = updates.priority;
-    if (updates.dueDate !== undefined) dbUpdates.due_date = updates.dueDate;
-    if (updates.project !== undefined) dbUpdates.project = updates.project;
-    if (updates.notes !== undefined) dbUpdates.notes = updates.notes;
-    if (updates.source !== undefined) dbUpdates.source = updates.source;
-    supabase.from("inbox_items").update(dbUpdates).eq("id", id).then();
+    runWrite(
+      "Inbox update could not be saved",
+      supabase.from("inbox_items").update(buildDbUpdate(updates, inboxFields)).eq("id", id),
+    );
   },
   deleteInboxItem: (id) => {
-    const item = get().inboxItems.find((i) => i.id === id);
+    const before = get().inboxItems.find((i) => i.id === id);
     set((s) => ({ inboxItems: s.inboxItems.filter((i) => i.id !== id) }));
-    supabase.from("inbox_items").delete().eq("id", id).then();
-    if (item) {
-      getUserId().then((uid) => supabase.from("inbox_item_events").insert({
-        inbox_item_id: id, event: 'deleted', user_id: uid, source: item.source || '', created_at_snapshot: item.createdAt,
-      } as any).then());
+    runWrite(
+      "Inbox item could not be deleted",
+      supabase.from("inbox_items").delete().eq("id", id),
+      before ? () => set((s) => ({ inboxItems: [...s.inboxItems, before] })) : undefined,
+    );
+    if (before) {
+      runWriteWithUid(
+        "Inbox event log failed",
+        (uid) => supabase.from("inbox_item_events").insert({
+          inbox_item_id: id,
+          event: "deleted",
+          user_id: uid,
+          source: before.source || "",
+          created_at_snapshot: before.createdAt,
+        } as any),
+      );
     }
   },
   bulkDeleteInboxItems: (ids) => {
-    const items = get().inboxItems.filter((i) => ids.includes(i.id));
+    const before = get().inboxItems.filter((i) => ids.includes(i.id));
     set((s) => ({ inboxItems: s.inboxItems.filter((i) => !ids.includes(i.id)) }));
-    supabase.from("inbox_items").delete().in("id", ids).then();
-    if (items.length) {
-      getUserId().then((uid) => {
-        const rows = items.map((i) => ({ inbox_item_id: i.id, event: 'deleted' as const, user_id: uid, source: i.source || '', created_at_snapshot: i.createdAt }));
-        supabase.from("inbox_item_events").insert(rows as any).then();
-      });
+    runWrite(
+      "Bulk inbox delete could not be saved",
+      supabase.from("inbox_items").delete().in("id", ids),
+      before.length > 0 ? () => set((s) => ({ inboxItems: [...s.inboxItems, ...before] })) : undefined,
+    );
+    if (before.length > 0) {
+      runWriteWithUid(
+        "Inbox event log failed",
+        (uid) => supabase.from("inbox_item_events").insert(
+          before.map((i) => ({
+            inbox_item_id: i.id,
+            event: "deleted" as const,
+            user_id: uid,
+            source: i.source || "",
+            created_at_snapshot: i.createdAt,
+          })) as any,
+        ),
+      );
     }
   },
   promoteInboxToActions: (ids) => {
@@ -550,16 +768,23 @@ export const useAppStore = create<AppState>()((set, get) => ({
       inboxItems: s.inboxItems.filter((i) => !ids.includes(i.id)),
       actions: [...s.actions, ...newActions],
     });
-    // Persist both operations
-    supabase.from("inbox_items").delete().in("id", ids).then();
+    // Two writes: delete the inbox rows, then insert the new actions. If the
+    // action insert fails we roll back both local state and (best-effort) the
+    // inbox delete by reinserting the rows.
+    runWrite(
+      "Inbox cleanup could not be saved",
+      supabase.from("inbox_items").delete().in("id", ids),
+    );
     getUserId().then(async (uid) => {
       const rows = newActions.map((a) => ({ id: a.id, user_id: uid, task: a.task, project: a.project, work_package: a.workPackage, start_date: a.startDate, due_date: a.dueDate, priority: a.priority, status: a.status, notes: a.notes }));
       const { error } = await supabase.from("actions").insert(rows);
       if (error) throw error;
       // Log inbox promotion events
       if (toPromote.length) {
-        const eventRows = toPromote.map((i) => ({ inbox_item_id: i.id, event: 'promoted' as const, user_id: uid, source: i.source || '', created_at_snapshot: i.createdAt }));
-        supabase.from("inbox_item_events").insert(eventRows as any).then();
+        const eventRows = toPromote.map((i) => ({ inbox_item_id: i.id, event: "promoted" as const, user_id: uid, source: i.source || "", created_at_snapshot: i.createdAt }));
+        supabase.from("inbox_item_events").insert(eventRows as any).then(({ error: evErr }) => {
+          if (evErr) console.error("inbox promotion event log failed", evErr);
+        });
       }
     }).catch((error) => {
       set((state) => ({ actions: state.actions.filter((a) => !newActions.some((na) => na.id === a.id)) }));
@@ -584,18 +809,27 @@ export const useAppStore = create<AppState>()((set, get) => ({
   },
   updateSOPItem: (id, updates) => {
     set((s) => ({ sopItems: s.sopItems.map((item) => (item.id === id ? { ...item, ...updates } : item)) }));
-    const dbUpdates: any = {};
-    if (updates.when !== undefined) dbUpdates.trigger_when = updates.when;
-    if (updates.instruction !== undefined) dbUpdates.instruction = updates.instruction;
-    supabase.from("sop_items").update(dbUpdates).eq("id", id).then();
+    runWrite(
+      "SOP update could not be saved",
+      supabase.from("sop_items").update(buildDbUpdate(updates, sopFields)).eq("id", id),
+    );
   },
   addSOPItem: (item) => {
     set((s) => ({ sopItems: [...s.sopItems, item] }));
-    getUserId().then((uid) => supabase.from("sop_items").insert({ id: item.id, user_id: uid, trigger_when: item.when, instruction: item.instruction }).then());
+    runWriteWithUid(
+      "SOP item could not be saved",
+      (uid) => supabase.from("sop_items").insert({ id: item.id, user_id: uid, trigger_when: item.when, instruction: item.instruction }),
+      () => set((s) => ({ sopItems: s.sopItems.filter((x) => x.id !== item.id) })),
+    );
   },
   deleteSOPItem: (id) => {
+    const before = get().sopItems.find((item) => item.id === id);
     set((s) => ({ sopItems: s.sopItems.filter((item) => item.id !== id) }));
-    supabase.from("sop_items").delete().eq("id", id).then();
+    runWrite(
+      "SOP item could not be deleted",
+      supabase.from("sop_items").delete().eq("id", id),
+      before ? () => set((s) => ({ sopItems: [...s.sopItems, before] })) : undefined,
+    );
   },
 
   // --- Cross-entity operations ---
@@ -617,8 +851,26 @@ export const useAppStore = create<AppState>()((set, get) => ({
       actions: s.actions.filter((a) => a.id !== id),
       waitingItems: [...s.waitingItems, newWaiting],
     });
-    supabase.from("actions").delete().eq("id", id).then();
-    getUserId().then((uid) => supabase.from("waiting_items").insert({ id: newWaiting.id, user_id: uid, description: newWaiting.description, from_whom: newWaiting.fromWhom, project_wp: newWaiting.projectWP, asked_on: newWaiting.askedOn, due_by: newWaiting.dueBy, status: newWaiting.status, notes: newWaiting.notes }).then());
+    runWrite(
+      "Delegation (action delete) could not be saved",
+      supabase.from("actions").delete().eq("id", id),
+      () => set((state) => ({ actions: [...state.actions, action] })),
+    );
+    runWriteWithUid(
+      "Delegation (waiting insert) could not be saved",
+      (uid) => supabase.from("waiting_items").insert({
+        id: newWaiting.id,
+        user_id: uid,
+        description: newWaiting.description,
+        from_whom: newWaiting.fromWhom,
+        project_wp: newWaiting.projectWP,
+        asked_on: newWaiting.askedOn,
+        due_by: newWaiting.dueBy,
+        status: newWaiting.status,
+        notes: newWaiting.notes,
+      }),
+      () => set((state) => ({ waitingItems: state.waitingItems.filter((w) => w.id !== newWaiting.id) })),
+    );
   },
 
   takeBackWaiting: (id) => {
@@ -641,7 +893,11 @@ export const useAppStore = create<AppState>()((set, get) => ({
       waitingItems: s.waitingItems.filter((w) => w.id !== id),
       actions: [...s.actions, newAction],
     });
-    supabase.from("waiting_items").delete().eq("id", id).then();
+    runWrite(
+      "Take-back (waiting delete) could not be saved",
+      supabase.from("waiting_items").delete().eq("id", id),
+      () => set((state) => ({ waitingItems: [...state.waitingItems, item] })),
+    );
     persistAction(newAction).catch((error) => {
       set((state) => ({ actions: state.actions.filter((a) => a.id !== newAction.id) }));
       notifySaveError("Action could not be saved", error);

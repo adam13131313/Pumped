@@ -7,6 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { WaitingItem, WaitingStatus } from "@/lib/types";
 import { useAppStore } from "@/lib/store";
+import { waitingItemSchema, firstZodError } from "@/lib/schemas";
+import { toast } from "sonner";
 import { LinkRenderer } from "@/components/LinkRenderer";
 import { TaskAttachments } from "@/components/TaskAttachments";
 import { TaskComments } from "@/components/TaskComments";
@@ -154,17 +156,27 @@ export function WaitingDialog({ open, onOpenChange, item, onSave, onDelete, onTa
   };
 
   const handleSave = () => {
-    if (!form.description?.trim()) return;
+    const parsed = waitingItemSchema.safeParse({
+      ...form,
+      linkedProjectId: selectedProjectId || undefined,
+    });
+    if (!parsed.success) {
+      toast.error(firstZodError(parsed.error));
+      return;
+    }
+    // See ActionDialog.handleSave: explicit fallbacks because .default() in
+    // this zod version leaves the output type loose (T | undefined).
+    const d = parsed.data;
     onSave({
       id: item?.id ?? crypto.randomUUID(),
-      description: form.description?.trim() ?? "",
-      fromWhom: form.fromWhom?.trim() ?? "",
-      projectWP: form.projectWP?.trim() ?? "",
-      askedOn: form.askedOn ?? "",
-      dueBy: form.dueBy ?? "",
-      status: form.status ?? "Pending",
-      notes: form.notes?.trim() ?? "",
-      linkedProjectId: selectedProjectId || undefined,
+      description: d.description,
+      fromWhom: d.fromWhom ?? "",
+      projectWP: d.projectWP ?? "",
+      askedOn: d.askedOn ?? "",
+      dueBy: d.dueBy ?? "",
+      status: d.status ?? "Pending",
+      notes: d.notes ?? "",
+      linkedProjectId: d.linkedProjectId,
     });
     onOpenChange(false);
   };

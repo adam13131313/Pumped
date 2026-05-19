@@ -251,20 +251,10 @@ export const useAppStore = create<AppState>()((set, get) => ({
   sopItems: [],
 
   loadAllData: async () => {
-    // Backfill completed_at for any Complete tasks missing it, then archive
-    await supabase.from("actions")
-      .update({ completed_at: new Date().toISOString() } as any)
-      .eq("status", "Complete")
-      .is("completed_at", null);
-
-    // Auto-archive actions completed more than 24 hours ago
-    const archiveCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-    await supabase.from("actions")
-      .update({ archived: true } as any)
-      .eq("archived", false)
-      .eq("status", "Complete")
-      .not("completed_at", "is", null)
-      .lt("completed_at", archiveCutoff);
+    // completed_at backfill + auto-archive of Complete actions >24h old run
+    // server-side via the maintenance-archive-completed edge function (pg_cron).
+    // They used to run inline here; that added 2-7s of cold-start latency on
+    // large tenants and scaled with row count.
 
     const [
       { data: programmes },

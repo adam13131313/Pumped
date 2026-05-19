@@ -5,3 +5,5 @@ project_id = "cbzytppshpopamdkzdrr"
     verify_jwt = false
   [functions.process-email-queue]
     verify_jwt = true
+  [functions.maintenance-archive-completed]
+    verify_jwt = false

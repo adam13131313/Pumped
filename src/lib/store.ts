@@ -154,6 +154,13 @@ const sopFields: FieldMap<SopItem> = {
   position: "position",
 };
 
+const webhookSourceFields: FieldMap<WebhookSource> = {
+  name: "name",
+  slug: "slug",
+  description: "description",
+  lastReceivedAt: "last_received_at",
+};
+
 // ============================================================================
 // Row → domain mappers (one per table)
 // ============================================================================
@@ -416,6 +423,11 @@ interface AppState {
   addSopItem: (item: SopItem) => void;
   updateSopItem: (id: string, updates: Partial<SopItem>) => void;
   deleteSopItem: (id: string) => void;
+
+  // Webhook sources (Integrations)
+  addWebhookSource: (source: WebhookSource) => void;
+  updateWebhookSource: (id: string, updates: Partial<WebhookSource>) => void;
+  deleteWebhookSource: (id: string) => void;
 
   // Profile
   updateProfile: (updates: Partial<Profile>) => void;
@@ -1111,6 +1123,44 @@ export const useAppStore = create<AppState>()((set, get) => ({
       "SOP item could not be deleted",
       supabase.from("sop_items").delete().eq("id", id),
       before ? () => set((s) => ({ sopItems: [...s.sopItems, before] })) : undefined,
+    );
+  },
+
+  // --------------------------------------------------------------------------
+  // Webhook sources (Integrations)
+  // --------------------------------------------------------------------------
+
+  addWebhookSource: (source) => {
+    set((s) => ({ webhookSources: [...s.webhookSources, source] }));
+    runWrite(
+      "Webhook source could not be saved",
+      supabase.from("webhook_sources").insert({
+        id: source.id,
+        organisation_id: source.organisationId,
+        name: source.name,
+        slug: source.slug,
+        description: source.description,
+        created_by: source.createdBy,
+      }),
+      () => set((s) => ({ webhookSources: s.webhookSources.filter((x) => x.id !== source.id) })),
+    );
+  },
+  updateWebhookSource: (id, updates) => {
+    set((s) => ({
+      webhookSources: s.webhookSources.map((x) => (x.id === id ? { ...x, ...updates } : x)),
+    }));
+    runWrite(
+      "Webhook source update could not be saved",
+      supabase.from("webhook_sources").update(buildDbUpdate(updates, webhookSourceFields)).eq("id", id),
+    );
+  },
+  deleteWebhookSource: (id) => {
+    const before = get().webhookSources.find((x) => x.id === id);
+    set((s) => ({ webhookSources: s.webhookSources.filter((x) => x.id !== id) }));
+    runWrite(
+      "Webhook source could not be deleted",
+      supabase.from("webhook_sources").delete().eq("id", id),
+      before ? () => set((s) => ({ webhookSources: [...s.webhookSources, before] })) : undefined,
     );
   },
 

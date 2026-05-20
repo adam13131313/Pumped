@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.4"
+    PostgrestVersion: "14.5"
   }
   public: {
     Tables: {
@@ -18,90 +18,270 @@ export type Database = {
         Row: {
           action_id: string
           changed_at: string
-          from_status: string | null
+          changed_by: string | null
+          from_status: Database["public"]["Enums"]["action_status"] | null
           id: string
-          to_status: string
-          user_id: string
+          organisation_id: string
+          to_status: Database["public"]["Enums"]["action_status"]
         }
         Insert: {
           action_id: string
           changed_at?: string
-          from_status?: string | null
+          changed_by?: string | null
+          from_status?: Database["public"]["Enums"]["action_status"] | null
           id?: string
-          to_status: string
-          user_id: string
+          organisation_id: string
+          to_status: Database["public"]["Enums"]["action_status"]
         }
         Update: {
           action_id?: string
           changed_at?: string
-          from_status?: string | null
+          changed_by?: string | null
+          from_status?: Database["public"]["Enums"]["action_status"] | null
           id?: string
-          to_status?: string
-          user_id?: string
+          organisation_id?: string
+          to_status?: Database["public"]["Enums"]["action_status"]
         }
         Relationships: [
           {
-            foreignKeyName: "action_status_log_action_id_fkey"
-            columns: ["action_id"]
+            foreignKeyName: "action_status_log_organisation_id_action_id_fkey"
+            columns: ["organisation_id", "action_id"]
             isOneToOne: false
             referencedRelation: "actions"
+            referencedColumns: ["organisation_id", "id"]
+          },
+          {
+            foreignKeyName: "action_status_log_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
             referencedColumns: ["id"]
           },
         ]
       }
       actions: {
         Row: {
-          archived: boolean
+          archived_at: string | null
+          assigned_to: string | null
           completed_at: string | null
           created_at: string
-          due_date: string
+          created_by: string | null
+          due_date: string | null
           id: string
           labels: string[]
           not_started_since: string | null
           notes: string
-          priority: string
-          project: string
-          start_date: string
-          status: string
+          organisation_id: string
+          priority: Database["public"]["Enums"]["action_priority"]
+          start_date: string | null
+          status: Database["public"]["Enums"]["action_status"]
           task: string
-          user_id: string
-          work_package: string
+          updated_at: string
+          wbs_node_id: string | null
         }
         Insert: {
-          archived?: boolean
+          archived_at?: string | null
+          assigned_to?: string | null
           completed_at?: string | null
           created_at?: string
-          due_date?: string
+          created_by?: string | null
+          due_date?: string | null
           id?: string
           labels?: string[]
           not_started_since?: string | null
           notes?: string
-          priority?: string
-          project?: string
-          start_date?: string
-          status?: string
-          task?: string
-          user_id: string
-          work_package?: string
+          organisation_id: string
+          priority?: Database["public"]["Enums"]["action_priority"]
+          start_date?: string | null
+          status?: Database["public"]["Enums"]["action_status"]
+          task: string
+          updated_at?: string
+          wbs_node_id?: string | null
         }
         Update: {
-          archived?: boolean
+          archived_at?: string | null
+          assigned_to?: string | null
           completed_at?: string | null
           created_at?: string
-          due_date?: string
+          created_by?: string | null
+          due_date?: string | null
           id?: string
           labels?: string[]
           not_started_since?: string | null
           notes?: string
-          priority?: string
-          project?: string
-          start_date?: string
-          status?: string
+          organisation_id?: string
+          priority?: Database["public"]["Enums"]["action_priority"]
+          start_date?: string | null
+          status?: Database["public"]["Enums"]["action_status"]
           task?: string
-          user_id?: string
-          work_package?: string
+          updated_at?: string
+          wbs_node_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "actions_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "actions_organisation_id_wbs_node_id_fkey"
+            columns: ["organisation_id", "wbs_node_id"]
+            isOneToOne: false
+            referencedRelation: "wbs_nodes"
+            referencedColumns: ["organisation_id", "id"]
+          },
+        ]
+      }
+      attachments: {
+        Row: {
+          action_id: string | null
+          created_at: string
+          id: string
+          mime_type: string
+          organisation_id: string
+          original_filename: string
+          size_bytes: number
+          storage_path: string
+          uploader_id: string | null
+          waiting_item_id: string | null
+          wbs_node_id: string | null
+        }
+        Insert: {
+          action_id?: string | null
+          created_at?: string
+          id?: string
+          mime_type: string
+          organisation_id: string
+          original_filename: string
+          size_bytes: number
+          storage_path: string
+          uploader_id?: string | null
+          waiting_item_id?: string | null
+          wbs_node_id?: string | null
+        }
+        Update: {
+          action_id?: string | null
+          created_at?: string
+          id?: string
+          mime_type?: string
+          organisation_id?: string
+          original_filename?: string
+          size_bytes?: number
+          storage_path?: string
+          uploader_id?: string | null
+          waiting_item_id?: string | null
+          wbs_node_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attachments_organisation_id_action_id_fkey"
+            columns: ["organisation_id", "action_id"]
+            isOneToOne: false
+            referencedRelation: "actions"
+            referencedColumns: ["organisation_id", "id"]
+          },
+          {
+            foreignKeyName: "attachments_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attachments_organisation_id_waiting_item_id_fkey"
+            columns: ["organisation_id", "waiting_item_id"]
+            isOneToOne: false
+            referencedRelation: "waiting_items"
+            referencedColumns: ["organisation_id", "id"]
+          },
+          {
+            foreignKeyName: "attachments_organisation_id_wbs_node_id_fkey"
+            columns: ["organisation_id", "wbs_node_id"]
+            isOneToOne: false
+            referencedRelation: "wbs_nodes"
+            referencedColumns: ["organisation_id", "id"]
+          },
+        ]
+      }
+      comments: {
+        Row: {
+          action_id: string | null
+          author_id: string | null
+          content: string
+          created_at: string
+          edited: boolean
+          id: string
+          organisation_id: string
+          parent_comment_id: string | null
+          updated_at: string
+          waiting_item_id: string | null
+          wbs_node_id: string | null
+        }
+        Insert: {
+          action_id?: string | null
+          author_id?: string | null
+          content: string
+          created_at?: string
+          edited?: boolean
+          id?: string
+          organisation_id: string
+          parent_comment_id?: string | null
+          updated_at?: string
+          waiting_item_id?: string | null
+          wbs_node_id?: string | null
+        }
+        Update: {
+          action_id?: string | null
+          author_id?: string | null
+          content?: string
+          created_at?: string
+          edited?: boolean
+          id?: string
+          organisation_id?: string
+          parent_comment_id?: string | null
+          updated_at?: string
+          waiting_item_id?: string | null
+          wbs_node_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comments_organisation_id_action_id_fkey"
+            columns: ["organisation_id", "action_id"]
+            isOneToOne: false
+            referencedRelation: "actions"
+            referencedColumns: ["organisation_id", "id"]
+          },
+          {
+            foreignKeyName: "comments_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comments_organisation_id_waiting_item_id_fkey"
+            columns: ["organisation_id", "waiting_item_id"]
+            isOneToOne: false
+            referencedRelation: "waiting_items"
+            referencedColumns: ["organisation_id", "id"]
+          },
+          {
+            foreignKeyName: "comments_organisation_id_wbs_node_id_fkey"
+            columns: ["organisation_id", "wbs_node_id"]
+            isOneToOne: false
+            referencedRelation: "wbs_nodes"
+            referencedColumns: ["organisation_id", "id"]
+          },
+          {
+            foreignKeyName: "comments_parent_comment_id_fkey"
+            columns: ["parent_comment_id"]
+            isOneToOne: false
+            referencedRelation: "comments"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       email_send_log: {
         Row: {
@@ -194,369 +374,566 @@ export type Database = {
         Row: {
           created_at: string
           description: string
-          github_issue_number: number | null
           github_issue_url: string | null
           id: string
-          status: string
+          organisation_id: string
           title: string
-          updated_at: string
-          user_id: string
+          user_id: string | null
         }
         Insert: {
           created_at?: string
-          description: string
-          github_issue_number?: number | null
+          description?: string
           github_issue_url?: string | null
           id?: string
-          status?: string
+          organisation_id: string
           title: string
-          updated_at?: string
-          user_id: string
+          user_id?: string | null
         }
         Update: {
           created_at?: string
           description?: string
-          github_issue_number?: number | null
           github_issue_url?: string | null
           id?: string
-          status?: string
+          organisation_id?: string
           title?: string
-          updated_at?: string
-          user_id?: string
+          user_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "feature_suggestions_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       gathered_state: {
         Row: {
+          created_at: string
           durations: Json
-          ids: Json
-          order_ids: Json
+          id: string
+          order_ids: string[]
+          organisation_id: string
           schedule: Json
+          task_ids: string[]
           updated_at: string
           user_id: string
         }
         Insert: {
+          created_at?: string
           durations?: Json
-          ids?: Json
-          order_ids?: Json
+          id?: string
+          order_ids?: string[]
+          organisation_id: string
           schedule?: Json
+          task_ids?: string[]
           updated_at?: string
           user_id: string
         }
         Update: {
+          created_at?: string
           durations?: Json
-          ids?: Json
-          order_ids?: Json
+          id?: string
+          order_ids?: string[]
+          organisation_id?: string
           schedule?: Json
+          task_ids?: string[]
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "gathered_state_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       health_score_history: {
         Row: {
+          components: Json
           created_at: string
           id: string
-          inbox_lag_component: number
-          on_time_component: number
-          overdue_waiting_component: number
-          rag_component: number
+          organisation_id: string
           recorded_week: string
-          routine_component: number
           score: number
           user_id: string
         }
         Insert: {
+          components?: Json
           created_at?: string
           id?: string
-          inbox_lag_component?: number
-          on_time_component?: number
-          overdue_waiting_component?: number
-          rag_component?: number
+          organisation_id: string
           recorded_week: string
-          routine_component?: number
           score: number
           user_id: string
         }
         Update: {
+          components?: Json
           created_at?: string
           id?: string
-          inbox_lag_component?: number
-          on_time_component?: number
-          overdue_waiting_component?: number
-          rag_component?: number
+          organisation_id?: string
           recorded_week?: string
-          routine_component?: number
           score?: number
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "health_score_history_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       inbox_item_events: {
         Row: {
-          created_at_snapshot: string | null
-          event: string
           event_at: string
+          event_type: Database["public"]["Enums"]["inbox_event_type"]
           id: string
-          inbox_item_id: string
-          source: string
-          user_id: string
+          inbox_item_id: string | null
+          organisation_id: string
+          snapshot_created_at: string | null
+          snapshot_source_id: string | null
+          snapshot_task: string | null
+          user_id: string | null
         }
         Insert: {
-          created_at_snapshot?: string | null
-          event: string
           event_at?: string
+          event_type: Database["public"]["Enums"]["inbox_event_type"]
           id?: string
-          inbox_item_id: string
-          source?: string
-          user_id: string
+          inbox_item_id?: string | null
+          organisation_id: string
+          snapshot_created_at?: string | null
+          snapshot_source_id?: string | null
+          snapshot_task?: string | null
+          user_id?: string | null
         }
         Update: {
-          created_at_snapshot?: string | null
-          event?: string
           event_at?: string
+          event_type?: Database["public"]["Enums"]["inbox_event_type"]
           id?: string
-          inbox_item_id?: string
-          source?: string
-          user_id?: string
+          inbox_item_id?: string | null
+          organisation_id?: string
+          snapshot_created_at?: string | null
+          snapshot_source_id?: string | null
+          snapshot_task?: string | null
+          user_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "inbox_item_events_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       inbox_items: {
         Row: {
           created_at: string
-          due_date: string
+          created_by: string | null
+          due_date: string | null
+          external_id: string | null
+          external_url: string | null
           id: string
           notes: string
-          priority: string
-          project: string
-          source: string
-          source_id: string
-          source_url: string
+          organisation_id: string
+          priority: Database["public"]["Enums"]["action_priority"]
+          promoted_at: string | null
+          promoted_to_action_id: string | null
+          source_id: string | null
           task: string
-          user_id: string
+          updated_at: string
+          wbs_node_id: string | null
         }
         Insert: {
           created_at?: string
-          due_date?: string
+          created_by?: string | null
+          due_date?: string | null
+          external_id?: string | null
+          external_url?: string | null
           id?: string
           notes?: string
-          priority?: string
-          project?: string
-          source?: string
-          source_id?: string
-          source_url?: string
-          task?: string
-          user_id: string
+          organisation_id: string
+          priority?: Database["public"]["Enums"]["action_priority"]
+          promoted_at?: string | null
+          promoted_to_action_id?: string | null
+          source_id?: string | null
+          task: string
+          updated_at?: string
+          wbs_node_id?: string | null
         }
         Update: {
           created_at?: string
-          due_date?: string
+          created_by?: string | null
+          due_date?: string | null
+          external_id?: string | null
+          external_url?: string | null
           id?: string
           notes?: string
-          priority?: string
-          project?: string
-          source?: string
-          source_id?: string
-          source_url?: string
+          organisation_id?: string
+          priority?: Database["public"]["Enums"]["action_priority"]
+          promoted_at?: string | null
+          promoted_to_action_id?: string | null
+          source_id?: string | null
           task?: string
-          user_id?: string
+          updated_at?: string
+          wbs_node_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "inbox_items_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inbox_items_organisation_id_promoted_to_action_id_fkey"
+            columns: ["organisation_id", "promoted_to_action_id"]
+            isOneToOne: false
+            referencedRelation: "actions"
+            referencedColumns: ["organisation_id", "id"]
+          },
+          {
+            foreignKeyName: "inbox_items_organisation_id_source_id_fkey"
+            columns: ["organisation_id", "source_id"]
+            isOneToOne: false
+            referencedRelation: "webhook_sources"
+            referencedColumns: ["organisation_id", "id"]
+          },
+          {
+            foreignKeyName: "inbox_items_organisation_id_wbs_node_id_fkey"
+            columns: ["organisation_id", "wbs_node_id"]
+            isOneToOne: false
+            referencedRelation: "wbs_nodes"
+            referencedColumns: ["organisation_id", "id"]
+          },
+        ]
       }
-      ingest_sources: {
+      integration_tokens: {
         Row: {
           created_at: string
+          created_by: string | null
           id: string
-          last_received_at: string | null
-          name: string
-          slug: string
+          organisation_id: string
+          revoked_at: string | null
+          revoked_by: string | null
+          source_id: string
           token_hash: string
           token_prefix: string
-          user_id: string
         }
         Insert: {
           created_at?: string
+          created_by?: string | null
           id?: string
-          last_received_at?: string | null
-          name: string
-          slug: string
+          organisation_id: string
+          revoked_at?: string | null
+          revoked_by?: string | null
+          source_id: string
           token_hash: string
-          token_prefix?: string
-          user_id: string
+          token_prefix: string
         }
         Update: {
           created_at?: string
+          created_by?: string | null
           id?: string
-          last_received_at?: string | null
-          name?: string
-          slug?: string
+          organisation_id?: string
+          revoked_at?: string | null
+          revoked_by?: string | null
+          source_id?: string
           token_hash?: string
           token_prefix?: string
-          user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "integration_tokens_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "integration_tokens_organisation_id_source_id_fkey"
+            columns: ["organisation_id", "source_id"]
+            isOneToOne: false
+            referencedRelation: "webhook_sources"
+            referencedColumns: ["organisation_id", "id"]
+          },
+        ]
       }
       kb_chat_messages: {
         Row: {
           content: string
           created_at: string
           id: string
-          role: string
+          organisation_id: string
+          role: Database["public"]["Enums"]["kb_chat_role"]
           user_id: string
         }
         Insert: {
           content: string
           created_at?: string
           id?: string
-          role: string
+          organisation_id: string
+          role: Database["public"]["Enums"]["kb_chat_role"]
           user_id: string
         }
         Update: {
           content?: string
           created_at?: string
           id?: string
-          role?: string
+          organisation_id?: string
+          role?: Database["public"]["Enums"]["kb_chat_role"]
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "kb_chat_messages_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
-      profiles: {
+      memberships: {
         Row: {
           created_at: string
-          first_name: string | null
           id: string
-          last_name: string | null
+          invited_at: string | null
+          invited_by: string | null
+          joined_at: string
+          organisation_id: string
+          role: Database["public"]["Enums"]["membership_role"]
+          unit_id: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
           created_at?: string
-          first_name?: string | null
           id?: string
-          last_name?: string | null
+          invited_at?: string | null
+          invited_by?: string | null
+          joined_at?: string
+          organisation_id: string
+          role?: Database["public"]["Enums"]["membership_role"]
+          unit_id?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
           created_at?: string
-          first_name?: string | null
           id?: string
-          last_name?: string | null
+          invited_at?: string | null
+          invited_by?: string | null
+          joined_at?: string
+          organisation_id?: string
+          role?: Database["public"]["Enums"]["membership_role"]
+          unit_id?: string | null
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "memberships_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "memberships_organisation_id_unit_id_fkey"
+            columns: ["organisation_id", "unit_id"]
+            isOneToOne: false
+            referencedRelation: "organisation_units"
+            referencedColumns: ["organisation_id", "id"]
+          },
+        ]
       }
-      programmes: {
+      organisation_units: {
         Row: {
           created_at: string
           description: string
           id: string
           name: string
-          user_id: string
+          organisation_id: string
+          parent_unit_id: string | null
+          updated_at: string
         }
         Insert: {
           created_at?: string
           description?: string
           id?: string
           name: string
-          user_id: string
+          organisation_id: string
+          parent_unit_id?: string | null
+          updated_at?: string
         }
         Update: {
           created_at?: string
           description?: string
           id?: string
           name?: string
-          user_id?: string
+          organisation_id?: string
+          parent_unit_id?: string | null
+          updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "organisation_units_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organisation_units_organisation_id_parent_unit_id_fkey"
+            columns: ["organisation_id", "parent_unit_id"]
+            isOneToOne: false
+            referencedRelation: "organisation_units"
+            referencedColumns: ["organisation_id", "id"]
+          },
+        ]
       }
-      projects: {
+      organisations: {
         Row: {
           created_at: string
-          description: string
+          created_by: string | null
           id: string
           name: string
-          programme_id: string
-          status: string
-          user_id: string
+          slug: string | null
+          updated_at: string
         }
         Insert: {
           created_at?: string
-          description?: string
+          created_by?: string | null
           id?: string
           name: string
-          programme_id?: string
-          status?: string
-          user_id: string
+          slug?: string | null
+          updated_at?: string
         }
         Update: {
           created_at?: string
-          description?: string
+          created_by?: string | null
           id?: string
           name?: string
-          programme_id?: string
-          status?: string
-          user_id?: string
+          slug?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          display_name: string | null
+          id: string
+          preferences: Json
+          updated_at: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          id: string
+          preferences?: Json
+          updated_at?: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          preferences?: Json
+          updated_at?: string
         }
         Relationships: []
       }
       rag_status_history: {
         Row: {
+          from_status: Database["public"]["Enums"]["rag_status"] | null
           id: string
-          rag_status: string
+          organisation_id: string
           recorded_at: string
-          user_id: string
-          work_package_id: string
+          recorded_by: string | null
+          to_status: Database["public"]["Enums"]["rag_status"] | null
+          wbs_node_id: string
         }
         Insert: {
+          from_status?: Database["public"]["Enums"]["rag_status"] | null
           id?: string
-          rag_status: string
+          organisation_id: string
           recorded_at?: string
-          user_id: string
-          work_package_id: string
+          recorded_by?: string | null
+          to_status?: Database["public"]["Enums"]["rag_status"] | null
+          wbs_node_id: string
         }
         Update: {
+          from_status?: Database["public"]["Enums"]["rag_status"] | null
           id?: string
-          rag_status?: string
+          organisation_id?: string
           recorded_at?: string
-          user_id?: string
-          work_package_id?: string
+          recorded_by?: string | null
+          to_status?: Database["public"]["Enums"]["rag_status"] | null
+          wbs_node_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "rag_status_history_work_package_id_fkey"
-            columns: ["work_package_id"]
+            foreignKeyName: "rag_status_history_organisation_id_fkey"
+            columns: ["organisation_id"]
             isOneToOne: false
-            referencedRelation: "work_packages"
+            referencedRelation: "organisations"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rag_status_history_organisation_id_wbs_node_id_fkey"
+            columns: ["organisation_id", "wbs_node_id"]
+            isOneToOne: false
+            referencedRelation: "wbs_nodes"
+            referencedColumns: ["organisation_id", "id"]
           },
         ]
       }
       routine_completions: {
         Row: {
-          completed_at: string
           completed_date: string
+          created_at: string
           id: string
+          organisation_id: string
           routine_id: string
           user_id: string
         }
         Insert: {
-          completed_at?: string
           completed_date: string
+          created_at?: string
           id?: string
+          organisation_id: string
           routine_id: string
           user_id: string
         }
         Update: {
-          completed_at?: string
           completed_date?: string
+          created_at?: string
           id?: string
+          organisation_id?: string
           routine_id?: string
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "routine_completions_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "routine_completions_routine_id_fkey"
             columns: ["routine_id"]
@@ -570,58 +947,92 @@ export type Database = {
         Row: {
           archived_at: string | null
           created_at: string
+          description: string
           frequency_config: Json
-          frequency_type: string
+          frequency_type: Database["public"]["Enums"]["routine_frequency"]
           id: string
           name: string
-          time_of_day: string
-          user_id: string
+          organisation_id: string
+          owner_user_id: string
+          time_of_day: Database["public"]["Enums"]["routine_time_of_day"]
+          updated_at: string
         }
         Insert: {
           archived_at?: string | null
           created_at?: string
+          description?: string
           frequency_config?: Json
-          frequency_type?: string
+          frequency_type?: Database["public"]["Enums"]["routine_frequency"]
           id?: string
           name: string
-          time_of_day?: string
-          user_id: string
+          organisation_id: string
+          owner_user_id: string
+          time_of_day?: Database["public"]["Enums"]["routine_time_of_day"]
+          updated_at?: string
         }
         Update: {
           archived_at?: string | null
           created_at?: string
+          description?: string
           frequency_config?: Json
-          frequency_type?: string
+          frequency_type?: Database["public"]["Enums"]["routine_frequency"]
           id?: string
           name?: string
-          time_of_day?: string
-          user_id?: string
+          organisation_id?: string
+          owner_user_id?: string
+          time_of_day?: Database["public"]["Enums"]["routine_time_of_day"]
+          updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "routines_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       sop_items: {
         Row: {
           created_at: string
           id: string
           instruction: string
+          organisation_id: string
+          owner_user_id: string
+          position: number
           trigger_when: string
-          user_id: string
+          updated_at: string
         }
         Insert: {
           created_at?: string
           id?: string
-          instruction?: string
-          trigger_when?: string
-          user_id: string
+          instruction: string
+          organisation_id: string
+          owner_user_id: string
+          position?: number
+          trigger_when: string
+          updated_at?: string
         }
         Update: {
           created_at?: string
           id?: string
           instruction?: string
+          organisation_id?: string
+          owner_user_id?: string
+          position?: number
           trigger_when?: string
-          user_id?: string
+          updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "sop_items_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       suppressed_emails: {
         Row: {
@@ -647,188 +1058,239 @@ export type Database = {
         }
         Relationships: []
       }
-      task_attachments: {
-        Row: {
-          action_id: string | null
-          created_at: string
-          file_name: string
-          file_path: string
-          file_size: number
-          file_type: string
-          id: string
-          item_type: string
-          user_id: string
-          waiting_item_id: string | null
-          work_package_id: string | null
-        }
-        Insert: {
-          action_id?: string | null
-          created_at?: string
-          file_name: string
-          file_path: string
-          file_size?: number
-          file_type?: string
-          id?: string
-          item_type?: string
-          user_id: string
-          waiting_item_id?: string | null
-          work_package_id?: string | null
-        }
-        Update: {
-          action_id?: string | null
-          created_at?: string
-          file_name?: string
-          file_path?: string
-          file_size?: number
-          file_type?: string
-          id?: string
-          item_type?: string
-          user_id?: string
-          waiting_item_id?: string | null
-          work_package_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "task_attachments_action_id_fkey"
-            columns: ["action_id"]
-            isOneToOne: false
-            referencedRelation: "actions"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "task_attachments_waiting_item_id_fkey"
-            columns: ["waiting_item_id"]
-            isOneToOne: false
-            referencedRelation: "waiting_items"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "task_attachments_work_package_id_fkey"
-            columns: ["work_package_id"]
-            isOneToOne: false
-            referencedRelation: "work_packages"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      task_comments: {
-        Row: {
-          content: string
-          created_at: string
-          id: string
-          item_id: string
-          item_type: string
-          user_id: string
-        }
-        Insert: {
-          content?: string
-          created_at?: string
-          id?: string
-          item_id: string
-          item_type?: string
-          user_id: string
-        }
-        Update: {
-          content?: string
-          created_at?: string
-          id?: string
-          item_id?: string
-          item_type?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
       waiting_items: {
         Row: {
-          asked_on: string
+          asked_on: string | null
           created_at: string
+          created_by: string | null
           description: string
-          due_by: string
-          from_whom: string
+          due_by: string | null
+          from_user_id: string | null
+          from_whom_text: string | null
           id: string
-          linked_project_id: string | null
           notes: string
-          project_wp: string
-          status: string
-          user_id: string
+          organisation_id: string
+          status: Database["public"]["Enums"]["waiting_status"]
+          updated_at: string
+          wbs_node_id: string | null
         }
         Insert: {
-          asked_on?: string
+          asked_on?: string | null
           created_at?: string
-          description?: string
-          due_by?: string
-          from_whom?: string
+          created_by?: string | null
+          description: string
+          due_by?: string | null
+          from_user_id?: string | null
+          from_whom_text?: string | null
           id?: string
-          linked_project_id?: string | null
           notes?: string
-          project_wp?: string
-          status?: string
-          user_id: string
+          organisation_id: string
+          status?: Database["public"]["Enums"]["waiting_status"]
+          updated_at?: string
+          wbs_node_id?: string | null
         }
         Update: {
-          asked_on?: string
+          asked_on?: string | null
           created_at?: string
+          created_by?: string | null
           description?: string
-          due_by?: string
-          from_whom?: string
+          due_by?: string | null
+          from_user_id?: string | null
+          from_whom_text?: string | null
           id?: string
-          linked_project_id?: string | null
           notes?: string
-          project_wp?: string
-          status?: string
-          user_id?: string
+          organisation_id?: string
+          status?: Database["public"]["Enums"]["waiting_status"]
+          updated_at?: string
+          wbs_node_id?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "waiting_items_linked_project_id_fkey"
-            columns: ["linked_project_id"]
+            foreignKeyName: "waiting_items_organisation_id_fkey"
+            columns: ["organisation_id"]
             isOneToOne: false
-            referencedRelation: "projects"
+            referencedRelation: "organisations"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "waiting_items_organisation_id_wbs_node_id_fkey"
+            columns: ["organisation_id", "wbs_node_id"]
+            isOneToOne: false
+            referencedRelation: "wbs_nodes"
+            referencedColumns: ["organisation_id", "id"]
           },
         ]
       }
-      work_packages: {
+      wbs_node_dependencies: {
         Row: {
-          blockers: string
           created_at: string
-          dependencies: Json
-          due_date: string
+          dependency_type: Database["public"]["Enums"]["dependency_type"]
           id: string
-          project: string
-          rag_status: string
-          start_date: string
-          user_id: string
-          work_package: string
-          wp_lead: string
+          lag_days: number
+          organisation_id: string
+          source_node_id: string
+          target_node_id: string
         }
         Insert: {
-          blockers?: string
           created_at?: string
-          dependencies?: Json
-          due_date?: string
+          dependency_type?: Database["public"]["Enums"]["dependency_type"]
           id?: string
-          project?: string
-          rag_status?: string
-          start_date?: string
-          user_id: string
-          work_package?: string
-          wp_lead?: string
+          lag_days?: number
+          organisation_id: string
+          source_node_id: string
+          target_node_id: string
         }
         Update: {
-          blockers?: string
           created_at?: string
-          dependencies?: Json
-          due_date?: string
+          dependency_type?: Database["public"]["Enums"]["dependency_type"]
           id?: string
-          project?: string
-          rag_status?: string
-          start_date?: string
-          user_id?: string
-          work_package?: string
-          wp_lead?: string
+          lag_days?: number
+          organisation_id?: string
+          source_node_id?: string
+          target_node_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "wbs_node_dependencies_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wbs_node_dependencies_organisation_id_source_node_id_fkey"
+            columns: ["organisation_id", "source_node_id"]
+            isOneToOne: false
+            referencedRelation: "wbs_nodes"
+            referencedColumns: ["organisation_id", "id"]
+          },
+          {
+            foreignKeyName: "wbs_node_dependencies_organisation_id_target_node_id_fkey"
+            columns: ["organisation_id", "target_node_id"]
+            isOneToOne: false
+            referencedRelation: "wbs_nodes"
+            referencedColumns: ["organisation_id", "id"]
+          },
+        ]
+      }
+      wbs_nodes: {
+        Row: {
+          archived_at: string | null
+          blockers: string | null
+          created_at: string
+          created_by: string | null
+          description: string
+          due_date: string | null
+          id: string
+          lead_user_id: string | null
+          name: string
+          node_type: Database["public"]["Enums"]["node_type"]
+          organisation_id: string
+          parent_id: string | null
+          position: number
+          project_status: Database["public"]["Enums"]["project_status"] | null
+          rag_status: Database["public"]["Enums"]["rag_status"] | null
+          start_date: string | null
+          updated_at: string
+        }
+        Insert: {
+          archived_at?: string | null
+          blockers?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          due_date?: string | null
+          id?: string
+          lead_user_id?: string | null
+          name: string
+          node_type: Database["public"]["Enums"]["node_type"]
+          organisation_id: string
+          parent_id?: string | null
+          position?: number
+          project_status?: Database["public"]["Enums"]["project_status"] | null
+          rag_status?: Database["public"]["Enums"]["rag_status"] | null
+          start_date?: string | null
+          updated_at?: string
+        }
+        Update: {
+          archived_at?: string | null
+          blockers?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          due_date?: string | null
+          id?: string
+          lead_user_id?: string | null
+          name?: string
+          node_type?: Database["public"]["Enums"]["node_type"]
+          organisation_id?: string
+          parent_id?: string | null
+          position?: number
+          project_status?: Database["public"]["Enums"]["project_status"] | null
+          rag_status?: Database["public"]["Enums"]["rag_status"] | null
+          start_date?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wbs_nodes_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wbs_nodes_organisation_id_parent_id_fkey"
+            columns: ["organisation_id", "parent_id"]
+            isOneToOne: false
+            referencedRelation: "wbs_nodes"
+            referencedColumns: ["organisation_id", "id"]
+          },
+        ]
+      }
+      webhook_sources: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string
+          id: string
+          last_received_at: string | null
+          name: string
+          organisation_id: string
+          slug: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          id?: string
+          last_received_at?: string | null
+          name: string
+          organisation_id: string
+          slug: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          id?: string
+          last_received_at?: string | null
+          name?: string
+          organisation_id?: string
+          slug?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "webhook_sources_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
@@ -843,6 +1305,14 @@ export type Database = {
         Args: { payload: Json; queue_name: string }
         Returns: number
       }
+      has_org_role: {
+        Args: {
+          _org_id: string
+          _roles: Database["public"]["Enums"]["membership_role"][]
+        }
+        Returns: boolean
+      }
+      is_org_member: { Args: { _org_id: string }; Returns: boolean }
       move_to_dlq: {
         Args: {
           dlq_name: string
@@ -862,7 +1332,19 @@ export type Database = {
       }
     }
     Enums: {
-      [_ in never]: never
+      action_priority: "high" | "medium" | "low"
+      action_status: "not_started" | "in_progress" | "complete" | "blocked"
+      dependency_type: "fs" | "ff" | "ss" | "sf"
+      domain_entity_kind: "action" | "waiting_item" | "wbs_node"
+      inbox_event_type: "created" | "promoted" | "deleted"
+      kb_chat_role: "user" | "assistant" | "system"
+      membership_role: "owner" | "admin" | "member"
+      node_type: "portfolio" | "programme" | "project" | "work_package"
+      project_status: "active" | "on_hold" | "complete"
+      rag_status: "green" | "amber" | "red"
+      routine_frequency: "daily" | "weekly_days" | "weekly_count"
+      routine_time_of_day: "morning" | "afternoon" | "evening" | "anytime"
+      waiting_status: "pending" | "received" | "overdue"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -989,6 +1471,20 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      action_priority: ["high", "medium", "low"],
+      action_status: ["not_started", "in_progress", "complete", "blocked"],
+      dependency_type: ["fs", "ff", "ss", "sf"],
+      domain_entity_kind: ["action", "waiting_item", "wbs_node"],
+      inbox_event_type: ["created", "promoted", "deleted"],
+      kb_chat_role: ["user", "assistant", "system"],
+      membership_role: ["owner", "admin", "member"],
+      node_type: ["portfolio", "programme", "project", "work_package"],
+      project_status: ["active", "on_hold", "complete"],
+      rag_status: ["green", "amber", "red"],
+      routine_frequency: ["daily", "weekly_days", "weekly_count"],
+      routine_time_of_day: ["morning", "afternoon", "evening", "anytime"],
+      waiting_status: ["pending", "received", "overdue"],
+    },
   },
 } as const

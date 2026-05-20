@@ -1,37 +1,58 @@
 import { useState } from "react";
-import { useAppStore, SOPItem } from "@/lib/store";
+import { useAppStore } from "@/lib/store";
+import type { SopItem } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Plus, Pencil, Trash2, Check, X, BookOpen } from "lucide-react";
+import { toast } from "sonner";
 
 export default function SOPPage() {
   const sopItems = useAppStore((s) => s.sopItems);
-  const updateSOPItem = useAppStore((s) => s.updateSOPItem);
-  const addSOPItem = useAppStore((s) => s.addSOPItem);
-  const deleteSOPItem = useAppStore((s) => s.deleteSOPItem);
+  const updateSopItem = useAppStore((s) => s.updateSopItem);
+  const addSopItem = useAppStore((s) => s.addSopItem);
+  const deleteSopItem = useAppStore((s) => s.deleteSopItem);
+  const currentOrg = useAppStore((s) => s.currentOrg);
+  const currentMembership = useAppStore((s) => s.currentMembership);
 
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState<{ when: string; instruction: string }>({ when: "", instruction: "" });
+  const [editForm, setEditForm] = useState<{ triggerWhen: string; instruction: string }>({ triggerWhen: "", instruction: "" });
   const [adding, setAdding] = useState(false);
-  const [newForm, setNewForm] = useState<{ when: string; instruction: string }>({ when: "", instruction: "" });
+  const [newForm, setNewForm] = useState<{ triggerWhen: string; instruction: string }>({ triggerWhen: "", instruction: "" });
 
-  const startEdit = (item: SOPItem) => {
+  const startEdit = (item: SopItem) => {
     setEditingId(item.id);
-    setEditForm({ when: item.when, instruction: item.instruction });
+    setEditForm({ triggerWhen: item.triggerWhen, instruction: item.instruction });
   };
 
   const saveEdit = () => {
-    if (editingId && editForm.when.trim() && editForm.instruction.trim()) {
-      updateSOPItem(editingId, { when: editForm.when.trim(), instruction: editForm.instruction.trim() });
+    if (editingId && editForm.triggerWhen.trim() && editForm.instruction.trim()) {
+      updateSopItem(editingId, {
+        triggerWhen: editForm.triggerWhen.trim(),
+        instruction: editForm.instruction.trim(),
+      });
     }
     setEditingId(null);
   };
 
   const saveNew = () => {
-    if (newForm.when.trim() && newForm.instruction.trim()) {
-      addSOPItem({ id: crypto.randomUUID(), when: newForm.when.trim(), instruction: newForm.instruction.trim() });
-      setNewForm({ when: "", instruction: "" });
+    if (!currentOrg || !currentMembership) {
+      toast.error("No active organisation");
+      return;
+    }
+    if (newForm.triggerWhen.trim() && newForm.instruction.trim()) {
+      const now = new Date().toISOString();
+      addSopItem({
+        id: crypto.randomUUID(),
+        organisationId: currentOrg.id,
+        ownerUserId: currentMembership.userId,
+        triggerWhen: newForm.triggerWhen.trim(),
+        instruction: newForm.instruction.trim(),
+        position: sopItems.length,
+        createdAt: now,
+        updatedAt: now,
+      });
+      setNewForm({ triggerWhen: "", instruction: "" });
       setAdding(false);
     }
   };
@@ -59,8 +80,8 @@ export default function SOPPage() {
             {editingId === item.id ? (
               <div className="p-4 space-y-3">
                 <Input
-                  value={editForm.when}
-                  onChange={(e) => setEditForm({ ...editForm, when: e.target.value })}
+                  value={editForm.triggerWhen}
+                  onChange={(e) => setEditForm({ ...editForm, triggerWhen: e.target.value })}
                   placeholder="When (e.g., Monday 30 min)"
                   maxLength={100}
                 />
@@ -72,13 +93,13 @@ export default function SOPPage() {
                   maxLength={2000}
                 />
                 <div className="flex gap-2">
-                  <Button size="sm" onClick={saveEdit} disabled={!editForm.when.trim() || !editForm.instruction.trim()}>
+                  <Button size="sm" onClick={saveEdit} disabled={!editForm.triggerWhen.trim() || !editForm.instruction.trim()}>
                     <Check className="mr-1 h-3.5 w-3.5" /> Save
                   </Button>
                   <Button size="sm" variant="outline" onClick={() => setEditingId(null)}>
                     <X className="mr-1 h-3.5 w-3.5" /> Cancel
                   </Button>
-                  <Button size="sm" variant="destructive" onClick={() => { deleteSOPItem(item.id); setEditingId(null); }} className="ml-auto">
+                  <Button size="sm" variant="destructive" onClick={() => { deleteSopItem(item.id); setEditingId(null); }} className="ml-auto">
                     <Trash2 className="mr-1 h-3.5 w-3.5" /> Delete
                   </Button>
                 </div>
@@ -87,7 +108,7 @@ export default function SOPPage() {
               <div className="flex gap-4 p-4 group cursor-pointer" onClick={() => startEdit(item)}>
                 <div className="min-w-[140px] shrink-0">
                   <span className="inline-flex items-center rounded-md bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
-                    {item.when}
+                    {item.triggerWhen}
                   </span>
                 </div>
                 <p className="text-sm leading-relaxed whitespace-pre-line flex-1">{item.instruction}</p>
@@ -100,8 +121,8 @@ export default function SOPPage() {
         {adding && (
           <div className="rounded-lg border-2 border-dashed border-primary/30 bg-card p-4 space-y-3">
             <Input
-              value={newForm.when}
-              onChange={(e) => setNewForm({ ...newForm, when: e.target.value })}
+              value={newForm.triggerWhen}
+              onChange={(e) => setNewForm({ ...newForm, triggerWhen: e.target.value })}
               placeholder="When (e.g., Friday 15 min)"
               maxLength={100}
               autoFocus
@@ -114,10 +135,10 @@ export default function SOPPage() {
               maxLength={2000}
             />
             <div className="flex gap-2">
-              <Button size="sm" onClick={saveNew} disabled={!newForm.when.trim() || !newForm.instruction.trim()}>
+              <Button size="sm" onClick={saveNew} disabled={!newForm.triggerWhen.trim() || !newForm.instruction.trim()}>
                 <Check className="mr-1 h-3.5 w-3.5" /> Add
               </Button>
-              <Button size="sm" variant="outline" onClick={() => { setAdding(false); setNewForm({ when: "", instruction: "" }); }}>
+              <Button size="sm" variant="outline" onClick={() => { setAdding(false); setNewForm({ triggerWhen: "", instruction: "" }); }}>
                 <X className="mr-1 h-3.5 w-3.5" /> Cancel
               </Button>
             </div>

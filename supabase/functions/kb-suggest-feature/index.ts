@@ -63,17 +63,28 @@ Deno.serve(async (req) => {
       console.warn("GitHub env vars missing — saving suggestion without issue.");
     }
 
+    const { data: membership } = await supabase
+      .from("memberships")
+      .select("organisation_id")
+      .eq("user_id", user.id)
+      .limit(1)
+      .maybeSingle();
+    if (!membership?.organisation_id) {
+      return new Response(JSON.stringify({ error: "No active organisation" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const { error: insertErr } = await supabase.from("feature_suggestions").insert({
+      organisation_id: membership.organisation_id,
       user_id: user.id,
       title,
       description,
       github_issue_url: issueUrl,
-      github_issue_number: issueNumber,
-      status,
     });
     if (insertErr) throw insertErr;
 
-    return new Response(JSON.stringify({ success: true, github_issue_url: issueUrl, status }), {
+    return new Response(JSON.stringify({ success: true, github_issue_url: issueUrl, github_issue_number: issueNumber, status }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {

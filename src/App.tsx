@@ -9,8 +9,8 @@ import MyActions from "@/pages/MyActions";
 import DashboardPage from "@/pages/DashboardPage";
 import WaitingFor from "@/pages/WaitingFor";
 import SOPPage from "@/pages/SOPPage";
-import ProjectsPage from "@/pages/ProjectsPage";
-import ProjectDetailPage from "@/pages/ProjectDetailPage";
+import WbsPage from "@/pages/WbsPage";
+import WbsNodeDetailPage from "@/pages/WbsNodeDetailPage";
 import WBSPlanner from "@/pages/WBSPlanner";
 import RoutinesPage from "@/pages/RoutinesPage";
 
@@ -23,6 +23,7 @@ import AuthPage from "@/pages/AuthPage";
 import ResetPasswordPage from "@/pages/ResetPasswordPage";
 import Landing from "@/pages/Landing";
 import NotFound from "./pages/NotFound";
+import OrgBootstrapPage from "@/pages/OrgBootstrapPage";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 const queryClient = new QueryClient();
@@ -37,6 +38,7 @@ const isDevEnvironment = () => {
 function ProtectedRoutes() {
   const { session, loading } = useAuth();
   const dataLoaded = useAppStore((s) => s.dataLoaded);
+  const needsOrgBootstrap = useAppStore((s) => s.needsOrgBootstrap);
   const isDev = isDevEnvironment();
 
   if (!isDev && (loading || (session && !dataLoaded))) {
@@ -51,6 +53,12 @@ function ProtectedRoutes() {
     return <Navigate to="/landing" replace />;
   }
 
+  // Freshly signed-up user with no membership yet → first-org bootstrap.
+  // Lives outside AppShell because no nav surface makes sense yet.
+  if (needsOrgBootstrap) {
+    return <OrgBootstrapPage />;
+  }
+
   return (
     <AppShell>
       <ErrorBoundary label="route">
@@ -58,8 +66,11 @@ function ProtectedRoutes() {
           <Route path="/" element={<MyActions />} />
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/inbox" element={<InboxPage />} />
-          <Route path="/projects" element={<ProjectsPage />} />
-          <Route path="/projects/:projectId" element={<ProjectDetailPage />} />
+          <Route path="/wbs" element={<WbsPage />} />
+          <Route path="/wbs/:nodeId" element={<WbsNodeDetailPage />} />
+          {/* Legacy routes kept temporarily so deep links don't 404 */}
+          <Route path="/projects" element={<WbsPage />} />
+          <Route path="/projects/:nodeId" element={<WbsNodeDetailPage />} />
           <Route path="/actions" element={<MyActions />} />
 
           <Route path="/waiting" element={<WaitingFor />} />

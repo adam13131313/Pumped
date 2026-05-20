@@ -1,93 +1,80 @@
 import { useEffect, useMemo, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useAppStore } from "@/lib/store";
+import type { Routine, RoutineCompletion, RoutineFrequency, RoutineTimeOfDay } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter,
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Plus, Sun, CloudSun, Moon, Sparkles, Flame, Archive, ArchiveRestore, Pencil, Trash2 } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { Plus, Sun, CloudSun, Moon, Sparkles, Flame, Archive, ArchiveRestore, Pencil, Trash2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import confetti from "canvas-confetti";
-import { format, startOfWeek, addDays, isSameDay, parseISO, differenceInCalendarDays, startOfDay } from "date-fns";
+import { addDays, differenceInCalendarDays, format, isSameDay, parseISO, startOfDay, startOfWeek } from "date-fns";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
-type FreqType = "daily" | "weekly_days" | "weekly_count";
-type TimeOfDay = "morning" | "afternoon" | "evening" | "anytime";
+// v2 Routines. Personal habits stored per (organisation, owner_user). The
+// store owns CRUD + completion writes; this component only renders the
+// state and dispatches.
 
-interface Routine {
-  id: string;
-  user_id: string;
-  name: string;
-  frequency_type: FreqType;
-  frequency_config: { days?: number[]; target?: number };
-  time_of_day: TimeOfDay;
-  created_at: string;
-  archived_at: string | null;
-}
-
-interface Completion {
-  id: string;
-  routine_id: string;
-  completed_date: string; // YYYY-MM-DD
-}
-
-const todayStr = () => format(new Date(), "yyyy-MM-dd");
-
-const TOD_META: Record<TimeOfDay, { label: string; icon: React.ComponentType<{ className?: string }> }> = {
+const TOD_META: Record<RoutineTimeOfDay, { label: string; icon: React.ComponentType<{ className?: string }> }> = {
   morning: { label: "Morning", icon: Sun },
   afternoon: { label: "Afternoon", icon: CloudSun },
   evening: { label: "Evening", icon: Moon },
   anytime: { label: "Anytime", icon: Sparkles },
 };
+const TOD_ORDER: RoutineTimeOfDay[] = ["morning", "afternoon", "evening", "anytime"];
 
 const WEEKDAYS = [
   { v: 1, s: "M" }, { v: 2, s: "T" }, { v: 3, s: "W" },
   { v: 4, s: "T" }, { v: 5, s: "F" }, { v: 6, s: "S" }, { v: 0, s: "S" },
 ];
 
-function isDueOn(routine: Routine, date: Date): boolean {
-  if (routine.archived_at) return false;
-  if (routine.frequency_type === "daily") return true;
-  if (routine.frequency_type === "weekly_days") {
-    const days = routine.frequency_config.days ?? [];
-    return days.includes(date.getDay());
-  }
-  return true; // weekly_count: shown every day until target met for that week
+function freqDays(r: Routine): number[] {
+  const days = (r.frequencyConfig as { days?: number[] })?.days;
+  return Array.isArray(days) ? days : [];
+}
+function freqTarget(r: Routine): number {
+  const target = (r.frequencyConfig as { target?: number })?.target;
+  return typeof target === "number" ? target : 1;
 }
 
-function calcStreak(routine: Routine, comps: Completion[]): { current: number; longest: number } {
-  const set = new Set(comps.map((c) => c.completed_date));
-  if (routine.frequency_type === "weekly_count") {
-    // Streak in weeks meeting target
-    const target = routine.frequency_config.target ?? 1;
+function isDueOn(routine: Routine, date: Date): boolean {
+  if (routine.archivedAt) return false;
+  if (routine.frequencyType === "daily") return true;
+  if (routine.frequencyType === "weekly_days") return freqDays(routine).includes(date.getDay());
+  // weekly_count: shown every day until target met for the week
+  return true;
+}
+
+function calcStreak(routine: Routine, comps: RoutineCompletion[]): { current: number; longest: number } {
+  const set = new Set(comps.map((c) => c.completedDate));
+  if (routine.frequencyType === "weekly_count") {
+    const target = freqTarget(routine);
     const byWeek = new Map<string, number>();
     for (const c of comps) {
-      const d = parseISO(c.completed_date);
+      const d = parseISO(c.completedDate);
       const wk = format(startOfWeek(d, { weekStartsOn: 1 }), "yyyy-MM-dd");
       byWeek.set(wk, (byWeek.get(wk) ?? 0) + 1);
     }
-    const weeks = Array.from(byWeek.entries()).sort(([a], [b]) => (a < b ? 1 : -1));
-    let current = 0, longest = 0, run = 0;
+    let current = 0;
     let cursor = format(startOfWeek(new Date(), { weekStartsOn: 1 }), "yyyy-MM-dd");
-    // current
     while ((byWeek.get(cursor) ?? 0) >= target) {
       current++;
       cursor = format(addDays(parseISO(cursor), -7), "yyyy-MM-dd");
     }
-    // longest
-    let prev: string | null = null;
-    for (const [wk, count] of weeks.reverse()) {
+    let longest = 0, run = 0, prev: string | null = null;
+    for (const [wk, count] of Array.from(byWeek.entries()).sort()) {
       if (count >= target) {
         if (!prev || differenceInCalendarDays(parseISO(wk), parseISO(prev)) === 7) run++;
         else run = 1;
@@ -99,24 +86,24 @@ function calcStreak(routine: Routine, comps: Completion[]): { current: number; l
     }
     return { current, longest };
   }
-  // daily / weekly_days: count consecutive due days completed, starting from today backwards
+  // daily / weekly_days
   let current = 0;
   let cursor = startOfDay(new Date());
-  // If today not yet completed, start from yesterday for "current"
   if (!set.has(format(cursor, "yyyy-MM-dd")) && isDueOn(routine, cursor)) {
     cursor = addDays(cursor, -1);
   } else if (set.has(format(cursor, "yyyy-MM-dd"))) {
     current++;
     cursor = addDays(cursor, -1);
   }
-  while (true) {
+  let guard = 0;
+  while (guard++ < 3650) {
     if (!isDueOn(routine, cursor)) { cursor = addDays(cursor, -1); continue; }
     if (set.has(format(cursor, "yyyy-MM-dd"))) {
       current++;
       cursor = addDays(cursor, -1);
     } else break;
-    if (current > 3650) break;
   }
+
   // longest
   const sortedDates = Array.from(set).sort();
   let longest = 0, run = 0, prev: Date | null = null;
@@ -124,7 +111,6 @@ function calcStreak(routine: Routine, comps: Completion[]): { current: number; l
     const d = parseISO(ds);
     if (!prev) { run = 1; }
     else {
-      // walk forward from prev to d skipping non-due days
       let c = addDays(prev, 1);
       let consecutive = true;
       while (c < d) {
@@ -141,138 +127,94 @@ function calcStreak(routine: Routine, comps: Completion[]): { current: number; l
 
 export default function RoutinesPage() {
   const { user } = useAuth();
-  const [routines, setRoutines] = useState<Routine[]>([]);
-  const [completions, setCompletions] = useState<Completion[]>([]);
-  const [skipped, setSkipped] = useState<Set<string>>(new Set()); // local "skip today" by routine id
-  const [loading, setLoading] = useState(true);
+  const currentOrg = useAppStore((s) => s.currentOrg);
+  const currentMembership = useAppStore((s) => s.currentMembership);
+  const routines = useAppStore((s) => s.routines);
+  const completions = useAppStore((s) => s.routineCompletions);
+  const addRoutine = useAppStore((s) => s.addRoutine);
+  const updateRoutine = useAppStore((s) => s.updateRoutine);
+  const deleteRoutine = useAppStore((s) => s.deleteRoutine);
+  const addRoutineCompletion = useAppStore((s) => s.addRoutineCompletion);
+  const deleteRoutineCompletion = useAppStore((s) => s.deleteRoutineCompletion);
+
+  const [skipped, setSkipped] = useState<Set<string>>(new Set());
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Routine | null>(null);
 
-  useEffect(() => {
-    if (!user) return;
-    void load();
-  }, [user]);
-
-  async function load() {
-    setLoading(true);
-    const [r, c] = await Promise.all([
-      supabase.from("routines").select("*").order("created_at", { ascending: true }),
-      supabase.from("routine_completions").select("*"),
-    ]);
-    if (!r.error) setRoutines((r.data as any) ?? []);
-    if (!c.error) setCompletions((c.data as any) ?? []);
-    setLoading(false);
-  }
-
   const today = new Date();
-  const todayKey = todayStr();
+  const todayKey = format(today, "yyyy-MM-dd");
 
   const dueToday = useMemo(
-    () => routines.filter((r) => !r.archived_at && isDueOn(r, today) && !skipped.has(r.id)),
-    [routines, skipped]
+    () => routines.filter((r) => !r.archivedAt && isDueOn(r, today) && !skipped.has(r.id)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [routines, skipped],
   );
   const completedToday = useMemo(
-    () => new Set(completions.filter((c) => c.completed_date === todayKey).map((c) => c.routine_id)),
-    [completions, todayKey]
+    () => new Set(completions.filter((c) => c.completedDate === todayKey).map((c) => c.routineId)),
+    [completions, todayKey],
   );
 
   const doneCount = dueToday.filter((r) => completedToday.has(r.id)).length;
   const totalCount = dueToday.length;
   const pct = totalCount === 0 ? 0 : Math.round((doneCount / totalCount) * 100);
 
-  async function toggleComplete(routine: Routine) {
-    if (!user) return;
-    const isDone = completedToday.has(routine.id);
+  const toggleComplete = async (routine: Routine) => {
+    if (!user || !currentOrg) return;
     if (navigator.vibrate) navigator.vibrate(10);
-
+    const isDone = completedToday.has(routine.id);
     if (isDone) {
-      const existing = completions.find((c) => c.routine_id === routine.id && c.completed_date === todayKey);
-      setCompletions((prev) => prev.filter((c) => c.id !== existing?.id));
-      if (existing) await supabase.from("routine_completions").delete().eq("id", existing.id);
-    } else {
-      const optimistic: Completion = {
-        id: `tmp-${Date.now()}`,
-        routine_id: routine.id,
-        completed_date: todayKey,
-      };
-      setCompletions((prev) => [...prev, optimistic]);
-      const { data, error } = await supabase
-        .from("routine_completions")
-        .insert({ routine_id: routine.id, user_id: user.id, completed_date: todayKey })
-        .select()
-        .single();
-      if (error) {
-        setCompletions((prev) => prev.filter((c) => c.id !== optimistic.id));
-        toast.error("Couldn't save — try again");
-      } else {
-        setCompletions((prev) => prev.map((c) => (c.id === optimistic.id ? (data as any) : c)));
-        // confetti when ring hits 100%
-        const newDone = doneCount + 1;
-        if (newDone === totalCount && totalCount > 0) {
-          confetti({ particleCount: 80, spread: 70, origin: { y: 0.3 } });
-        }
-      }
+      const existing = completions.find((c) => c.routineId === routine.id && c.completedDate === todayKey);
+      if (existing) deleteRoutineCompletion(existing.id);
+      return;
     }
-  }
+    addRoutineCompletion({
+      id: crypto.randomUUID(),
+      organisationId: currentOrg.id,
+      routineId: routine.id,
+      userId: user.id,
+      completedDate: todayKey,
+      createdAt: new Date().toISOString(),
+    });
+    // Confetti only when we've crossed into "all done".
+    if (doneCount + 1 === totalCount && totalCount > 0) {
+      confetti({ particleCount: 80, spread: 70, origin: { y: 0.3 } });
+    }
+  };
 
-  function skipToday(routine: Routine) {
+  const skipToday = (routine: Routine) => {
     setSkipped((prev) => new Set(prev).add(routine.id));
     toast(`Skipped "${routine.name}" today — streak safe`);
-  }
+  };
 
-  async function handleArchive(r: Routine, archive: boolean) {
-    const archived_at = archive ? new Date().toISOString() : null;
-    setRoutines((prev) => prev.map((x) => (x.id === r.id ? { ...x, archived_at } : x)));
-    await supabase.from("routines").update({ archived_at }).eq("id", r.id);
-  }
+  const handleArchive = (r: Routine, archive: boolean) => {
+    updateRoutine(r.id, { archivedAt: archive ? new Date().toISOString() : null });
+  };
 
-  async function handleDelete(r: Routine) {
-    setRoutines((prev) => prev.filter((x) => x.id !== r.id));
-    setCompletions((prev) => prev.filter((c) => c.routine_id !== r.id));
-    const { error } = await supabase.from("routines").delete().eq("id", r.id);
-    if (error) {
-      toast.error("Couldn't delete — try again");
-      void load();
-    } else {
-      toast.success(`Deleted "${r.name}"`);
-    }
-  }
+  const handleDelete = (r: Routine) => {
+    deleteRoutine(r.id);
+    toast.success(`Deleted "${r.name}"`);
+  };
 
-  async function toggleCompletionForDate(routineId: string, dateStr: string) {
-    if (!user) return;
-    const existing = completions.find(
-      (c) => c.routine_id === routineId && c.completed_date === dateStr
-    );
+  const toggleCompletionForDate = (routineId: string, dateStr: string) => {
+    if (!user || !currentOrg) return;
+    const existing = completions.find((c) => c.routineId === routineId && c.completedDate === dateStr);
     if (existing) {
-      setCompletions((prev) => prev.filter((c) => c.id !== existing.id));
-      const { error } = await supabase.from("routine_completions").delete().eq("id", existing.id);
-      if (error) { toast.error("Couldn't update"); void load(); }
-    } else {
-      const optimistic: Completion = {
-        id: `tmp-${Date.now()}`,
-        routine_id: routineId,
-        completed_date: dateStr,
-      };
-      setCompletions((prev) => [...prev, optimistic]);
-      const { data, error } = await supabase
-        .from("routine_completions")
-        .insert({ routine_id: routineId, user_id: user.id, completed_date: dateStr })
-        .select()
-        .single();
-      if (error) {
-        setCompletions((prev) => prev.filter((c) => c.id !== optimistic.id));
-        toast.error("Couldn't save");
-      } else {
-        setCompletions((prev) => prev.map((c) => (c.id === optimistic.id ? (data as any) : c)));
-      }
+      deleteRoutineCompletion(existing.id);
+      return;
     }
-  }
+    addRoutineCompletion({
+      id: crypto.randomUUID(),
+      organisationId: currentOrg.id,
+      routineId,
+      userId: user.id,
+      completedDate: dateStr,
+      createdAt: new Date().toISOString(),
+    });
+  };
 
-  if (!user) {
+  if (!user || !currentOrg || !currentMembership) {
     return (
-      <div className="p-8 text-center text-muted-foreground">
-        Sign in to track routines.
-      </div>
+      <div className="p-8 text-center text-muted-foreground">Sign in to track routines.</div>
     );
   }
 
@@ -287,8 +229,30 @@ export default function RoutinesPage() {
           open={dialogOpen}
           setOpen={(v) => { setDialogOpen(v); if (!v) setEditing(null); }}
           editing={editing}
-          onSaved={async () => { setEditing(null); await load(); }}
-          userId={user.id}
+          onSave={(payload) => {
+            const now = new Date().toISOString();
+            if (editing) {
+              updateRoutine(editing.id, payload);
+              toast.success("Updated");
+            } else {
+              addRoutine({
+                id: crypto.randomUUID(),
+                organisationId: currentOrg.id,
+                ownerUserId: user.id,
+                name: payload.name,
+                description: "",
+                timeOfDay: payload.timeOfDay,
+                frequencyType: payload.frequencyType,
+                frequencyConfig: payload.frequencyConfig,
+                archivedAt: null,
+                createdAt: now,
+                updatedAt: now,
+              });
+              toast.success("Routine added");
+            }
+            setEditing(null);
+            setDialogOpen(false);
+          }}
         />
       </header>
 
@@ -303,13 +267,11 @@ export default function RoutinesPage() {
           {totalCount > 0 && (
             <CompletionRing done={doneCount} total={totalCount} pct={pct} />
           )}
-          {loading ? (
-            <p className="text-center text-sm text-muted-foreground">Loading…</p>
-          ) : totalCount === 0 ? (
+          {totalCount === 0 ? (
             <EmptyState onAdd={() => setDialogOpen(true)} />
           ) : (
-            (["morning", "afternoon", "evening", "anytime"] as TimeOfDay[]).map((tod) => {
-              const items = dueToday.filter((r) => r.time_of_day === tod);
+            TOD_ORDER.map((tod) => {
+              const items = dueToday.filter((r) => r.timeOfDay === tod);
               if (items.length === 0) return null;
               const sorted = [...items].sort((a, b) => {
                 const ad = completedToday.has(a.id) ? 1 : 0;
@@ -330,7 +292,7 @@ export default function RoutinesPage() {
                           key={r.id}
                           routine={r}
                           done={completedToday.has(r.id)}
-                          completions={completions.filter((c) => c.routine_id === r.id)}
+                          completions={completions.filter((c) => c.routineId === r.id)}
                           onToggle={() => toggleComplete(r)}
                           onSkip={() => skipToday(r)}
                           onEdit={() => { setEditing(r); setDialogOpen(true); }}
@@ -346,7 +308,7 @@ export default function RoutinesPage() {
 
         <TabsContent value="week" className="mt-6">
           <WeekGrid
-            routines={routines.filter((r) => !r.archived_at)}
+            routines={routines.filter((r) => !r.archivedAt)}
             completions={completions}
             onToggle={toggleCompletionForDate}
           />
@@ -405,7 +367,7 @@ function RoutineRow({
 }: {
   routine: Routine;
   done: boolean;
-  completions: Completion[];
+  completions: RoutineCompletion[];
   onToggle: () => void;
   onSkip: () => void;
   onEdit: () => void;
@@ -431,7 +393,7 @@ function RoutineRow({
       }}
       className={cn(
         "relative touch-pan-y select-none rounded-2xl border bg-card transition-colors",
-        done && "border-emerald-200 bg-emerald-50 dark:border-emerald-900/40 dark:bg-emerald-950/30"
+        done && "border-emerald-200 bg-emerald-50 dark:border-emerald-900/40 dark:bg-emerald-950/30",
       )}
     >
       {dragX < -10 && (
@@ -452,7 +414,7 @@ function RoutineRow({
             "flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full border-2 transition-colors",
             done
               ? "border-emerald-500 bg-emerald-500 text-white"
-              : "border-muted-foreground/30 bg-background"
+              : "border-muted-foreground/30 bg-background",
           )}
         >
           {done && (
@@ -482,13 +444,13 @@ function RoutineRow({
 }
 
 function FrequencyLabel({ routine }: { routine: Routine }) {
-  if (routine.frequency_type === "daily") return <span>Daily</span>;
-  if (routine.frequency_type === "weekly_days") {
-    const days = routine.frequency_config.days ?? [];
+  if (routine.frequencyType === "daily") return <span>Daily</span>;
+  if (routine.frequencyType === "weekly_days") {
+    const days = freqDays(routine);
     const labels = ["S", "M", "T", "W", "T", "F", "S"];
     return <span>{days.map((d) => labels[d]).join(" · ")}</span>;
   }
-  return <span>{routine.frequency_config.target ?? 1}× per week</span>;
+  return <span>{freqTarget(routine)}× per week</span>;
 }
 
 function useLongPress(callback: () => void, ms = 500) {
@@ -524,7 +486,7 @@ function WeekGrid({
   routines, completions, onToggle,
 }: {
   routines: Routine[];
-  completions: Completion[];
+  completions: RoutineCompletion[];
   onToggle: (routineId: string, dateStr: string) => void;
 }) {
   const start = startOfWeek(new Date(), { weekStartsOn: 1 });
@@ -556,7 +518,7 @@ function WeekGrid({
               <td className="pr-3 text-sm">{r.name}</td>
               {days.map((d) => {
                 const ds = format(d, "yyyy-MM-dd");
-                const did = completions.some((c) => c.routine_id === r.id && c.completed_date === ds);
+                const did = completions.some((c) => c.routineId === r.id && c.completedDate === ds);
                 const due = isDueOn(r, d);
                 const isFuture = d > startOfDay(today) && !isSameDay(d, today);
                 return (
@@ -574,7 +536,7 @@ function WeekGrid({
                           ? "bg-emerald-500"
                           : due
                             ? "border border-dashed border-muted-foreground/40"
-                            : "bg-muted/40"
+                            : "bg-muted/40",
                       )}
                     />
                   </td>
@@ -592,27 +554,27 @@ function AllRoutinesList({
   routines, completions, onArchive, onUnarchive, onEdit, onDelete,
 }: {
   routines: Routine[];
-  completions: Completion[];
+  completions: RoutineCompletion[];
   onArchive: (r: Routine) => void;
   onUnarchive: (r: Routine) => void;
   onEdit: (r: Routine) => void;
   onDelete: (r: Routine) => void;
 }) {
-  const active = routines.filter((r) => !r.archived_at);
-  const archived = routines.filter((r) => r.archived_at);
+  const active = routines.filter((r) => !r.archivedAt);
+  const archived = routines.filter((r) => r.archivedAt);
   return (
     <div className="space-y-6">
       <Section title="Active">
         {active.length === 0 ? (
           <p className="text-sm text-muted-foreground">No active routines.</p>
         ) : active.map((r) => {
-          const { current, longest } = calcStreak(r, completions.filter((c) => c.routine_id === r.id));
+          const { current, longest } = calcStreak(r, completions.filter((c) => c.routineId === r.id));
           return (
             <div key={r.id} className="flex items-center gap-3 rounded-2xl border bg-card p-3">
               <div className="min-w-0 flex-1">
                 <div className="truncate font-medium">{r.name}</div>
                 <div className="text-xs text-muted-foreground">
-                  <FrequencyLabel routine={r} /> · {TOD_META[r.time_of_day].label} · streak {current} (best {longest})
+                  <FrequencyLabel routine={r} /> · {TOD_META[r.timeOfDay].label} · streak {current} (best {longest})
                 </div>
               </div>
               <Button size="icon" variant="ghost" onClick={() => onEdit(r)} aria-label="Edit routine"><Pencil className="h-4 w-4" /></Button>
@@ -675,54 +637,52 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
+interface RoutinePayload {
+  name: string;
+  timeOfDay: RoutineTimeOfDay;
+  frequencyType: RoutineFrequency;
+  frequencyConfig: Record<string, unknown>;
+}
+
 function QuickAddButton({
-  open, setOpen, editing, onSaved, userId,
+  open, setOpen, editing, onSave,
 }: {
   open: boolean;
   setOpen: (v: boolean) => void;
   editing: Routine | null;
-  onSaved: () => void;
-  userId: string;
+  onSave: (payload: RoutinePayload) => void;
 }) {
   const [name, setName] = useState("");
-  const [freqType, setFreqType] = useState<FreqType>("daily");
+  const [freqType, setFreqType] = useState<RoutineFrequency>("daily");
   const [days, setDays] = useState<number[]>([1, 3, 5]);
   const [target, setTarget] = useState(3);
-  const [tod, setTod] = useState<TimeOfDay>("anytime");
+  const [tod, setTod] = useState<RoutineTimeOfDay>("anytime");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (open) {
       setName(editing?.name ?? "");
-      setFreqType(editing?.frequency_type ?? "daily");
-      setDays(editing?.frequency_config.days ?? [1, 3, 5]);
-      setTarget(editing?.frequency_config.target ?? 3);
-      setTod(editing?.time_of_day ?? "anytime");
+      setFreqType(editing?.frequencyType ?? "daily");
+      setDays(editing ? freqDays(editing).length ? freqDays(editing) : [1, 3, 5] : [1, 3, 5]);
+      setTarget(editing ? freqTarget(editing) : 3);
+      setTod(editing?.timeOfDay ?? "anytime");
     }
   }, [open, editing]);
 
-  async function handleSave() {
+  const handleSave = () => {
     if (!name.trim()) return;
     setSaving(true);
-    const config =
+    const frequencyConfig: Record<string, unknown> =
       freqType === "weekly_days" ? { days } :
       freqType === "weekly_count" ? { target } : {};
-    const payload = {
-      user_id: userId,
+    onSave({
       name: name.trim(),
-      frequency_type: freqType,
-      frequency_config: config,
-      time_of_day: tod,
-    };
-    const { error } = editing
-      ? await supabase.from("routines").update(payload).eq("id", editing.id)
-      : await supabase.from("routines").insert(payload);
+      timeOfDay: tod,
+      frequencyType: freqType,
+      frequencyConfig,
+    });
     setSaving(false);
-    if (error) { toast.error("Couldn't save"); return; }
-    toast.success(editing ? "Updated" : "Routine added");
-    setOpen(false);
-    onSaved();
-  }
+  };
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -743,12 +703,13 @@ function QuickAddButton({
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Morning walk"
+              maxLength={120}
               autoFocus
             />
           </div>
           <div className="space-y-2">
             <Label>Frequency</Label>
-            <Select value={freqType} onValueChange={(v) => setFreqType(v as FreqType)}>
+            <Select value={freqType} onValueChange={(v) => setFreqType(v as RoutineFrequency)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="daily">Every day</SelectItem>
@@ -769,7 +730,7 @@ function QuickAddButton({
                       }
                       className={cn(
                         "h-9 w-9 rounded-full text-sm font-medium transition-colors",
-                        on ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                        on ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
                       )}
                     >
                       {s}
@@ -794,7 +755,7 @@ function QuickAddButton({
           </div>
           <div className="space-y-2">
             <Label>Time of day (optional)</Label>
-            <Select value={tod} onValueChange={(v) => setTod(v as TimeOfDay)}>
+            <Select value={tod} onValueChange={(v) => setTod(v as RoutineTimeOfDay)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="anytime">Anytime</SelectItem>

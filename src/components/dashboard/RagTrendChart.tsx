@@ -2,46 +2,52 @@ import { format, startOfWeek, addWeeks } from "date-fns";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, CartesianGrid, BarChart, Bar } from "recharts";
 import { WidgetEmpty } from "./WidgetTitle";
 import { Activity } from "lucide-react";
-import { WorkPackage, Action } from "@/lib/types";
+import type { Action, RagStatus, WbsNode } from "@/lib/types";
 
 interface RagHistoryRow {
-  work_package_id: string;
-  rag_status: string;
+  wbs_node_id: string;
+  to_status: RagStatus;
   recorded_at: string;
 }
 
-export function RagTrendChart({ history, wpIdSet }: { history: RagHistoryRow[]; wpIdSet: Set<string> }) {
-  const filtered = history.filter((h) => wpIdSet.has(h.work_package_id));
+export function RagTrendChart({ history, nodeIdSet }: { history: RagHistoryRow[]; nodeIdSet: Set<string> }) {
+  // When nodeIdSet is empty we treat that as "all" (global scope).
+  const filtered = nodeIdSet.size === 0
+    ? history
+    : history.filter((h) => nodeIdSet.has(h.wbs_node_id));
+
   if (filtered.length === 0) {
     return <WidgetEmpty icon={Activity} message="No RAG history yet — update work-package status to start tracking." />;
   }
 
   const now = new Date();
-  const weeks: Array<{ label: string; key: string; weekDate: Date; Green: number; Amber: number; Red: number }> = [];
+  const weeks: Array<{ label: string; key: string; weekDate: Date; green: number; amber: number; red: number }> = [];
   for (let i = 7; i >= 0; i--) {
     const wkStart = startOfWeek(addWeeks(now, -i), { weekStartsOn: 1 });
-    weeks.push({ label: format(wkStart, "MMM d"), key: format(wkStart, "yyyy-MM-dd"), weekDate: wkStart, Green: 0, Amber: 0, Red: 0 });
+    weeks.push({
+      label: format(wkStart, "MMM d"),
+      key: format(wkStart, "yyyy-MM-dd"),
+      weekDate: wkStart,
+      green: 0, amber: 0, red: 0,
+    });
   }
 
-  // For each week, determine the latest status of each WP up to that week's end
-  for (const wkObj of weeks) {
-    const cutoff = addWeeks(wkObj.weekDate, 1);
-    const latestByWp = new Map<string, string>();
+  // For each week, take the most recent rag_status per node up to that week's end.
+  for (const wk of weeks) {
+    const cutoff = addWeeks(wk.weekDate, 1);
+    const latestByNode = new Map<string, { at: number; status: RagStatus }>();
     for (const h of filtered) {
-      const t = new Date(h.recorded_at);
-      if (t < cutoff) {
-        // keep only the most recent
-        const existing = latestByWp.get(h.work_package_id);
-        if (!existing || t > new Date(existing.split("|")[0])) {
-          latestByWp.set(h.work_package_id, h.recorded_at + "|" + h.rag_status);
-        }
+      const t = new Date(h.recorded_at).getTime();
+      if (t >= cutoff.getTime()) continue;
+      const existing = latestByNode.get(h.wbs_node_id);
+      if (!existing || t > existing.at) {
+        latestByNode.set(h.wbs_node_id, { at: t, status: h.to_status });
       }
     }
-    for (const v of latestByWp.values()) {
-      const status = v.split("|")[1];
-      if (status === "Green") wkObj.Green++;
-      else if (status === "Amber") wkObj.Amber++;
-      else if (status === "Red") wkObj.Red++;
+    for (const { status } of latestByNode.values()) {
+      if (status === "green") wk.green++;
+      else if (status === "amber") wk.amber++;
+      else if (status === "red") wk.red++;
     }
   }
 
@@ -54,25 +60,25 @@ export function RagTrendChart({ history, wpIdSet }: { history: RagHistoryRow[]; 
           <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} stroke="hsl(var(--border))" allowDecimals={false} />
           <Tooltip contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", borderRadius: 6, fontSize: 12 }} />
           <Legend wrapperStyle={{ fontSize: 11 }} />
-          <Line type="monotone" dataKey="Green" stroke="hsl(var(--rag-green))" strokeWidth={2} dot={false} />
-          <Line type="monotone" dataKey="Amber" stroke="hsl(var(--rag-amber))" strokeWidth={2} dot={false} />
-          <Line type="monotone" dataKey="Red" stroke="hsl(var(--rag-red))" strokeWidth={2} dot={false} />
+          <Line type="monotone" dataKey="green" stroke="hsl(var(--rag-green))" strokeWidth={2} dot={false} name="Green" />
+          <Line type="monotone" dataKey="amber" stroke="hsl(var(--rag-amber))" strokeWidth={2} dot={false} name="Amber" />
+          <Line type="monotone" dataKey="red" stroke="hsl(var(--rag-red))" strokeWidth={2} dot={false} name="Red" />
         </LineChart>
       </ResponsiveContainer>
     </div>
   );
 }
 
-export function WPCompletionBars({ workPackages, actions }: { workPackages: WorkPackage[]; actions: Action[] }) {
+export function WPCompletionBars({ workPackages, actions }: { workPackages: WbsNode[]; actions: Action[] }) {
   if (workPackages.length === 0) {
     return <WidgetEmpty icon={Activity} message="No work packages in this scope." />;
   }
   const data = workPackages.map((wp) => {
-    const wpActions = actions.filter((a) => a.workPackage === wp.workPackage && a.project === wp.project);
+    const wpActions = actions.filter((a) => a.wbsNodeId === wp.id);
     const total = wpActions.length;
-    const done = wpActions.filter((a) => a.status === "Complete").length;
+    const done = wpActions.filter((a) => a.status === "complete").length;
     const pct = total === 0 ? 0 : Math.round((done / total) * 100);
-    return { name: wp.workPackage.length > 18 ? wp.workPackage.slice(0, 18) + "…" : wp.workPackage, pct };
+    return { name: wp.name.length > 18 ? wp.name.slice(0, 18) + "…" : wp.name, pct };
   });
 
   return (

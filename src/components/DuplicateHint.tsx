@@ -18,19 +18,22 @@ export function DuplicateHint({ query, excludeActionId, className }: DuplicateHi
   const actions = useAppStore((s) => s.actions);
   const inboxItems = useAppStore((s) => s.inboxItems);
   const waitingItems = useAppStore((s) => s.waitingItems);
+  const wbsNodes = useAppStore((s) => s.wbsNodes);
 
   const matches = useMemo(() => {
     if (!query || query.trim().length < 4) return [];
 
+    const nodeName = (id: string | null) => (id ? wbsNodes.find((n) => n.id === id)?.name ?? "" : "");
+
     const openActions = actions.filter(
-      (a) => a.status !== "Complete" && a.id !== excludeActionId,
+      (a) => a.status !== "complete" && a.id !== excludeActionId,
     );
 
     const actionMatches = findSimilar(query, openActions, (a) => a.task, 0.5, 2)
       .map((m) => ({
         id: m.item.id,
         label: m.item.task,
-        context: m.item.project || m.item.workPackage || "My Actions",
+        context: nodeName(m.item.wbsNodeId) || "My Actions",
         kind: "action" as const,
         score: m.score,
       }));
@@ -48,7 +51,7 @@ export function DuplicateHint({ query, excludeActionId, className }: DuplicateHi
       .map((m) => ({
         id: m.item.id,
         label: m.item.description,
-        context: `Waiting on ${m.item.fromWhom || "someone"}`,
+        context: `Waiting on ${m.item.fromWhomText || "someone"}`,
         kind: "waiting" as const,
         score: m.score,
       }));
@@ -56,7 +59,7 @@ export function DuplicateHint({ query, excludeActionId, className }: DuplicateHi
     return [...actionMatches, ...inboxMatches, ...waitingMatches]
       .sort((a, b) => b.score - a.score)
       .slice(0, 3);
-  }, [query, actions, inboxItems, waitingItems, excludeActionId]);
+  }, [query, actions, inboxItems, waitingItems, wbsNodes, excludeActionId]);
 
   if (matches.length === 0) return null;
 

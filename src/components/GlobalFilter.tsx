@@ -1,112 +1,77 @@
 import { useAppStore } from "@/lib/store";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Filter, X } from "lucide-react";
+import { Filter, X, ChevronRight } from "lucide-react";
+import { NodePicker, nodePath } from "@/components/NodePicker";
+
+// Single-control replacement for the v1 three-dropdown (Programme / Project /
+// Work Package) filter. The user picks any wbs_node; the rest of the app
+// scopes to that node's subtree via useFilteredData and useDashboardScope.
+//
+// "Unassigned" remains a discrete mode for surfacing rows with no wbs_node link.
 
 export function GlobalFilter() {
-  const programmes = useAppStore((s) => s.programmes);
-  const projects = useAppStore((s) => s.projects);
-  const workPackages = useAppStore((s) => s.workPackages);
+  const wbsNodes = useAppStore((s) => s.wbsNodes);
   const globalFilter = useAppStore((s) => s.globalFilter);
   const setGlobalFilter = useAppStore((s) => s.setGlobalFilter);
   const clearGlobalFilter = useAppStore((s) => s.clearGlobalFilter);
 
-  const hasFilter = globalFilter.programmeId || globalFilter.projectId || globalFilter.workPackageId || globalFilter.unassigned;
-  const isUnassigned = !!globalFilter.unassigned;
+  const hasFilter = !!globalFilter.nodeId || globalFilter.unassigned;
+  const path = nodePath(wbsNodes, globalFilter.nodeId);
 
-  const filteredProjects = globalFilter.programmeId
-    ? projects.filter((p) => p.programmeId === globalFilter.programmeId)
-    : projects;
-
-  const selectedProject = globalFilter.projectId
-    ? projects.find((p) => p.id === globalFilter.projectId)
-    : null;
-  const filteredWPs = selectedProject
-    ? workPackages.filter((wp) => wp.project === selectedProject.name)
-    : globalFilter.programmeId
-      ? workPackages.filter((wp) => {
-          const proj = filteredProjects.find((p) => p.name === wp.project);
-          return !!proj;
-        })
-      : workPackages;
-
-  const programmeValue = isUnassigned ? "__unassigned__" : (globalFilter.programmeId || "__all__");
+  const toggleUnassigned = () => {
+    if (globalFilter.unassigned) {
+      clearGlobalFilter();
+    } else {
+      setGlobalFilter({ nodeId: null, unassigned: true });
+    }
+  };
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2 min-w-0">
       <Filter className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-      <Select
-        value={programmeValue}
-        onValueChange={(v) => {
-          if (v === "__unassigned__") {
-            setGlobalFilter({ programmeId: "", projectId: "", workPackageId: "", unassigned: true });
-          } else {
-            setGlobalFilter({
-              programmeId: v === "__all__" ? "" : v,
-              projectId: "",
-              workPackageId: "",
-              unassigned: false,
-            });
-          }
-        }}
-      >
-        <SelectTrigger className="h-8 w-[130px] sm:w-[160px] text-xs">
-          <SelectValue placeholder="All Programmes" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="__all__">All Programmes</SelectItem>
-          <SelectItem value="__unassigned__">Unassigned only</SelectItem>
-          {programmes.map((p) => (
-            <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
 
-      <Select
-        value={globalFilter.projectId || "__all__"}
-        disabled={isUnassigned}
-        onValueChange={(v) => setGlobalFilter({
-          ...globalFilter,
-          projectId: v === "__all__" ? "" : v,
-          workPackageId: "",
-          unassigned: false,
-        })}
-      >
-        <SelectTrigger className="h-8 w-[130px] sm:w-[150px] text-xs">
-          <SelectValue placeholder="All Projects" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="__all__">All Projects</SelectItem>
-          {filteredProjects.map((p) => (
-            <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <div className="flex items-center gap-1 min-w-0">
+        <NodePicker
+          value={globalFilter.nodeId}
+          onChange={(nodeId) => setGlobalFilter({ nodeId, unassigned: false })}
+          includeNone
+          noneLabel="All work"
+          placeholder="All work"
+          className="h-7 min-w-[180px] max-w-[280px] text-xs"
+        />
 
-      <Select
-        value={globalFilter.workPackageId || "__all__"}
-        disabled={isUnassigned}
-        onValueChange={(v) => setGlobalFilter({
-          ...globalFilter,
-          workPackageId: v === "__all__" ? "" : v,
-          unassigned: false,
-        })}
-      >
-        <SelectTrigger className="h-8 w-[130px] sm:w-[150px] text-xs">
-          <SelectValue placeholder="All Work Packages" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="__all__">All Work Packages</SelectItem>
-          {filteredWPs.map((wp) => (
-            <SelectItem key={wp.id} value={wp.id}>{wp.workPackage}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-
-      {hasFilter && (
-        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={clearGlobalFilter}>
-          <X className="h-3.5 w-3.5" />
+        <Button
+          variant={globalFilter.unassigned ? "secondary" : "ghost"}
+          size="sm"
+          className="h-7 px-2 text-xs"
+          onClick={toggleUnassigned}
+        >
+          Unassigned
         </Button>
+
+        {hasFilter && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 text-muted-foreground hover:text-foreground"
+            onClick={() => clearGlobalFilter()}
+            aria-label="Clear filter"
+          >
+            <X className="h-3.5 w-3.5" />
+          </Button>
+        )}
+      </div>
+
+      {/* Breadcrumb of the selected node's path */}
+      {path.length > 0 && (
+        <div className="hidden lg:flex items-center gap-1 text-xs text-muted-foreground/80 min-w-0 truncate">
+          {path.map((n, i) => (
+            <span key={n.id} className="inline-flex items-center gap-1 truncate">
+              {i > 0 && <ChevronRight className="h-3 w-3 flex-shrink-0" />}
+              <span className="truncate">{n.name}</span>
+            </span>
+          ))}
+        </div>
       )}
     </div>
   );

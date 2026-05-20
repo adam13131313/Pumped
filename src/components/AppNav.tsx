@@ -13,7 +13,7 @@ const links: { to: string; label: string; icon: LucideIcon }[] = [
   { to: "/routines", label: "Personal Routines", icon: Repeat },
   { to: "/waiting", label: "Waiting For", icon: Clock },
   { to: "/inbox", label: "Rapid Capture", icon: Inbox },
-  { to: "/projects", label: "Projects", icon: FolderKanban },
+  { to: "/wbs", label: "Work Breakdown", icon: FolderKanban },
 
   { to: "/planner", label: "WBS Planner", icon: Sparkles },
   { to: "/sop", label: "SOP", icon: BookOpen },

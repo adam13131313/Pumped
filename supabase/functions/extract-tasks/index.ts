@@ -1,22 +1,33 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
+// v2 contract:
+// Request body  :: { text, sourceType?, existingNodes?: NodeOption[] }
+//   NodeOption  :: { id: string, path: string }    // "Programme › Project › WP"
+// Response body :: { summary, tasks: ExtractedTask[] }
+//   ExtractedTask :: { task, priority: 'high'|'medium'|'low',
+//                      status: 'not_started'|'in_progress'|'complete'|'blocked',
+//                      startDate, dueDate, wbsNodeId: string | null,
+//                      notes, labels }
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-// Defensive bounds so any authenticated user can't drive arbitrarily large
-// LLM calls. Below the model's context window and well above a realistic
-// meeting note / email thread.
 const MAX_TEXT_LEN = 50_000;
-const MAX_EXISTING_PROJECTS = 200;
+const MAX_EXISTING_NODES = 500;
+
+interface NodeOption {
+  id: string;
+  path: string;
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { text, sourceType, existingProjects } = await req.json();
+    const { text, sourceType, existingNodes } = await req.json();
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
@@ -33,45 +44,41 @@ serve(async (req) => {
         { status: 413, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
-    if (Array.isArray(existingProjects) && existingProjects.length > MAX_EXISTING_PROJECTS) {
-      return new Response(
-        JSON.stringify({ error: `Too many existing projects (max ${MAX_EXISTING_PROJECTS})` }),
-        { status: 413, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
 
-    const projectList = Array.isArray(existingProjects) && existingProjects.length > 0
-      ? existingProjects.join(", ")
-      : null;
+    const nodes: NodeOption[] = Array.isArray(existingNodes) ? existingNodes.slice(0, MAX_EXISTING_NODES) : [];
 
-    const projectRule = projectList
-      ? `- The user already has these projects: [${projectList}]. If a task clearly belongs to one of these projects, set "project" to that exact project name. If it does not clearly match any existing project, set "project" to an empty string. NEVER invent or fabricate project names.`
-      : `- Set "project" to an empty string for every task. Do NOT invent project names.`;
+    const nodeRule = nodes.length > 0
+      ? `- The user has these WBS nodes:\n${nodes.map((n, i) => `${i + 1}. ${n.path} (id=${n.id})`).join("\n")}
+- For each task, set "wbsNodeId" to the id of the most-fitting node, or null if no node clearly matches. NEVER invent ids.`
+      : `- Set "wbsNodeId" to null for every task. Do NOT invent ids.`;
 
-    const systemPrompt = `You are a task extraction assistant. Analyze the provided text (which may be meeting notes, voice memo transcripts, emails, spreadsheet data, or free-form notes) and extract actionable tasks.
+    const systemPrompt = `You are a task extraction assistant. Analyze the provided text (meeting notes, voice memos, emails, free-form notes) and extract actionable tasks.
 
 Return a JSON object with this structure:
 {
-  "summary": "string - brief summary of the source material (1-2 sentences)",
+  "summary": "1-2 sentence summary of the source material",
   "tasks": [
     {
-      "task": "string - clear, specific, actionable task description",
-      "priority": "High" | "Medium" | "Low",
-      "dueDate": "string - YYYY-MM-DD if mentioned or inferrable, otherwise empty string",
-      "project": "string - existing project name if clearly matching, otherwise empty string",
-      "notes": "string - any relevant context from the source, or empty string"
+      "task": "specific, actionable task description starting with a verb",
+      "priority": "high" | "medium" | "low",
+      "status": "not_started",
+      "startDate": "YYYY-MM-DD or empty",
+      "dueDate":   "YYYY-MM-DD or empty",
+      "wbsNodeId": "uuid string or null",
+      "notes": "any relevant context, or empty string",
+      "labels": []
     }
   ]
 }
 
 Rules:
-- Extract EVERY actionable item, no matter how small
-- Tasks must be specific and start with a verb (e.g. "Send", "Review", "Schedule", "Follow up on")
-- If people are mentioned as responsible, note that in the task or notes
-- If deadlines are mentioned (even relative like "by Friday"), convert to dates where possible
-- Prioritize based on urgency cues in the text (ASAP/urgent = High, routine = Medium, nice-to-have = Low)
-${projectRule}
-- Return ONLY the JSON, no markdown fences
+- Extract EVERY actionable item, no matter how small.
+- Tasks must be specific and start with a verb.
+- If a deadline is mentioned (even relative like "by Friday"), convert to YYYY-MM-DD where possible.
+- Map urgency cues: ASAP/urgent → "high", routine → "medium", nice-to-have → "low".
+- All priority/status values MUST be lowercase exactly as listed.
+${nodeRule}
+- Return ONLY the JSON, no markdown fences.
 - Source type: ${sourceType || "unknown"}`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {

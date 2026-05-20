@@ -6,10 +6,11 @@ const corsHeaders = {
 };
 
 const FEATURE_KNOWLEDGE = `
-You are the Pumped Knowledgebase Assistant. Pumped ("Work in Motion") is a personal work-management app.
+You are the Pumped Knowledgebase Assistant. Pumped ("Work in Motion") is a multi-tenant work-management app.
 
 # Core hierarchy
-Programme → Project → Work Package → Action (Task). Strict — no other levels.
+A flexible WBS tree of nodes: Portfolio → Programme → Project → Work Package → Action (Task).
+Portfolios and Programmes are optional; the smallest valid scope is a Project with one Work Package.
 
 # Pages & features
 - **Dashboard (Pulse)**: Context-aware overview at /dashboard. Reads the global filter (Programme/Project/WP, plus an "Unassigned" option) and reshapes every widget to that scope. Sections: Health Score (0–100, computed from on-time delivery, overdue waiting, routine consistency, RAG reds, inbox lag) with weekly history snapshot, Priority Drift (stalled high-priority actions via not_started_since), Action Velocity (created vs completed), Workload Heatmap (Mon–Fri × 12 weeks), Waiting Risk Matrix (days-to-due vs project risk), and (Global only) Inbox Lag by Source. "View dashboard" button on each project header scopes the filter automatically.
@@ -58,14 +59,33 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: "Invalid message" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // Save user message
-    await supabase.from("kb_chat_messages").insert({ user_id: user.id, role: "user", content: message });
+    // kb_chat_messages is org-scoped in v2 — resolve the user's active
+    // organisation via memberships.
+    const { data: membership } = await supabase
+      .from("memberships")
+      .select("organisation_id")
+      .eq("user_id", user.id)
+      .limit(1)
+      .maybeSingle();
+    if (!membership?.organisation_id) {
+      return new Response(JSON.stringify({ error: "No active organisation" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const orgId = membership.organisation_id;
 
-    // Load recent history (last 20)
+    await supabase.from("kb_chat_messages").insert({
+      organisation_id: orgId,
+      user_id: user.id,
+      role: "user",
+      content: message,
+    });
+
     const { data: history } = await supabase
       .from("kb_chat_messages")
       .select("role, content")
       .eq("user_id", user.id)
+      .eq("organisation_id", orgId)
       .order("created_at", { ascending: false })
       .limit(20);
 
@@ -94,7 +114,12 @@ Deno.serve(async (req) => {
     const aiData = await aiRes.json();
     const reply = aiData.choices?.[0]?.message?.content ?? "Sorry, no response.";
 
-    await supabase.from("kb_chat_messages").insert({ user_id: user.id, role: "assistant", content: reply });
+    await supabase.from("kb_chat_messages").insert({
+      organisation_id: orgId,
+      user_id: user.id,
+      role: "assistant",
+      content: reply,
+    });
 
     return new Response(JSON.stringify({ reply }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {

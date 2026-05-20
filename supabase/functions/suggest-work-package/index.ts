@@ -1,5 +1,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
+// v2 contract:
+// Request body  :: { task, notes?, currentNodeId?, workPackages: WPOption[] }
+//   WPOption    :: { id: string, name: string, path: string }    // path = "Programme › Project › Work Package"
+// Response body :: { suggestion: { nodeId: string } | null, confidence, reason }
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -8,15 +13,15 @@ const corsHeaders = {
 
 interface WPOption {
   id: string;
-  project: string;
-  workPackage: string;
+  name: string;
+  path: string;
 }
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { task, notes, currentProject, workPackages } = await req.json();
+    const { task, notes, currentNodeId, workPackages } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
@@ -34,7 +39,7 @@ serve(async (req) => {
     }
 
     const wpList = wps
-      .map((w, i) => `${i + 1}. project="${w.project}" | workPackage="${w.workPackage}"`)
+      .map((w, i) => `${i + 1}. ${w.path} (id=${w.id})`)
       .join("\n");
 
     const systemPrompt = `You match a task to the most appropriate Work Package from a fixed list.
@@ -48,13 +53,13 @@ Return ONLY JSON in this exact shape:
 
 Rules:
 - matchIndex is the 1-based index from the list, or null if no reasonable match exists.
-- Prefer a Work Package whose project matches the task's current project (if any).
+- Prefer a Work Package whose path matches the task's currently linked node (if any).
 - Do not invent work packages. Only choose from the list.
 - If nothing is a sensible match, return matchIndex: null.`;
 
     const userPrompt = `Task: "${task}"
-${notes ? `Notes: "${notes}"\n` : ""}${currentProject ? `Currently assigned project: "${currentProject}"\n` : ""}
-Available Work Packages:
+${notes ? `Notes: "${notes}"\n` : ""}${currentNodeId ? `Currently linked node id: "${currentNodeId}"\n` : ""}
+Available Work Packages (with full breadcrumb path):
 ${wpList}`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -98,13 +103,11 @@ ${wpList}`;
 
     return new Response(
       JSON.stringify({
-        suggestion: match
-          ? { id: match.id, project: match.project, workPackage: match.workPackage }
-          : null,
+        suggestion: match ? { nodeId: match.id } : null,
         confidence: parsed.confidence ?? "low",
         reason: parsed.reason ?? "",
       }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (e) {
     console.error("suggest-work-package error:", e);

@@ -1,365 +1,369 @@
-import React, { useState, useCallback } from "react";
-import { useAppStore } from "@/lib/store";
+import { useCallback, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { useAppStore } from "@/lib/store";
+import type { Action, ActionPriority, NodeType, WbsNode } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import { toast } from "sonner";
-import { Upload, Sparkles, Trash2, Plus, Check, FileText, X, Loader2 } from "lucide-react";
+import {
+  Check, ChevronRight, FileText, Loader2, Plus, Sparkles, Trash2, Upload, X,
+} from "lucide-react";
+import { allowedChildTypes } from "@/lib/schemas";
 
-interface WBSAction {
+// v2 WBS Planner. Calls the generate-wbs edge function (returns flat
+// {nodes[], actions[]}), lets the user edit the tree inline, then walks
+// nodes parents-before-children to insert wbs_nodes + a final bulk action
+// insert keyed by nodeRef→nodeId.
+
+interface ProposedNode {
+  ref: string;
+  parentRef: string | null;
+  nodeType: NodeType;
+  name: string;
+  description: string;
+  lead?: string;
+  dueDate?: string;
+}
+
+interface ProposedAction {
+  nodeRef: string;
   task: string;
-  priority: "High" | "Medium" | "Low";
+  priority: ActionPriority;
   dueDate: string;
 }
 
-interface WBSWorkPackage {
-  name: string;
-  lead: string;
-  dueDate: string;
-  description: string;
-  actions: WBSAction[];
+interface ProposedWbs {
+  nodes: ProposedNode[];
+  actions: ProposedAction[];
 }
 
-interface WBSProject {
-  name: string;
-  description: string;
-  workPackages: WBSWorkPackage[];
+const NODE_TYPE_LABEL: Record<NodeType, string> = {
+  portfolio: "Portfolio",
+  programme: "Programme",
+  project: "Project",
+  work_package: "Work Package",
+};
+
+const PRIORITY_LABEL: Record<ActionPriority, string> = {
+  high: "High", medium: "Medium", low: "Low",
+};
+
+function isImageFile(file: File) { return file.type.startsWith("image/"); }
+
+function readFileAsText(file: File): Promise<string> {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => resolve(`[Could not read file: ${file.name}]`);
+    reader.readAsText(file);
+  });
+}
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => resolve("");
+    reader.readAsDataURL(file);
+  });
 }
 
-interface WBSProgramme {
-  name: string;
-  description: string;
-  projects: WBSProject[];
-}
+const normalize = (raw: unknown): ProposedWbs => {
+  const r = (raw ?? {}) as { nodes?: unknown; actions?: unknown };
+  const nodes: ProposedNode[] = Array.isArray(r.nodes)
+    ? (r.nodes as Array<Record<string, unknown>>).map((n) => ({
+        ref: String(n.ref ?? crypto.randomUUID()),
+        parentRef: typeof n.parentRef === "string" ? n.parentRef : null,
+        nodeType: (n.nodeType as NodeType) ?? "project",
+        name: String(n.name ?? "Untitled"),
+        description: String(n.description ?? ""),
+        lead: typeof n.lead === "string" ? n.lead : "",
+        dueDate: typeof n.dueDate === "string" ? n.dueDate : "",
+      }))
+    : [];
+  const actions: ProposedAction[] = Array.isArray(r.actions)
+    ? (r.actions as Array<Record<string, unknown>>).map((a) => {
+        const rawPri = String(a.priority ?? "medium").toLowerCase();
+        const priority: ActionPriority = rawPri === "high" || rawPri === "low" ? rawPri : "medium";
+        return {
+          nodeRef: String(a.nodeRef ?? ""),
+          task: String(a.task ?? ""),
+          priority,
+          dueDate: typeof a.dueDate === "string" ? a.dueDate : "",
+        };
+      })
+    : [];
+  return { nodes, actions };
+};
 
-interface WBSResult {
-  programmes: WBSProgramme[];
+// Sort nodes so every parent appears before its children. Throws if a cycle
+// is detected, which generate-wbs should never produce but we still defend.
+function topoSort(nodes: ProposedNode[]): ProposedNode[] {
+  const byRef = new Map(nodes.map((n) => [n.ref, n]));
+  const visited = new Set<string>();
+  const ordered: ProposedNode[] = [];
+  const visit = (n: ProposedNode, stack: Set<string>) => {
+    if (visited.has(n.ref)) return;
+    if (stack.has(n.ref)) throw new Error(`Cycle detected at ref ${n.ref}`);
+    stack.add(n.ref);
+    if (n.parentRef && byRef.has(n.parentRef)) {
+      visit(byRef.get(n.parentRef)!, stack);
+    }
+    stack.delete(n.ref);
+    visited.add(n.ref);
+    ordered.push(n);
+  };
+  for (const n of nodes) visit(n, new Set());
+  return ordered;
 }
 
 export default function WBSPlanner() {
-  const store = useAppStore();
+  const navigate = useNavigate();
+  const currentOrg = useAppStore((s) => s.currentOrg);
+  const currentMembership = useAppStore((s) => s.currentMembership);
+  const addWbsNode = useAppStore((s) => s.addWbsNode);
+  const bulkAddActions = useAppStore((s) => s.bulkAddActions);
 
   const [files, setFiles] = useState<File[]>([]);
   const [additionalContext, setAdditionalContext] = useState("");
   const [loading, setLoading] = useState(false);
-  const [wbs, setWbs] = useState<WBSResult | null>(null);
-  const [accepted, setAccepted] = useState(false);
-  const [iteratePrompt, setIteratePrompt] = useState("");
   const [iterating, setIterating] = useState(false);
+  const [iteratePrompt, setIteratePrompt] = useState("");
+  const [wbs, setWbs] = useState<ProposedWbs | null>(null);
   const [isDragging, setIsDragging] = useState(false);
-
-  const handleFileAdd = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const newFiles = Array.from(e.target.files ?? []);
-    setFiles((prev) => [...prev, ...newFiles]);
-    e.target.value = "";
-  }, []);
+  const [accepted, setAccepted] = useState(false);
 
   const removeFile = (idx: number) => setFiles((prev) => prev.filter((_, i) => i !== idx));
 
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(true);
+  const handleFileAdd = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const next = Array.from(e.target.files ?? []);
+    setFiles((prev) => [...prev, ...next]);
+    e.target.value = "";
   }, []);
 
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-  }, []);
+  const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); setIsDragging(true); };
+  const handleDragLeave = (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); setIsDragging(false); };
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault(); e.stopPropagation(); setIsDragging(false);
+    const dropped = Array.from(e.dataTransfer.files);
+    if (dropped.length) setFiles((prev) => [...prev, ...dropped]);
+  };
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-    const droppedFiles = Array.from(e.dataTransfer.files);
-    if (droppedFiles.length > 0) {
-      setFiles((prev) => [...prev, ...droppedFiles]);
-    }
-  }, []);
-
-  const isImageFile = (file: File) => file.type.startsWith("image/");
-
-  const readFileAsText = (file: File): Promise<string> =>
-    new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = () => resolve(`[Could not read file: ${file.name}]`);
-      reader.readAsText(file);
-    });
-
-  const readFileAsDataUrl = (file: File): Promise<string> =>
-    new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = () => resolve("");
-      reader.readAsDataURL(file);
-    });
+  const buildBody = async (extras: { iteratePrompt?: string } = {}) => {
+    const imageFiles = files.filter(isImageFile);
+    const textFiles = files.filter((f) => !isImageFile(f));
+    const documentTexts = await Promise.all(textFiles.map(async (f) => `--- ${f.name} ---\n${await readFileAsText(f)}`));
+    const images = await Promise.all(imageFiles.map(async (f) => ({ name: f.name, dataUrl: await readFileAsDataUrl(f) })));
+    return {
+      documentTexts,
+      images,
+      additionalContext: additionalContext.trim(),
+      currentWbs: extras.iteratePrompt ? wbs : null,
+      iteratePrompt: extras.iteratePrompt ?? null,
+    };
+  };
 
   const handleGenerate = async () => {
     if (files.length === 0 && !additionalContext.trim()) {
-      toast.error("Please upload at least one document or provide context");
+      toast.error("Upload a document or describe the project first");
       return;
     }
-
     setLoading(true);
     setWbs(null);
     setAccepted(false);
-
     try {
-      const imageFiles = files.filter(isImageFile);
-      const textFiles = files.filter((f) => !isImageFile(f));
-
-      const documentTexts = await Promise.all(
-        textFiles.map(async (f) => {
-          const text = await readFileAsText(f);
-          return `--- ${f.name} ---\n${text}`;
-        })
-      );
-
-      const images = await Promise.all(
-        imageFiles.map(async (f) => ({
-          name: f.name,
-          dataUrl: await readFileAsDataUrl(f),
-        }))
-      );
-
       const { data, error } = await supabase.functions.invoke("generate-wbs", {
-        body: { documentTexts, images, additionalContext: additionalContext.trim() },
+        body: await buildBody(),
       });
-
       if (error) throw error;
-      if (data.error) throw new Error(data.error);
-
-      // Handle legacy single-programme format
-      const result = normalizeWBSResult(data);
-      setWbs(result);
-      toast.success("Work breakdown structure generated!");
-    } catch (e: any) {
-      toast.error("Generation failed", { description: e.message });
+      if (data?.error) throw new Error(data.error);
+      const next = normalize(data);
+      if (next.nodes.length === 0) {
+        toast.error("AI returned an empty WBS — try adding more detail in 'Additional context'.");
+        return;
+      }
+      setWbs(next);
+      toast.success(`Generated ${next.nodes.length} nodes and ${next.actions.length} actions`);
+    } catch (e) {
+      toast.error("Generation failed", { description: e instanceof Error ? e.message : "Unknown" });
     } finally {
       setLoading(false);
     }
   };
 
-  const normalizeWBSResult = (data: any): WBSResult => {
-    if (data.programmes) return data as WBSResult;
-    // Legacy format: single programme
-    return {
-      programmes: [{
-        name: data.programmeName || "",
-        description: data.programmeDescription || "",
-        projects: data.projects || [],
-      }],
-    };
-  };
-
-  // Edit helpers
-  const updateProgramme = (progIdx: number, field: "name" | "description", value: string) =>
-    setWbs((prev) => {
-      if (!prev) return prev;
-      const programmes = [...prev.programmes];
-      programmes[progIdx] = { ...programmes[progIdx], [field]: value };
-      return { ...prev, programmes };
-    });
-
-  const updateProject = (progIdx: number, pi: number, field: keyof WBSProject, value: string) =>
-    setWbs((prev) => {
-      if (!prev) return prev;
-      const programmes = [...prev.programmes];
-      const projects = [...programmes[progIdx].projects];
-      projects[pi] = { ...projects[pi], [field]: value } as any;
-      programmes[progIdx] = { ...programmes[progIdx], projects };
-      return { ...prev, programmes };
-    });
-
-  const updateWP = (progIdx: number, pi: number, wi: number, field: keyof WBSWorkPackage, value: string) =>
-    setWbs((prev) => {
-      if (!prev) return prev;
-      const programmes = [...prev.programmes];
-      const projects = [...programmes[progIdx].projects];
-      const wps = [...projects[pi].workPackages];
-      wps[wi] = { ...wps[wi], [field]: value };
-      projects[pi] = { ...projects[pi], workPackages: wps };
-      programmes[progIdx] = { ...programmes[progIdx], projects };
-      return { ...prev, programmes };
-    });
-
-  const updateAction = (progIdx: number, pi: number, wi: number, ai: number, field: keyof WBSAction, value: string) =>
-    setWbs((prev) => {
-      if (!prev) return prev;
-      const programmes = [...prev.programmes];
-      const projects = [...programmes[progIdx].projects];
-      const wps = [...projects[pi].workPackages];
-      const actions = [...wps[wi].actions];
-      actions[ai] = { ...actions[ai], [field]: value };
-      wps[wi] = { ...wps[wi], actions };
-      projects[pi] = { ...projects[pi], workPackages: wps };
-      programmes[progIdx] = { ...programmes[progIdx], projects };
-      return { ...prev, programmes };
-    });
-
-  const removeAction = (progIdx: number, pi: number, wi: number, ai: number) =>
-    setWbs((prev) => {
-      if (!prev) return prev;
-      const programmes = [...prev.programmes];
-      const projects = [...programmes[progIdx].projects];
-      const wps = [...projects[pi].workPackages];
-      wps[wi] = { ...wps[wi], actions: wps[wi].actions.filter((_, i) => i !== ai) };
-      projects[pi] = { ...projects[pi], workPackages: wps };
-      programmes[progIdx] = { ...programmes[progIdx], projects };
-      return { ...prev, programmes };
-    });
-
-  const addAction = (progIdx: number, pi: number, wi: number) =>
-    setWbs((prev) => {
-      if (!prev) return prev;
-      const programmes = [...prev.programmes];
-      const projects = [...programmes[progIdx].projects];
-      const wps = [...projects[pi].workPackages];
-      wps[wi] = { ...wps[wi], actions: [...wps[wi].actions, { task: "New task", priority: "Medium", dueDate: "" }] };
-      projects[pi] = { ...projects[pi], workPackages: wps };
-      programmes[progIdx] = { ...programmes[progIdx], projects };
-      return { ...prev, programmes };
-    });
-
-  const removeProgramme = (progIdx: number) =>
-    setWbs((prev) => prev ? { ...prev, programmes: prev.programmes.filter((_, i) => i !== progIdx) } : prev);
-
-  const removeProject = (progIdx: number, pi: number) =>
-    setWbs((prev) => {
-      if (!prev) return prev;
-      const programmes = [...prev.programmes];
-      programmes[progIdx] = { ...programmes[progIdx], projects: programmes[progIdx].projects.filter((_, i) => i !== pi) };
-      return { ...prev, programmes };
-    });
-
-  const removeWP = (progIdx: number, pi: number, wi: number) =>
-    setWbs((prev) => {
-      if (!prev) return prev;
-      const programmes = [...prev.programmes];
-      const projects = [...programmes[progIdx].projects];
-      projects[pi] = { ...projects[pi], workPackages: projects[pi].workPackages.filter((_, i) => i !== wi) };
-      programmes[progIdx] = { ...programmes[progIdx], projects };
-      return { ...prev, programmes };
-    });
-
-  const addProgramme = () =>
-    setWbs((prev) => prev ? { ...prev, programmes: [...prev.programmes, { name: "New Programme", description: "", projects: [] }] } : prev);
-
-  const addProject = (progIdx: number) =>
-    setWbs((prev) => {
-      if (!prev) return prev;
-      const programmes = [...prev.programmes];
-      programmes[progIdx] = { ...programmes[progIdx], projects: [...programmes[progIdx].projects, { name: "New Project", description: "", workPackages: [] }] };
-      return { ...prev, programmes };
-    });
-
-  const addWP = (progIdx: number, pi: number) =>
-    setWbs((prev) => {
-      if (!prev) return prev;
-      const programmes = [...prev.programmes];
-      const projects = [...programmes[progIdx].projects];
-      projects[pi] = { ...projects[pi], workPackages: [...projects[pi].workPackages, { name: "New Work Package", lead: "", dueDate: "", description: "", actions: [] }] };
-      programmes[progIdx] = { ...programmes[progIdx], projects };
-      return { ...prev, programmes };
-    });
-
-  const handleAccept = () => {
-    if (!wbs) return;
-
-    wbs.programmes.forEach((prog) => {
-      let programmeId = "";
-      if (prog.name.trim()) {
-        programmeId = crypto.randomUUID();
-        store.addProgramme({ id: programmeId, name: prog.name, description: prog.description });
-      }
-
-      prog.projects.forEach((proj) => {
-        const projectId = crypto.randomUUID();
-        store.addProject({ id: projectId, name: proj.name, description: proj.description, programmeId, status: "Active" });
-
-        proj.workPackages.forEach((wp) => {
-          store.addWorkPackage({
-            id: crypto.randomUUID(),
-            project: proj.name,
-            workPackage: wp.name,
-            wpLead: wp.lead,
-            startDate: "",
-            dueDate: wp.dueDate,
-            ragStatus: "Green",
-            blockers: "",
-            dependencies: [],
-          });
-
-          (wp.actions ?? []).forEach((action) => {
-            store.addAction({
-              id: crypto.randomUUID(),
-              task: action.task,
-              project: proj.name,
-              workPackage: wp.name,
-              startDate: "",
-              dueDate: action.dueDate || "",
-              priority: action.priority || "Medium",
-              status: "Not Started",
-              notes: "",
-              labels: [],
-            });
-          });
-        });
-      });
-    });
-
-    setAccepted(true);
-    toast.success("Work breakdown structure accepted and added to your projects!");
-  };
-
   const handleIterate = async () => {
-    if (!wbs || !iteratePrompt.trim()) return;
+    if (!iteratePrompt.trim() || !wbs) return;
     setIterating(true);
     try {
-      const imageFiles = files.filter(isImageFile);
-      const textFiles = files.filter((f) => !isImageFile(f));
-
-      const documentTexts = await Promise.all(
-        textFiles.map(async (f) => {
-          const text = await readFileAsText(f);
-          return `--- ${f.name} ---\n${text}`;
-        })
-      );
-
-      const images = await Promise.all(
-        imageFiles.map(async (f) => ({
-          name: f.name,
-          dataUrl: await readFileAsDataUrl(f),
-        }))
-      );
-
       const { data, error } = await supabase.functions.invoke("generate-wbs", {
-        body: {
-          documentTexts,
-          images,
-          additionalContext: additionalContext.trim(),
-          currentWbs: wbs,
-          iteratePrompt: iteratePrompt.trim(),
-        },
+        body: await buildBody({ iteratePrompt: iteratePrompt.trim() }),
       });
-
       if (error) throw error;
-      if (data.error) throw new Error(data.error);
-
-      const result = normalizeWBSResult(data);
-      setWbs(result);
+      if (data?.error) throw new Error(data.error);
+      setWbs(normalize(data));
       setIteratePrompt("");
-      toast.success("WBS refined!");
-    } catch (e: any) {
-      toast.error("Refinement failed", { description: e.message });
+      toast.success("Refined");
+    } catch (e) {
+      toast.error("Refinement failed", { description: e instanceof Error ? e.message : "Unknown" });
     } finally {
       setIterating(false);
+    }
+  };
+
+  // ---- inline edit helpers ----
+  const patchNode = (ref: string, patch: Partial<ProposedNode>) =>
+    setWbs((prev) => prev ? { ...prev, nodes: prev.nodes.map((n) => n.ref === ref ? { ...n, ...patch } : n) } : prev);
+
+  const removeNode = (ref: string) =>
+    setWbs((prev) => {
+      if (!prev) return prev;
+      // Remove the node and everything that descends from it.
+      const descendants = new Set<string>();
+      const stack = [ref];
+      while (stack.length) {
+        const r = stack.pop()!;
+        descendants.add(r);
+        for (const n of prev.nodes) if (n.parentRef === r) stack.push(n.ref);
+      }
+      return {
+        nodes: prev.nodes.filter((n) => !descendants.has(n.ref)),
+        actions: prev.actions.filter((a) => !descendants.has(a.nodeRef)),
+      };
+    });
+
+  const addChildNode = (parent: ProposedNode) => {
+    const allowed = allowedChildTypes(parent.nodeType);
+    if (allowed.length === 0) return;
+    const childType = allowed[0];
+    setWbs((prev) => prev ? {
+      ...prev,
+      nodes: [...prev.nodes, {
+        ref: `tmp-${crypto.randomUUID()}`,
+        parentRef: parent.ref,
+        nodeType: childType,
+        name: `New ${NODE_TYPE_LABEL[childType]}`,
+        description: "",
+      }],
+    } : prev);
+  };
+
+  const addRootNode = () => {
+    setWbs((prev) => prev ? {
+      ...prev,
+      nodes: [...prev.nodes, {
+        ref: `tmp-${crypto.randomUUID()}`,
+        parentRef: null,
+        nodeType: "programme",
+        name: "New Programme",
+        description: "",
+      }],
+    } : { nodes: [{
+      ref: `tmp-${crypto.randomUUID()}`,
+      parentRef: null,
+      nodeType: "programme",
+      name: "New Programme",
+      description: "",
+    }], actions: [] });
+  };
+
+  const patchAction = (idx: number, patch: Partial<ProposedAction>) =>
+    setWbs((prev) => prev ? { ...prev, actions: prev.actions.map((a, i) => i === idx ? { ...a, ...patch } : a) } : prev);
+
+  const removeAction = (idx: number) =>
+    setWbs((prev) => prev ? { ...prev, actions: prev.actions.filter((_, i) => i !== idx) } : prev);
+
+  const addActionForNode = (nodeRef: string) =>
+    setWbs((prev) => prev ? {
+      ...prev,
+      actions: [...prev.actions, { nodeRef, task: "New task", priority: "medium", dueDate: "" }],
+    } : prev);
+
+  // ---- accept & import ----
+  const handleAccept = () => {
+    if (!wbs || !currentOrg || !currentMembership) {
+      toast.error("Nothing to import");
+      return;
+    }
+    try {
+      const ordered = topoSort(wbs.nodes);
+      const refToId = new Map<string, string>();
+      const now = new Date().toISOString();
+      const userId = currentMembership.userId;
+      const orgId = currentOrg.id;
+
+      // Position per (parent_ref + type) so siblings of the same kind get a
+      // sensible numeric order in the new tree.
+      const positionCounter = new Map<string, number>();
+      const positionKey = (parentRef: string | null, nodeType: NodeType) => `${parentRef ?? "root"}|${nodeType}`;
+
+      for (const n of ordered) {
+        const id = crypto.randomUUID();
+        refToId.set(n.ref, id);
+        const parentId = n.parentRef ? refToId.get(n.parentRef) ?? null : null;
+        const key = positionKey(n.parentRef, n.nodeType);
+        const position = positionCounter.get(key) ?? 0;
+        positionCounter.set(key, position + 1);
+        const node: WbsNode = {
+          id,
+          organisationId: orgId,
+          parentId,
+          nodeType: n.nodeType,
+          name: n.name.trim() || `Untitled ${NODE_TYPE_LABEL[n.nodeType]}`,
+          description: n.description ?? "",
+          position,
+          archivedAt: null,
+          projectStatus: n.nodeType === "project" ? "active" : null,
+          leadUserId: null,
+          startDate: null,
+          dueDate: n.nodeType === "work_package" && n.dueDate ? n.dueDate : null,
+          ragStatus: n.nodeType === "work_package" ? "green" : null,
+          blockers: null,
+          createdBy: userId,
+          createdAt: now,
+          updatedAt: now,
+        };
+        addWbsNode(node);
+      }
+
+      const newActions: Action[] = wbs.actions
+        .map((a) => {
+          const nodeId = refToId.get(a.nodeRef);
+          if (!nodeId) return null;
+          const act: Action = {
+            id: crypto.randomUUID(),
+            organisationId: orgId,
+            wbsNodeId: nodeId,
+            assignedTo: userId,
+            createdBy: userId,
+            task: a.task.trim() || "Untitled task",
+            priority: a.priority,
+            status: "not_started",
+            startDate: null,
+            dueDate: a.dueDate || null,
+            completedAt: null,
+            notes: "",
+            labels: [],
+            notStartedSince: null,
+            archivedAt: null,
+            createdAt: now,
+            updatedAt: now,
+          };
+          return act;
+        })
+        .filter((x): x is Action => x !== null);
+
+      if (newActions.length > 0) bulkAddActions(newActions);
+
+      setAccepted(true);
+      toast.success(`Imported ${ordered.length} nodes and ${newActions.length} actions`);
+    } catch (e) {
+      toast.error("Import failed", { description: e instanceof Error ? e.message : "Unknown" });
     }
   };
 
@@ -368,244 +372,277 @@ export default function WBSPlanner() {
     setAccepted(false);
     setFiles([]);
     setAdditionalContext("");
+    setIteratePrompt("");
   };
 
+  const childrenOf = (ref: string | null) =>
+    wbs ? wbs.nodes.filter((n) => n.parentRef === ref) : [];
+
   return (
-    <div className="space-y-6 max-w-4xl">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-          <Sparkles className="h-6 w-6 text-primary" /> WBS Planner
-        </h1>
-        <p className="text-muted-foreground text-sm mt-1">
-          Upload project documents and let AI suggest a work breakdown structure
-        </p>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <Sparkles className="h-6 w-6 text-primary" />
+          <div>
+            <h1 className="text-2xl font-bold">WBS Planner</h1>
+            <p className="text-sm text-muted-foreground">Generate a Programme → Project → Work Package → Action tree from briefs and notes.</p>
+          </div>
+        </div>
+        {wbs && !accepted && (
+          <Button variant="outline" onClick={handleReset}>Start over</Button>
+        )}
       </div>
 
-      {/* Upload Section */}
-      {!wbs && (
+      {!wbs && !accepted && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Input</CardTitle>
+            <CardTitle className="text-lg">Source material</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div>
-              <Label>Documents</Label>
-              <div
-                className={`mt-2 border-2 border-dashed rounded-lg p-6 text-center transition-colors ${isDragging ? "border-primary bg-primary/5" : "hover:border-primary/50"}`}
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-              >
-                <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-                <p className="text-sm text-muted-foreground mb-2">
-                  {isDragging ? "Drop files here…" : "Drag & drop files here, or click to browse"}
-                </p>
-                <label className="cursor-pointer">
-                  <Button variant="outline" size="sm" asChild>
-                    <span>Choose Files</span>
-                  </Button>
-                  <input type="file" multiple accept=".txt,.md,.csv,.json,.xml,.doc,.docx,.rtf,.pdf,.png,.jpg,.jpeg,.gif,.webp,.bmp" className="hidden" onChange={handleFileAdd} />
-                </label>
-              </div>
-              {files.length > 0 && (
-                <div className="mt-3 space-y-1">
-                  {files.map((f, i) => (
-                    <div key={i} className="flex items-center gap-2 text-sm rounded-md bg-muted px-3 py-1.5">
-                      <FileText className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span className="flex-1 truncate">{f.name}</span>
-                      <span className="text-xs text-muted-foreground">{(f.size / 1024).toFixed(0)}KB</span>
-                      <button onClick={() => removeFile(i)} className="text-muted-foreground hover:text-destructive"><X className="h-3.5 w-3.5" /></button>
-                    </div>
-                  ))}
-                </div>
-              )}
+            <div
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              className={`rounded-lg border-2 border-dashed p-6 text-center transition-colors ${isDragging ? "border-primary bg-primary/5" : "border-muted-foreground/25"}`}
+            >
+              <Upload className="h-7 w-7 mx-auto mb-2 text-muted-foreground" />
+              <p className="text-sm text-muted-foreground mb-2">Drag in docs (TXT, MD, CSV) or images.</p>
+              <label className="inline-flex">
+                <input type="file" multiple className="hidden" onChange={handleFileAdd} />
+                <Button type="button" variant="outline" size="sm" asChild>
+                  <span>Choose files</span>
+                </Button>
+              </label>
             </div>
 
+            {files.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {files.map((f, idx) => (
+                  <div key={idx} className="flex items-center gap-1.5 rounded-md bg-muted px-2 py-1 text-xs">
+                    <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+                    {f.name}
+                    <button onClick={() => removeFile(idx)} aria-label="Remove file" className="hover:text-destructive">
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
             <div>
-              <Label htmlFor="context">Additional Context / Ideas (optional)</Label>
+              <label className="text-sm font-medium" htmlFor="ctx">Additional context</label>
               <Textarea
-                id="context"
+                id="ctx"
                 value={additionalContext}
                 onChange={(e) => setAdditionalContext(e.target.value)}
-                className="mt-1"
+                placeholder="What's the goal? Any constraints, deadlines, or naming preferences?"
                 rows={4}
-                placeholder="Describe the project, goals, team, constraints, or paste ideas here..."
-                maxLength={5000}
+                className="mt-1"
               />
             </div>
 
-            <Button onClick={handleGenerate} disabled={loading || (files.length === 0 && !additionalContext.trim())} className="w-full">
-              {loading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Analysing...</> : <><Sparkles className="h-4 w-4 mr-2" /> Generate WBS</>}
+            <Button onClick={handleGenerate} disabled={loading}>
+              {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Generating…</> : <><Sparkles className="mr-2 h-4 w-4" />Generate WBS</>}
             </Button>
           </CardContent>
         </Card>
       )}
 
-      {/* WBS Editor */}
       {wbs && !accepted && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold">Suggested Work Breakdown Structure</h2>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={handleReset}>Start Over</Button>
-              <Button onClick={handleAccept}><Check className="h-4 w-4 mr-2" /> Accept & Create</Button>
-            </div>
-          </div>
-
-          {/* Iterate prompt */}
+        <>
           <Card>
-            <CardContent className="pt-4 pb-3">
-              <div className="flex gap-2 items-end">
-                <div className="flex-1">
-                  <Label className="text-xs text-muted-foreground">Refine this WBS</Label>
-                  <Textarea
-                    value={iteratePrompt}
-                    onChange={(e) => setIteratePrompt(e.target.value)}
-                    className="mt-1"
-                    rows={2}
-                    placeholder="e.g. Split the first project into two, add more detail to testing work packages, add a data migration project..."
-                  />
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center justify-between">
+                <span>Proposed WBS</span>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" onClick={addRootNode}>
+                    <Plus className="mr-1.5 h-3.5 w-3.5" /> Add programme
+                  </Button>
+                  <Button size="sm" onClick={handleAccept}>
+                    <Check className="mr-1.5 h-3.5 w-3.5" /> Accept & Create
+                  </Button>
                 </div>
-                <Button onClick={handleIterate} disabled={iterating || !iteratePrompt.trim()} className="shrink-0">
-                  {iterating ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Refining...</> : <><Sparkles className="h-4 w-4 mr-2" /> Refine</>}
-                </Button>
-              </div>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {childrenOf(null).length === 0 ? (
+                <p className="text-sm text-muted-foreground">No nodes yet — click "Add programme" to start.</p>
+              ) : (
+                childrenOf(null).map((n) => (
+                  <NodeTree
+                    key={n.ref}
+                    node={n}
+                    wbs={wbs}
+                    onPatch={patchNode}
+                    onRemove={removeNode}
+                    onAddChild={addChildNode}
+                    onPatchAction={patchAction}
+                    onRemoveAction={removeAction}
+                    onAddAction={addActionForNode}
+                  />
+                ))
+              )}
             </CardContent>
           </Card>
 
-          {/* Programmes */}
-          {wbs.programmes.map((prog, progIdx) => (
-            <div key={progIdx} className="space-y-3">
-              {/* Programme header */}
-              <Card className="border-primary/30">
-                <CardContent className="pt-4 pb-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <Badge variant="default">Programme {progIdx + 1}</Badge>
-                    {wbs.programmes.length > 1 && (
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => removeProgramme(progIdx)}><Trash2 className="h-3.5 w-3.5" /></Button>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Programme Name</Label>
-                      <Input value={prog.name} onChange={(e) => updateProgramme(progIdx, "name", e.target.value)} className="mt-1" placeholder="Leave empty for no programme" />
-                    </div>
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Programme Description</Label>
-                      <Input value={prog.description} onChange={(e) => updateProgramme(progIdx, "description", e.target.value)} className="mt-1" />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Projects under this programme */}
-              {prog.projects.map((proj, pi) => (
-                <Card key={pi} className="ml-4">
-                  <CardHeader className="py-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Badge variant="secondary">Project {pi + 1}</Badge>
-                        <Input value={proj.name} onChange={(e) => updateProject(progIdx, pi, "name", e.target.value)} className="h-8 font-semibold w-60" />
-                      </div>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => removeProject(progIdx, pi)}><Trash2 className="h-3.5 w-3.5" /></Button>
-                    </div>
-                    <Input value={proj.description} onChange={(e) => updateProject(progIdx, pi, "description", e.target.value)} className="h-8 text-sm text-muted-foreground" placeholder="Project description" />
-                  </CardHeader>
-                  <CardContent className="pt-0 pb-4">
-                    {proj.workPackages.length > 0 && (
-                      <div className="border rounded-lg overflow-hidden mb-3">
-                        <table className="w-full text-sm">
-                          <thead>
-                            <tr className="bg-muted/50 text-left">
-                              <th className="px-3 py-2 font-medium">Work Package</th>
-                              <th className="px-3 py-2 font-medium w-32">Lead</th>
-                              <th className="px-3 py-2 font-medium w-36">Due Date</th>
-                              <th className="px-3 py-2 font-medium w-10"></th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {proj.workPackages.map((wp, wi) => (
-                              <React.Fragment key={wi}>
-                                <tr className="border-t">
-                                  <td className="px-2 py-1">
-                                    <Input value={wp.name} onChange={(e) => updateWP(progIdx, pi, wi, "name", e.target.value)} className="h-7 text-sm border-0 shadow-none font-medium" />
-                                  </td>
-                                  <td className="px-2 py-1">
-                                    <Input value={wp.lead} onChange={(e) => updateWP(progIdx, pi, wi, "lead", e.target.value)} className="h-7 text-sm border-0 shadow-none" placeholder="—" />
-                                  </td>
-                                  <td className="px-2 py-1">
-                                    <Input type="date" value={wp.dueDate} onChange={(e) => updateWP(progIdx, pi, wi, "dueDate", e.target.value)} className="h-7 text-sm border-0 shadow-none" />
-                                  </td>
-                                  <td className="px-1 py-1">
-                                    <button onClick={() => removeWP(progIdx, pi, wi)} className="p-1 text-muted-foreground hover:text-destructive"><Trash2 className="h-3 w-3" /></button>
-                                  </td>
-                                </tr>
-                                {(wp.actions ?? []).map((action, ai) => (
-                                  <tr key={`${wi}-a-${ai}`} className="border-t bg-muted/20">
-                                    <td className="px-2 py-1 pl-6">
-                                      <Input value={action.task} onChange={(e) => updateAction(progIdx, pi, wi, ai, "task", e.target.value)} className="h-7 text-xs border-0 shadow-none" placeholder="Task description" />
-                                    </td>
-                                    <td className="px-2 py-1">
-                                      <select value={action.priority} onChange={(e) => updateAction(progIdx, pi, wi, ai, "priority", e.target.value)} className="h-7 text-xs bg-transparent border-0 outline-none">
-                                        <option value="High">High</option>
-                                        <option value="Medium">Medium</option>
-                                        <option value="Low">Low</option>
-                                      </select>
-                                    </td>
-                                    <td className="px-2 py-1">
-                                      <Input type="date" value={action.dueDate} onChange={(e) => updateAction(progIdx, pi, wi, ai, "dueDate", e.target.value)} className="h-7 text-xs border-0 shadow-none" />
-                                    </td>
-                                    <td className="px-1 py-1">
-                                      <button onClick={() => removeAction(progIdx, pi, wi, ai)} className="p-1 text-muted-foreground hover:text-destructive"><Trash2 className="h-3 w-3" /></button>
-                                    </td>
-                                  </tr>
-                                ))}
-                                <tr className="border-t bg-muted/10">
-                                  <td colSpan={4} className="px-2 py-1 pl-6">
-                                    <button onClick={() => addAction(progIdx, pi, wi)} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
-                                      <Plus className="h-3 w-3" /> Add task
-                                    </button>
-                                  </td>
-                                </tr>
-                              </React.Fragment>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                    <Button variant="outline" size="sm" onClick={() => addWP(progIdx, pi)}><Plus className="h-3.5 w-3.5 mr-1" /> Add Work Package</Button>
-                  </CardContent>
-                </Card>
-              ))}
-
-              <div className="ml-4">
-                <Button variant="outline" onClick={() => addProject(progIdx)} className="w-full"><Plus className="h-4 w-4 mr-2" /> Add Project to {prog.name || "Programme"}</Button>
-              </div>
-            </div>
-          ))}
-
-          <Button variant="outline" onClick={addProgramme} className="w-full"><Plus className="h-4 w-4 mr-2" /> Add Programme</Button>
-
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" onClick={handleReset}>Start Over</Button>
-            <Button onClick={handleAccept} size="lg"><Check className="h-4 w-4 mr-2" /> Accept & Create All</Button>
-          </div>
-        </div>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Refine</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Textarea
+                value={iteratePrompt}
+                onChange={(e) => setIteratePrompt(e.target.value)}
+                placeholder="e.g. 'Split the marketing work package into copy vs. design' or 'Tighten dates around Q3 launch'"
+                rows={3}
+              />
+              <Button onClick={handleIterate} disabled={!iteratePrompt.trim() || iterating}>
+                {iterating ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Refining…</> : <><Sparkles className="mr-2 h-4 w-4" />Refine</>}
+              </Button>
+            </CardContent>
+          </Card>
+        </>
       )}
 
-      {/* Accepted confirmation */}
       {accepted && (
         <Card>
-          <CardContent className="py-12 text-center">
-            <Check className="h-12 w-12 mx-auto mb-3 text-rag-green" />
-            <p className="text-lg font-semibold mb-1">Work Breakdown Structure Created</p>
-            <p className="text-sm text-muted-foreground mb-4">All programmes, projects and work packages have been added.</p>
+          <CardContent className="p-8 text-center space-y-3">
+            <Check className="h-10 w-10 mx-auto text-rag-green" />
+            <p className="font-medium">Imported into your work breakdown.</p>
             <div className="flex gap-2 justify-center">
-              <Button variant="outline" onClick={handleReset}>Plan Another</Button>
-              <Button onClick={() => window.location.href = "/projects"}>View Projects</Button>
+              <Button variant="outline" onClick={handleReset}>Plan another</Button>
+              <Button onClick={() => navigate("/wbs")}>Open Work Breakdown</Button>
             </div>
           </CardContent>
         </Card>
+      )}
+    </div>
+  );
+}
+
+function NodeTree({
+  node, wbs, onPatch, onRemove, onAddChild,
+  onPatchAction, onRemoveAction, onAddAction,
+}: {
+  node: ProposedNode;
+  wbs: ProposedWbs;
+  onPatch: (ref: string, patch: Partial<ProposedNode>) => void;
+  onRemove: (ref: string) => void;
+  onAddChild: (n: ProposedNode) => void;
+  onPatchAction: (idx: number, patch: Partial<ProposedAction>) => void;
+  onRemoveAction: (idx: number) => void;
+  onAddAction: (nodeRef: string) => void;
+}) {
+  const children = wbs.nodes.filter((n) => n.parentRef === node.ref);
+  const allowedChildren = allowedChildTypes(node.nodeType);
+  const actions = wbs.actions
+    .map((a, i) => ({ a, i }))
+    .filter(({ a }) => a.nodeRef === node.ref);
+
+  const palette: Record<NodeType, string> = {
+    portfolio: "border-purple-300/50 bg-purple-50/40 dark:bg-purple-950/20",
+    programme: "border-blue-300/50 bg-blue-50/40 dark:bg-blue-950/20",
+    project: "border-emerald-300/50 bg-emerald-50/40 dark:bg-emerald-950/20",
+    work_package: "border-amber-300/50 bg-amber-50/40 dark:bg-amber-950/20",
+  };
+
+  return (
+    <div className={`rounded-lg border ${palette[node.nodeType]} p-3 space-y-2`}>
+      <div className="flex items-start gap-2">
+        <Badge variant="outline" className="font-mono text-[10px] mt-1">{NODE_TYPE_LABEL[node.nodeType]}</Badge>
+        <div className="flex-1 space-y-1">
+          <Input
+            value={node.name}
+            onChange={(e) => onPatch(node.ref, { name: e.target.value })}
+            className="h-8 text-sm font-medium"
+            maxLength={200}
+          />
+          <Textarea
+            value={node.description}
+            onChange={(e) => onPatch(node.ref, { description: e.target.value })}
+            placeholder="Description"
+            rows={1}
+            className="text-xs"
+            maxLength={1000}
+          />
+          {node.nodeType === "work_package" && (
+            <div className="flex gap-2">
+              <Input
+                type="date"
+                value={node.dueDate ?? ""}
+                onChange={(e) => onPatch(node.ref, { dueDate: e.target.value })}
+                className="h-7 text-xs w-40"
+              />
+            </div>
+          )}
+        </div>
+        <Button size="sm" variant="ghost" onClick={() => onRemove(node.ref)} aria-label="Remove node" className="text-destructive hover:text-destructive">
+          <Trash2 className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+
+      {actions.length > 0 && (
+        <div className="ml-6 space-y-1.5">
+          {actions.map(({ a, i }) => (
+            <div key={i} className="flex items-center gap-2 rounded-md border bg-card px-2 py-1.5">
+              <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
+              <Input
+                value={a.task}
+                onChange={(e) => onPatchAction(i, { task: e.target.value })}
+                className="h-7 text-xs flex-1"
+                maxLength={500}
+              />
+              <Select value={a.priority} onValueChange={(v) => onPatchAction(i, { priority: v as ActionPriority })}>
+                <SelectTrigger className="h-7 w-24 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="high">{PRIORITY_LABEL.high}</SelectItem>
+                  <SelectItem value="medium">{PRIORITY_LABEL.medium}</SelectItem>
+                  <SelectItem value="low">{PRIORITY_LABEL.low}</SelectItem>
+                </SelectContent>
+              </Select>
+              <Input
+                type="date"
+                value={a.dueDate}
+                onChange={(e) => onPatchAction(i, { dueDate: e.target.value })}
+                className="h-7 w-36 text-xs"
+              />
+              <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => onRemoveAction(i)} aria-label="Remove action">
+                <X className="h-3 w-3" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="ml-6 flex flex-wrap gap-2">
+        {node.nodeType === "work_package" && (
+          <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => onAddAction(node.ref)}>
+            <Plus className="mr-1 h-3 w-3" /> Add action
+          </Button>
+        )}
+        {allowedChildren.length > 0 && (
+          <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => onAddChild(node)}>
+            <Plus className="mr-1 h-3 w-3" /> Add {NODE_TYPE_LABEL[allowedChildren[0]].toLowerCase()}
+          </Button>
+        )}
+      </div>
+
+      {children.length > 0 && (
+        <div className="ml-6 space-y-2">
+          {children.map((child) => (
+            <NodeTree
+              key={child.ref}
+              node={child}
+              wbs={wbs}
+              onPatch={onPatch}
+              onRemove={onRemove}
+              onAddChild={onAddChild}
+              onPatchAction={onPatchAction}
+              onRemoveAction={onRemoveAction}
+              onAddAction={onAddAction}
+            />
+          ))}
+        </div>
       )}
     </div>
   );

@@ -1,22 +1,26 @@
-import { Action, WaitingItem, WorkPackage, InboxItem } from "./types";
+import type { Action, InboxItem, WaitingItem, WbsNode } from "./types";
+
+// Pumped Pulse health score: a 0–100 composite. Mirrors the formula used by
+// the snapshot-health-scores edge function — keep both in sync if the
+// formula changes.
 
 export interface HealthScoreInput {
-  actions: Action[];          // non-archived
+  actions: Action[];                   // non-archived
   waitingItems: WaitingItem[];
-  workPackages: WorkPackage[];
+  wbsNodes: WbsNode[];                 // work-package RAG comes from these
   inboxItems: InboxItem[];
-  routineCompletionsLast7Days: number; // count of routine completions in last 7 days
-  routineTargetLast7Days: number;      // expected count
-  inboxLagAvgDays: number | null;      // avg lag in days, null if no data
+  routineCompletionsLast7Days: number;
+  routineTargetLast7Days: number;
+  inboxLagAvgDays: number | null;
 }
 
 export interface HealthScoreResult {
   score: number;
   components: {
     base: number;
-    onTime: number;            // 0..30
+    onTime: number;            //   0..30
     overdueWaiting: number;    // -15..0
-    routine: number;           // 0..20
+    routine: number;           //   0..20
     rag: number;               // -10..0
     inboxLag: number;          // -10..0
   };
@@ -44,7 +48,7 @@ export function computeHealthScore(input: HealthScoreInput): HealthScoreResult {
 
   // Overdue waiting penalty
   const overdue = input.waitingItems.filter((w) => {
-    if (w.status !== "Pending") return false;
+    if (w.status !== "pending") return false;
     if (!w.dueBy) return false;
     return new Date(w.dueBy) < today;
   }).length;
@@ -57,8 +61,10 @@ export function computeHealthScore(input: HealthScoreInput): HealthScoreResult {
     routine = Math.round(ratio * 20);
   }
 
-  // RAG red penalty
-  const reds = input.workPackages.filter((wp) => wp.ragStatus === "Red").length;
+  // RAG red penalty — pulled from wbs_nodes filtered to work_package + 'red'
+  const reds = input.wbsNodes.filter(
+    (n) => n.nodeType === "work_package" && n.ragStatus === "red",
+  ).length;
   const rag = -Math.min(10, reds * 2);
 
   // Inbox lag penalty

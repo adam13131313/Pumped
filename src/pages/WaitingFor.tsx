@@ -10,11 +10,23 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Plus, Pencil, Target, Filter, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { nodePath } from "@/components/NodePicker";
 
-const statuses: WaitingStatus[] = ["Pending", "Received", "Overdue"];
+const STATUS_LABEL: Record<WaitingStatus, string> = {
+  pending: "Pending",
+  received: "Received",
+  overdue: "Overdue",
+};
+const STATUS_CLASS: Record<WaitingStatus, string> = {
+  pending: "bg-rag-amber-bg text-rag-amber",
+  overdue: "bg-rag-red-bg text-rag-red",
+  received: "bg-rag-green-bg text-rag-green",
+};
+const STATUSES: WaitingStatus[] = ["pending", "received", "overdue"];
 
 export default function WaitingFor() {
   const { waitingItems: allItems } = useFilteredData();
+  const wbsNodes = useAppStore((s) => s.wbsNodes);
   const addWaitingItem = useAppStore((s) => s.addWaitingItem);
   const updateWaitingItem = useAppStore((s) => s.updateWaitingItem);
   const deleteWaitingItem = useAppStore((s) => s.deleteWaitingItem);
@@ -26,29 +38,40 @@ export default function WaitingFor() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<WaitingItem | null>(null);
 
-  // Filters
   const [filterDesc, setFilterDesc] = useState("");
   const [filterFrom, setFilterFrom] = useState("");
-  const [filterProject, setFilterProject] = useState("");
+  const [filterNode, setFilterNode] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [showFilters, setShowFilters] = useState(false);
+
+  const nodeNameById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const n of wbsNodes) m.set(n.id, n.name);
+    return m;
+  }, [wbsNodes]);
 
   const items = useMemo(() => {
     return allItems.filter((i) => {
       if (filterDesc && !i.description.toLowerCase().includes(filterDesc.toLowerCase())) return false;
-      if (filterFrom && !i.fromWhom.toLowerCase().includes(filterFrom.toLowerCase())) return false;
-      if (filterProject && !i.projectWP.toLowerCase().includes(filterProject.toLowerCase())) return false;
+      if (filterFrom) {
+        const from = (i.fromWhomText ?? "").toLowerCase();
+        if (!from.includes(filterFrom.toLowerCase())) return false;
+      }
+      if (filterNode) {
+        const nodeName = (i.wbsNodeId ? nodeNameById.get(i.wbsNodeId) ?? "" : "").toLowerCase();
+        if (!nodeName.includes(filterNode.toLowerCase())) return false;
+      }
       if (filterStatus !== "all" && i.status !== filterStatus) return false;
       return true;
     });
-  }, [allItems, filterDesc, filterFrom, filterProject, filterStatus]);
+  }, [allItems, filterDesc, filterFrom, filterNode, filterStatus, nodeNameById]);
 
-  const hasActiveFilters = filterDesc || filterFrom || filterProject || filterStatus !== "all";
+  const hasActiveFilters = filterDesc || filterFrom || filterNode || filterStatus !== "all";
 
   const clearFilters = () => {
     setFilterDesc("");
     setFilterFrom("");
-    setFilterProject("");
+    setFilterNode("");
     setFilterStatus("all");
   };
 
@@ -58,8 +81,6 @@ export default function WaitingFor() {
     setEditing(null);
   };
 
-  // Auto-open dialog when navigated from command palette via ?open=<id>
-  // Use raw store so global filter doesn't hide the target.
   const allItemsRaw = useAppStore((s) => s.waitingItems);
   const [searchParams, setSearchParams] = useSearchParams();
   useEffect(() => {
@@ -98,7 +119,6 @@ export default function WaitingFor() {
         </div>
       </div>
 
-      {/* Filter bar */}
       {showFilters && (
         <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-muted/30 p-3">
           <Input
@@ -114,10 +134,10 @@ export default function WaitingFor() {
             className="h-8 w-[140px] text-xs"
           />
           <Input
-            placeholder="Filter by project..."
-            value={filterProject}
-            onChange={(e) => setFilterProject(e.target.value)}
-            className="h-8 w-[140px] text-xs"
+            placeholder="Filter by WBS node..."
+            value={filterNode}
+            onChange={(e) => setFilterNode(e.target.value)}
+            className="h-8 w-[160px] text-xs"
           />
           <Select value={filterStatus} onValueChange={setFilterStatus}>
             <SelectTrigger className="h-8 w-[120px] text-xs">
@@ -125,7 +145,7 @@ export default function WaitingFor() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All statuses</SelectItem>
-              {statuses.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+              {STATUSES.map((s) => <SelectItem key={s} value={s}>{STATUS_LABEL[s]}</SelectItem>)}
             </SelectContent>
           </Select>
           {hasActiveFilters && (
@@ -153,7 +173,7 @@ export default function WaitingFor() {
                 <th className="w-10" />
                 <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Description</th>
                 <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">From</th>
-                <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Project</th>
+                <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Linked to</th>
                 <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Asked</th>
                 <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Due</th>
                 <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Status</th>
@@ -163,6 +183,8 @@ export default function WaitingFor() {
             <tbody>
               {items.map((item) => {
                 const gathered = todayIds.has(item.id);
+                const path = nodePath(wbsNodes, item.wbsNodeId);
+                const nodeLabel = path.length ? path.map((n) => n.name).join(" › ") : "—";
                 return (
                 <tr key={item.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors group cursor-pointer" onClick={() => { setEditing(item); setDialogOpen(true); }}>
                   <td className="px-2 py-3" onClick={(e) => e.stopPropagation()}>
@@ -182,16 +204,14 @@ export default function WaitingFor() {
                     </Tooltip>
                   </td>
                   <td className="max-w-sm px-4 py-3"><p className="font-medium">{item.description}</p></td>
-                  <td className="px-4 py-3 text-muted-foreground">{item.fromWhom || "—"}</td>
-                  <td className="px-4 py-3 text-muted-foreground text-xs">{item.projectWP || "—"}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{item.fromWhomText || "—"}</td>
+                  <td className="px-4 py-3 text-muted-foreground text-xs">{nodeLabel}</td>
                   <td className="px-4 py-3 text-muted-foreground font-mono text-xs">{item.askedOn || "—"}</td>
                   <td className="px-4 py-3 text-muted-foreground font-mono text-xs">{item.dueBy || "—"}</td>
                   <td className="px-4 py-3">
-                    <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${
-                      item.status === "Pending" ? "bg-rag-amber-bg text-rag-amber" :
-                      item.status === "Overdue" ? "bg-rag-red-bg text-rag-red" :
-                      "bg-rag-green-bg text-rag-green"
-                    }`}>{item.status}</span>
+                    <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${STATUS_CLASS[item.status]}`}>
+                      {STATUS_LABEL[item.status]}
+                    </span>
                   </td>
                   <td className="px-2 py-3">
                     <Pencil className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />

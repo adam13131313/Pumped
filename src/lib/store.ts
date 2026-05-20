@@ -1,97 +1,27 @@
 import { create } from "zustand";
-import { Action, InboxItem, Programme, Project, WaitingItem, WorkPackage } from "./types";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import type {
+  Action,
+  GatheredState,
+  InboxItem,
+  Membership,
+  NodeType,
+  Organisation,
+  Profile,
+  Routine,
+  RoutineCompletion,
+  SopItem,
+  WaitingItem,
+  WbsNode,
+  WbsNodeDependency,
+  WebhookSource,
+} from "./types";
+import type { Database, Json } from "@/integrations/supabase/types";
 
-export interface SOPItem {
-  id: string;
-  when: string;
-  instruction: string;
-}
-
-const defaultSOP: SOPItem[] = [
-  { id: "s1", when: "Daily (2 min)", instruction: "Open My Actions. Pick your top 3 for the day — just 3. Work those first." },
-  { id: "s2", when: "After every meeting", instruction: "Paste meeting notes into AI using the Task Extractor prompt. Review the output. Add your actions to My Actions. Add others' commitments to Waiting For." },
-  { id: "s3", when: "After every email thread", instruction: "Use the Email Thread Task Extractor prompt. Takes 90 seconds. Saves you forgetting things." },
-  { id: "s4", when: "Monday (30 min)", instruction: "Weekly Review:\n1. Process any outstanding notes/emails\n2. Update Waiting For — send any nudges\n3. Update Dashboard RAG statuses\n4. Set your Top 3 for the week\n5. Check for anything overdue" },
-  { id: "s5", when: "Wednesday (20 min)", instruction: "Follow-up sweep: Open Waiting For. Look at anything due this week or overdue. Send short nudge messages." },
-  { id: "s6", when: "RAG Status Guide", instruction: "Green = on track, no issues\nAmber = some risk or delay, being managed\nRed = off track, needs escalation or intervention\n\nUpdate weekly from WP leads' status updates." },
-  { id: "s7", when: "Waiting For Rule", instruction: "Every time you ask someone to do something, log it in Waiting For immediately. This is how you stop chasing from memory." },
-  { id: "s8", when: "Delegation Rule", instruction: "When delegating a WP or task: always specify WHAT, by WHEN, and what DONE looks like. A clear ask = fewer follow-up conversations." },
-];
-
-export interface GlobalFilter {
-  programmeId: string;
-  projectId: string;
-  workPackageId: string;
-  unassigned?: boolean;
-}
-
-interface AppState {
-  // Loading state
-  dataLoaded: boolean;
-
-  todayIds: Set<string>;
-  todayOrder: string[]; // ordered list of gathered task ids
-  addToday: (id: string) => void;
-  removeToday: (id: string) => void;
-  clearToday: () => void;
-  reorderToday: (orderedIds: string[]) => void;
-  scheduleMap: Record<string, number>; // taskId -> slot index
-  durationMap: Record<string, number>; // taskId -> duration in slots
-  scheduleTask: (id: string, slot: number) => void;
-  setTaskDuration: (id: string, duration: number) => void;
-  unscheduleTask: (id: string) => void;
-  clearSchedule: () => void;
-  globalFilter: GlobalFilter;
-  setGlobalFilter: (filter: GlobalFilter) => void;
-  clearGlobalFilter: () => void;
-  programmes: Programme[];
-  projects: Project[];
-  workPackages: WorkPackage[];
-  actions: Action[];
-  waitingItems: WaitingItem[];
-  inboxItems: InboxItem[];
-  sopItems: SOPItem[];
-
-  // Data loading
-  loadAllData: () => Promise<void>;
-
-  addProgramme: (p: Programme) => void;
-  updateProgramme: (id: string, updates: Partial<Programme>) => void;
-  deleteProgramme: (id: string) => void;
-  addProject: (p: Project) => void;
-  updateProject: (id: string, updates: Partial<Project>) => void;
-  deleteProject: (id: string) => void;
-  addAction: (action: Action) => void;
-  updateAction: (id: string, updates: Partial<Action>) => void;
-  deleteAction: (id: string) => void;
-  bulkUpdateActions: (ids: string[], updates: Partial<Action>) => void;
-  bulkDeleteActions: (ids: string[]) => void;
-  addWorkPackage: (wp: WorkPackage) => void;
-  updateWorkPackage: (id: string, updates: Partial<WorkPackage>) => void;
-  deleteWorkPackage: (id: string) => void;
-  addWaitingItem: (item: WaitingItem) => void;
-  updateWaitingItem: (id: string, updates: Partial<WaitingItem>) => void;
-  deleteWaitingItem: (id: string) => void;
-  addInboxItem: (item: InboxItem) => void;
-  addInboxItems: (items: InboxItem[]) => void;
-  updateInboxItem: (id: string, updates: Partial<InboxItem>) => void;
-  bulkUpdateInboxItems: (ids: string[], updates: Partial<InboxItem>) => void;
-  deleteInboxItem: (id: string) => void;
-  bulkDeleteInboxItems: (ids: string[]) => void;
-  promoteInboxToActions: (ids: string[]) => void;
-  bulkAddActions: (actions: Action[]) => void;
-  updateSOPItem: (id: string, updates: Partial<SOPItem>) => void;
-  addSOPItem: (item: SOPItem) => void;
-  deleteSOPItem: (id: string) => void;
-  delegateAction: (id: string, toWhom: string) => void;
-  takeBackWaiting: (id: string) => void;
-}
-
-const defaultGlobalFilter: GlobalFilter = { programmeId: "", projectId: "", workPackageId: "", unassigned: false };
-
-// --- Generic helpers ---------------------------------------------------------
+// ============================================================================
+// Generic helpers
+// ============================================================================
 
 async function getUserId(): Promise<string> {
   const { data: { user } } = await supabase.auth.getUser();
@@ -105,22 +35,18 @@ function notifySaveError(message: string, error: unknown) {
   toast.error(message, { description });
 }
 
-// Matches the ingest-task edge function's 5000-char cap on notes. Forms already
-// limit user input below this; this is the defensive bound for programmatic
-// paths (AI extraction, future imports) so LinkRenderer's URL regex can never
-// be fed an unbounded blob.
+// Same NOTES_MAX cap the edge functions and Zod schemas enforce; defends
+// programmatic paths (AI extraction, future imports) against unbounded blobs.
 const NOTES_MAX_LENGTH = 5000;
 
-function clampNotesField<T extends { notes?: string }>(patch: T): T {
+function clampNotes<T extends { notes?: string }>(patch: T): T {
   if (typeof patch.notes !== "string" || patch.notes.length <= NOTES_MAX_LENGTH) return patch;
   console.warn(`[store] notes truncated from ${patch.notes.length} to ${NOTES_MAX_LENGTH} chars`);
   return { ...patch, notes: patch.notes.slice(0, NOTES_MAX_LENGTH) };
 }
 
-// Maps a Partial<T> domain patch into a snake-case DB update payload, dropping
-// any field not present in `fieldMap`. Replaces the 8+ duplicated `dbUpdates: any`
-// blocks that previously had to be kept in sync by hand — that drift was the
-// source of `bulkUpdateActions` silently failing to forward `labels`/`completed_at`.
+// Maps Partial<T> patches into a snake_case DB update payload. Field maps live
+// at module scope so single + bulk variants cannot drift.
 type FieldMap<T> = { [K in keyof T]?: string };
 
 function buildDbUpdate<T extends object>(
@@ -137,65 +63,6 @@ function buildDbUpdate<T extends object>(
   return out;
 }
 
-// Field maps shared between single and bulk variants so they cannot drift.
-const programmeFields: FieldMap<Programme> = {
-  name: "name",
-  description: "description",
-};
-const projectFields: FieldMap<Project> = {
-  name: "name",
-  description: "description",
-  programmeId: "programme_id",
-  status: "status",
-};
-const workPackageFields: FieldMap<WorkPackage> = {
-  project: "project",
-  workPackage: "work_package",
-  wpLead: "wp_lead",
-  startDate: "start_date",
-  dueDate: "due_date",
-  ragStatus: "rag_status",
-  blockers: "blockers",
-  dependencies: "dependencies",
-};
-const actionFields: FieldMap<Action & { completedAt?: string | null }> = {
-  task: "task",
-  project: "project",
-  workPackage: "work_package",
-  startDate: "start_date",
-  dueDate: "due_date",
-  priority: "priority",
-  status: "status",
-  notes: "notes",
-  labels: "labels",
-  completedAt: "completed_at",
-};
-const waitingFields: FieldMap<WaitingItem> = {
-  description: "description",
-  fromWhom: "from_whom",
-  projectWP: "project_wp",
-  askedOn: "asked_on",
-  dueBy: "due_by",
-  status: "status",
-  notes: "notes",
-  linkedProjectId: "linked_project_id",
-};
-const inboxFields: FieldMap<InboxItem> = {
-  task: "task",
-  priority: "priority",
-  dueDate: "due_date",
-  project: "project",
-  notes: "notes",
-  source: "source",
-};
-const sopFields: FieldMap<SOPItem> = {
-  when: "trigger_when",
-  instruction: "instruction",
-};
-
-// Awaits a Supabase query, surfaces failures via toast, and invokes the optional
-// rollback. Mutators stay synchronous (they don't await this) so call sites read
-// unchanged — but errors no longer vanish into a swallowed `.then()`.
 type SbResult = { error: { message?: string } | null };
 
 function runWrite(
@@ -217,572 +84,606 @@ function runWrite(
   );
 }
 
-// As runWrite, but the query depends on the current user id.
-function runWriteWithUid(
-  label: string,
-  build: (uid: string) => PromiseLike<SbResult>,
-  rollback?: () => void,
-): void {
-  getUserId().then(
-    (uid) => runWrite(label, build(uid), rollback),
-    (error) => {
-      rollback?.();
-      notifySaveError(label, error);
-    },
-  );
+// ============================================================================
+// Field maps (snake_case translation, shared between single + bulk)
+// ============================================================================
+
+const wbsNodeFields: FieldMap<WbsNode> = {
+  parentId: "parent_id",
+  nodeType: "node_type",
+  name: "name",
+  description: "description",
+  position: "position",
+  archivedAt: "archived_at",
+  projectStatus: "project_status",
+  leadUserId: "lead_user_id",
+  startDate: "start_date",
+  dueDate: "due_date",
+  ragStatus: "rag_status",
+  blockers: "blockers",
+};
+
+const actionFields: FieldMap<Action> = {
+  wbsNodeId: "wbs_node_id",
+  assignedTo: "assigned_to",
+  task: "task",
+  priority: "priority",
+  status: "status",
+  startDate: "start_date",
+  dueDate: "due_date",
+  completedAt: "completed_at",
+  notes: "notes",
+  labels: "labels",
+  archivedAt: "archived_at",
+};
+
+const waitingFields: FieldMap<WaitingItem> = {
+  wbsNodeId: "wbs_node_id",
+  fromUserId: "from_user_id",
+  fromWhomText: "from_whom_text",
+  description: "description",
+  askedOn: "asked_on",
+  dueBy: "due_by",
+  status: "status",
+  notes: "notes",
+};
+
+const inboxFields: FieldMap<InboxItem> = {
+  sourceId: "source_id",
+  wbsNodeId: "wbs_node_id",
+  task: "task",
+  priority: "priority",
+  dueDate: "due_date",
+  notes: "notes",
+  externalId: "external_id",
+  externalUrl: "external_url",
+};
+
+const routineFields: FieldMap<Routine> = {
+  name: "name",
+  description: "description",
+  timeOfDay: "time_of_day",
+  frequencyType: "frequency_type",
+  frequencyConfig: "frequency_config",
+  archivedAt: "archived_at",
+};
+
+const sopFields: FieldMap<SopItem> = {
+  triggerWhen: "trigger_when",
+  instruction: "instruction",
+  position: "position",
+};
+
+const webhookSourceFields: FieldMap<WebhookSource> = {
+  name: "name",
+  slug: "slug",
+  description: "description",
+  lastReceivedAt: "last_received_at",
+};
+
+// ============================================================================
+// Row → domain mappers (one per table)
+// ============================================================================
+
+type Rows = Database["public"]["Tables"];
+
+const mapOrganisation = (r: Rows["organisations"]["Row"]): Organisation => ({
+  id: r.id,
+  name: r.name,
+  slug: r.slug,
+  createdBy: r.created_by,
+  createdAt: r.created_at,
+  updatedAt: r.updated_at,
+});
+
+const mapMembership = (r: Rows["memberships"]["Row"]): Membership => ({
+  id: r.id,
+  organisationId: r.organisation_id,
+  userId: r.user_id,
+  role: r.role,
+  unitId: r.unit_id,
+  invitedBy: r.invited_by,
+  invitedAt: r.invited_at,
+  joinedAt: r.joined_at,
+  createdAt: r.created_at,
+  updatedAt: r.updated_at,
+});
+
+const mapProfile = (r: Rows["profiles"]["Row"]): Profile => ({
+  id: r.id,
+  displayName: r.display_name,
+  avatarUrl: r.avatar_url,
+  preferences: (r.preferences ?? {}) as Record<string, unknown>,
+  createdAt: r.created_at,
+  updatedAt: r.updated_at,
+});
+
+const mapWbsNode = (r: Rows["wbs_nodes"]["Row"]): WbsNode => ({
+  id: r.id,
+  organisationId: r.organisation_id,
+  parentId: r.parent_id,
+  nodeType: r.node_type,
+  name: r.name,
+  description: r.description,
+  position: r.position,
+  archivedAt: r.archived_at,
+  projectStatus: r.project_status,
+  leadUserId: r.lead_user_id,
+  startDate: r.start_date,
+  dueDate: r.due_date,
+  ragStatus: r.rag_status,
+  blockers: r.blockers,
+  createdBy: r.created_by,
+  createdAt: r.created_at,
+  updatedAt: r.updated_at,
+});
+
+const mapWbsDependency = (r: Rows["wbs_node_dependencies"]["Row"]): WbsNodeDependency => ({
+  id: r.id,
+  organisationId: r.organisation_id,
+  sourceNodeId: r.source_node_id,
+  targetNodeId: r.target_node_id,
+  dependencyType: r.dependency_type,
+  lagDays: r.lag_days,
+  createdAt: r.created_at,
+});
+
+const mapAction = (r: Rows["actions"]["Row"]): Action => ({
+  id: r.id,
+  organisationId: r.organisation_id,
+  wbsNodeId: r.wbs_node_id,
+  assignedTo: r.assigned_to,
+  createdBy: r.created_by,
+  task: r.task,
+  priority: r.priority,
+  status: r.status,
+  startDate: r.start_date,
+  dueDate: r.due_date,
+  completedAt: r.completed_at,
+  notes: r.notes,
+  labels: r.labels ?? [],
+  notStartedSince: r.not_started_since,
+  archivedAt: r.archived_at,
+  createdAt: r.created_at,
+  updatedAt: r.updated_at,
+});
+
+const mapWaiting = (r: Rows["waiting_items"]["Row"]): WaitingItem => ({
+  id: r.id,
+  organisationId: r.organisation_id,
+  wbsNodeId: r.wbs_node_id,
+  fromUserId: r.from_user_id,
+  fromWhomText: r.from_whom_text,
+  description: r.description,
+  askedOn: r.asked_on,
+  dueBy: r.due_by,
+  status: r.status,
+  notes: r.notes,
+  createdBy: r.created_by,
+  createdAt: r.created_at,
+  updatedAt: r.updated_at,
+});
+
+const mapInbox = (r: Rows["inbox_items"]["Row"]): InboxItem => ({
+  id: r.id,
+  organisationId: r.organisation_id,
+  sourceId: r.source_id,
+  wbsNodeId: r.wbs_node_id,
+  promotedToActionId: r.promoted_to_action_id,
+  task: r.task,
+  priority: r.priority,
+  dueDate: r.due_date,
+  notes: r.notes,
+  externalId: r.external_id,
+  externalUrl: r.external_url,
+  promotedAt: r.promoted_at,
+  createdBy: r.created_by,
+  createdAt: r.created_at,
+  updatedAt: r.updated_at,
+});
+
+const mapRoutine = (r: Rows["routines"]["Row"]): Routine => ({
+  id: r.id,
+  organisationId: r.organisation_id,
+  ownerUserId: r.owner_user_id,
+  name: r.name,
+  description: r.description,
+  timeOfDay: r.time_of_day,
+  frequencyType: r.frequency_type,
+  frequencyConfig: (r.frequency_config ?? {}) as Record<string, unknown>,
+  archivedAt: r.archived_at,
+  createdAt: r.created_at,
+  updatedAt: r.updated_at,
+});
+
+const mapRoutineCompletion = (r: Rows["routine_completions"]["Row"]): RoutineCompletion => ({
+  id: r.id,
+  organisationId: r.organisation_id,
+  routineId: r.routine_id,
+  userId: r.user_id,
+  completedDate: r.completed_date,
+  createdAt: r.created_at,
+});
+
+const mapSop = (r: Rows["sop_items"]["Row"]): SopItem => ({
+  id: r.id,
+  organisationId: r.organisation_id,
+  ownerUserId: r.owner_user_id,
+  triggerWhen: r.trigger_when,
+  instruction: r.instruction,
+  position: r.position,
+  createdAt: r.created_at,
+  updatedAt: r.updated_at,
+});
+
+const mapGathered = (r: Rows["gathered_state"]["Row"]): GatheredState => ({
+  id: r.id,
+  userId: r.user_id,
+  organisationId: r.organisation_id,
+  taskIds: r.task_ids ?? [],
+  orderIds: r.order_ids ?? [],
+  schedule: (r.schedule ?? {}) as Record<string, number>,
+  durations: (r.durations ?? {}) as Record<string, number>,
+  createdAt: r.created_at,
+  updatedAt: r.updated_at,
+});
+
+const mapWebhookSource = (r: Rows["webhook_sources"]["Row"]): WebhookSource => ({
+  id: r.id,
+  organisationId: r.organisation_id,
+  name: r.name,
+  slug: r.slug,
+  description: r.description,
+  lastReceivedAt: r.last_received_at,
+  createdBy: r.created_by,
+  createdAt: r.created_at,
+  updatedAt: r.updated_at,
+});
+
+// ============================================================================
+// Global filter shape
+// ============================================================================
+
+export interface GlobalFilter {
+  // Either a specific node, or 'unassigned' (rows with no wbs_node_id).
+  nodeId: string | null;
+  unassigned: boolean;
 }
 
-// Project/WP rename + delete cascade helpers ---------------------------------
-//
-// Until project/WP linkage moves from name strings to UUID FKs (separate
-// migration), every action/waiting/inbox row that references a project or
-// work package by NAME has to be kept in sync by application code. Without
-// this, renaming a project orphans every dependent row (it disappears from
-// filtered views) and deleting one leaves dangling string references.
-//
-// `set` and `get` are accepted as parameters so these can live in module
-// scope alongside the other supabase helpers.
+const defaultGlobalFilter: GlobalFilter = { nodeId: null, unassigned: false };
 
-type StoreSet = (
-  partial: AppState | Partial<AppState> | ((state: AppState) => AppState | Partial<AppState>),
-) => void;
+// ============================================================================
+// Store state
+// ============================================================================
 
-function escapeLike(s: string): string {
-  return s.replace(/[\\%_]/g, "\\$&");
+interface AppState {
+  // Auth + tenancy
+  dataLoaded: boolean;
+  currentOrg: Organisation | null;
+  currentMembership: Membership | null;
+  profile: Profile | null;
+  needsOrgBootstrap: boolean;
+
+  // Domain
+  wbsNodes: WbsNode[];
+  wbsDependencies: WbsNodeDependency[];
+  actions: Action[];
+  waitingItems: WaitingItem[];
+  inboxItems: InboxItem[];
+  routines: Routine[];
+  routineCompletions: RoutineCompletion[];
+  sopItems: SopItem[];
+  webhookSources: WebhookSource[];
+  gathered: GatheredState | null;
+
+  globalFilter: GlobalFilter;
+  setGlobalFilter: (filter: GlobalFilter) => void;
+  clearGlobalFilter: () => void;
+
+  // Lifecycle
+  loadAllData: () => Promise<void>;
+  bootstrapOrganisation: (name: string) => Promise<Organisation>;
+  resetTenancy: () => void;
+
+  // WBS
+  addWbsNode: (node: WbsNode) => void;
+  updateWbsNode: (id: string, updates: Partial<WbsNode>) => void;
+  deleteWbsNode: (id: string) => void;
+
+  // Actions
+  addAction: (action: Action) => void;
+  updateAction: (id: string, updates: Partial<Action>) => void;
+  deleteAction: (id: string) => void;
+  bulkUpdateActions: (ids: string[], updates: Partial<Action>) => void;
+  bulkDeleteActions: (ids: string[]) => void;
+
+  // Waiting
+  addWaitingItem: (item: WaitingItem) => void;
+  updateWaitingItem: (id: string, updates: Partial<WaitingItem>) => void;
+  deleteWaitingItem: (id: string) => void;
+  delegateAction: (actionId: string, params: { fromUserId?: string | null; fromWhomText?: string | null }) => void;
+  takeBackWaiting: (id: string) => void;
+
+  // Inbox
+  addInboxItem: (item: InboxItem) => void;
+  addInboxItems: (items: InboxItem[]) => void;
+  updateInboxItem: (id: string, updates: Partial<InboxItem>) => void;
+  bulkUpdateInboxItems: (ids: string[], updates: Partial<InboxItem>) => void;
+  deleteInboxItem: (id: string) => void;
+  bulkDeleteInboxItems: (ids: string[]) => void;
+  promoteInboxToActions: (ids: string[]) => void;
+  bulkAddActions: (actions: Action[]) => void;
+
+  // Routines + SOP
+  addRoutine: (r: Routine) => void;
+  updateRoutine: (id: string, updates: Partial<Routine>) => void;
+  deleteRoutine: (id: string) => void;
+  addRoutineCompletion: (rc: RoutineCompletion) => void;
+  deleteRoutineCompletion: (id: string) => void;
+  addSopItem: (item: SopItem) => void;
+  updateSopItem: (id: string, updates: Partial<SopItem>) => void;
+  deleteSopItem: (id: string) => void;
+
+  // Webhook sources (Integrations)
+  addWebhookSource: (source: WebhookSource) => void;
+  updateWebhookSource: (id: string, updates: Partial<WebhookSource>) => void;
+  deleteWebhookSource: (id: string) => void;
+
+  // Profile
+  updateProfile: (updates: Partial<Profile>) => void;
+
+  // Gathered ("Today")
+  setGatheredTasks: (taskIds: string[], orderIds: string[]) => void;
+  scheduleGatheredTask: (taskId: string, slot: number) => void;
+  setGatheredTaskDuration: (taskId: string, duration: number) => void;
+  unscheduleGatheredTask: (taskId: string) => void;
+  clearGathered: () => void;
+
+  // Today convenience — derived from `gathered.taskIds`. Pages use this
+  // shape because "gather a single task" is the common interaction.
+  todayIds: Set<string>;
+  addToday: (id: string) => void;
+  removeToday: (id: string) => void;
+  clearToday: () => void;
 }
 
-function propagateProjectRename(oldName: string, newName: string, set: StoreSet) {
-  set((s) => ({
-    workPackages: s.workPackages.map((wp) => wp.project === oldName ? { ...wp, project: newName } : wp),
-    actions: s.actions.map((a) => a.project === oldName ? { ...a, project: newName } : a),
-    inboxItems: s.inboxItems.map((i) => i.project === oldName ? { ...i, project: newName } : i),
-    waitingItems: s.waitingItems.map((w) => {
-      if (!w.projectWP) return w;
-      const parts = w.projectWP.split(" / ");
-      if (parts[0] !== oldName) return w;
-      return { ...w, projectWP: [newName, ...parts.slice(1)].join(" / ") };
-    }),
-  }));
-
-  runWrite("Project rename propagation (work packages)", supabase.from("work_packages").update({ project: newName }).eq("project", oldName));
-  runWrite("Project rename propagation (actions)", supabase.from("actions").update({ project: newName }).eq("project", oldName));
-  runWrite("Project rename propagation (inbox)", supabase.from("inbox_items").update({ project: newName }).eq("project", oldName));
-  runWrite("Project rename propagation (waiting)", supabase.from("waiting_items").update({ project_wp: newName }).eq("project_wp", oldName));
-
-  // waiting_items with "oldName / WPName" suffix — needs a per-row rewrite
-  // because the JS client can't express UPDATE SET col = REPLACE(col, ...).
-  void (async () => {
-    const { data: matches, error } = await supabase
-      .from("waiting_items")
-      .select("id, project_wp")
-      .like("project_wp", `${escapeLike(oldName)} / %`);
-    if (error) {
-      notifySaveError("Waiting item rename propagation failed", error);
-      return;
-    }
-    if (!matches || matches.length === 0) return;
-    await Promise.all(matches.map((m: { id: string; project_wp: string }) => {
-      const newProjectWP = newName + m.project_wp.slice(oldName.length);
-      return supabase.from("waiting_items").update({ project_wp: newProjectWP }).eq("id", m.id);
-    }));
-  })();
-}
-
-function cascadeProjectDelete(projectName: string, set: StoreSet) {
-  set((s) => ({
-    workPackages: s.workPackages.filter((wp) => wp.project !== projectName),
-    actions: s.actions.map((a) => a.project === projectName ? { ...a, project: "", workPackage: "" } : a),
-    inboxItems: s.inboxItems.map((i) => i.project === projectName ? { ...i, project: "" } : i),
-    waitingItems: s.waitingItems.map((w) => {
-      if (!w.projectWP) return w;
-      const parts = w.projectWP.split(" / ");
-      return parts[0] === projectName ? { ...w, projectWP: "" } : w;
-    }),
-  }));
-
-  runWrite("Project cascade (delete WPs)", supabase.from("work_packages").delete().eq("project", projectName));
-  runWrite("Project cascade (clear actions)", supabase.from("actions").update({ project: "", work_package: "" }).eq("project", projectName));
-  runWrite("Project cascade (clear inbox)", supabase.from("inbox_items").update({ project: "" }).eq("project", projectName));
-  runWrite("Project cascade (clear waiting exact)", supabase.from("waiting_items").update({ project_wp: "" }).eq("project_wp", projectName));
-
-  void (async () => {
-    const { data: matches, error } = await supabase
-      .from("waiting_items")
-      .select("id")
-      .like("project_wp", `${escapeLike(projectName)} / %`);
-    if (error) {
-      notifySaveError("Waiting items cascade failed", error);
-      return;
-    }
-    if (!matches || matches.length === 0) return;
-    const ids = matches.map((m: { id: string }) => m.id);
-    await supabase.from("waiting_items").update({ project_wp: "" }).in("id", ids);
-  })();
-}
-
-function propagateWPRename(projectName: string, oldWP: string, newWP: string, set: StoreSet) {
-  set((s) => ({
-    actions: s.actions.map((a) => a.project === projectName && a.workPackage === oldWP ? { ...a, workPackage: newWP } : a),
-    waitingItems: s.waitingItems.map((w) => {
-      if (!w.projectWP) return w;
-      const parts = w.projectWP.split(" / ");
-      if (parts[0] === projectName && parts[1] === oldWP) {
-        return { ...w, projectWP: `${projectName} / ${newWP}` };
-      }
-      return w;
-    }),
-  }));
-
-  runWrite(
-    "WP rename propagation (actions)",
-    supabase.from("actions").update({ work_package: newWP }).eq("project", projectName).eq("work_package", oldWP),
-  );
-  runWrite(
-    "WP rename propagation (waiting)",
-    supabase.from("waiting_items").update({ project_wp: `${projectName} / ${newWP}` }).eq("project_wp", `${projectName} / ${oldWP}`),
-  );
-}
-
-function cascadeWPDelete(projectName: string, wpName: string, set: StoreSet) {
-  set((s) => ({
-    actions: s.actions.map((a) => a.project === projectName && a.workPackage === wpName ? { ...a, workPackage: "" } : a),
-    waitingItems: s.waitingItems.map((w) => {
-      if (!w.projectWP) return w;
-      const parts = w.projectWP.split(" / ");
-      if (parts[0] === projectName && parts[1] === wpName) {
-        return { ...w, projectWP: projectName };
-      }
-      return w;
-    }),
-  }));
-
-  runWrite(
-    "WP cascade (clear actions)",
-    supabase.from("actions").update({ work_package: "" }).eq("project", projectName).eq("work_package", wpName),
-  );
-  runWrite(
-    "WP cascade (waiting)",
-    supabase.from("waiting_items").update({ project_wp: projectName }).eq("project_wp", `${projectName} / ${wpName}`),
-  );
-}
-
-async function persistAction(action: Action) {
-  const uid = await getUserId();
-  const safe = clampNotesField(action);
-  const { error } = await supabase.from("actions").insert({
-    id: safe.id,
-    user_id: uid,
-    task: safe.task,
-    project: safe.project,
-    work_package: safe.workPackage,
-    start_date: safe.startDate,
-    due_date: safe.dueDate,
-    priority: safe.priority,
-    status: safe.status,
-    notes: safe.notes,
-    labels: safe.labels || [],
-  });
-  if (error) throw error;
-}
-
-// --- Gathered ("Today") state -----------------------------------------------
-
-// Persist gathered tasks across sessions (no daily reset). Migrate from old per-day key if present.
-const GATHERED_KEY = "pumped-gathered";
-const LEGACY_TODAY_KEY = `p3m-today-${new Date().toISOString().slice(0, 10)}`;
-
-let cloudSaveTimer: ReturnType<typeof setTimeout> | null = null;
-let pendingGatheredPayload: {
-  ids: string[];
-  schedule: Record<string, number>;
-  durations: Record<string, number>;
-  order: string[];
-} | null = null;
-
-async function writeGatheredNow(payload: {
-  ids: string[];
-  schedule: Record<string, number>;
-  durations: Record<string, number>;
-  order: string[];
-}) {
-  try {
-    const uid = await getUserId();
-    if (!uid) return;
-    await supabase.from("gathered_state").upsert({
-      user_id: uid,
-      ids: payload.ids as any,
-      schedule: payload.schedule as any,
-      durations: payload.durations as any,
-      order_ids: payload.order as any,
-      updated_at: new Date().toISOString(),
-    });
-  } catch (e) {
-    console.error("[gathered] cloud save failed", e);
-  }
-}
-
-function persistGatheredToCloud(payload: {
-  ids: string[];
-  schedule: Record<string, number>;
-  durations: Record<string, number>;
-  order: string[];
-}) {
-  pendingGatheredPayload = payload;
-  if (cloudSaveTimer) clearTimeout(cloudSaveTimer);
-  cloudSaveTimer = setTimeout(() => {
-    cloudSaveTimer = null;
-    const p = pendingGatheredPayload;
-    pendingGatheredPayload = null;
-    if (p) void writeGatheredNow(p);
-  }, 400);
-}
-
-// Flush any pending gathered-state save synchronously. Hooked to pagehide /
-// visibilitychange below so a debounced write isn't lost when the user closes
-// the tab or navigates away within the 400ms window. localStorage already has
-// the value — this is what makes cross-device sync survive a fast close.
-function flushPendingGathered() {
-  if (!pendingGatheredPayload) return;
-  if (cloudSaveTimer) {
-    clearTimeout(cloudSaveTimer);
-    cloudSaveTimer = null;
-  }
-  const p = pendingGatheredPayload;
-  pendingGatheredPayload = null;
-  void writeGatheredNow(p);
-}
-
-if (typeof window !== "undefined") {
-  // pagehide fires reliably on iOS Safari (where beforeunload doesn't);
-  // visibilitychange covers tab switches and PWA backgrounding.
-  window.addEventListener("pagehide", flushPendingGathered);
-  window.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "hidden") flushPendingGathered();
-  });
-}
-
-function saveTodayState(todayIds: Set<string>, scheduleMap: Record<string, number>, durationMap: Record<string, number>, todayOrder: string[]) {
-  const payload = {
-    ids: Array.from(todayIds),
-    schedule: scheduleMap,
-    durations: durationMap,
-    order: todayOrder,
-  };
-  try {
-    localStorage.setItem(GATHERED_KEY, JSON.stringify(payload));
-  } catch {}
-  persistGatheredToCloud(payload);
-}
-
-function loadTodayState(): { todayIds: Set<string>; scheduleMap: Record<string, number>; durationMap: Record<string, number>; todayOrder: string[] } {
-  try {
-    let raw = localStorage.getItem(GATHERED_KEY);
-    if (!raw) {
-      // One-time migration from legacy per-day key
-      raw = localStorage.getItem(LEGACY_TODAY_KEY);
-      if (raw) localStorage.setItem(GATHERED_KEY, raw);
-    }
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      return {
-        todayIds: new Set<string>(parsed.ids || []),
-        scheduleMap: parsed.schedule || {},
-        durationMap: parsed.durations || {},
-        todayOrder: parsed.order || parsed.ids || [],
-      };
-    }
-  } catch {}
-  return { todayIds: new Set(), scheduleMap: {}, durationMap: {}, todayOrder: [] };
-}
-
-const initialToday = loadTodayState();
+// ============================================================================
+// Store
+// ============================================================================
 
 export const useAppStore = create<AppState>()((set, get) => ({
   dataLoaded: false,
+  currentOrg: null,
+  currentMembership: null,
+  profile: null,
+  needsOrgBootstrap: false,
 
-  todayIds: initialToday.todayIds,
-  todayOrder: initialToday.todayOrder,
-  addToday: (id) => set((s) => {
-    const n = new Set(s.todayIds); n.add(id);
-    const order = [...s.todayOrder, id];
-    saveTodayState(n, s.scheduleMap, s.durationMap, order);
-    return { todayIds: n, todayOrder: order };
-  }),
-  removeToday: (id) => set((s) => {
-    const n = new Set(s.todayIds); n.delete(id);
-    const sm = { ...s.scheduleMap }; delete sm[id];
-    const dm = { ...s.durationMap }; delete dm[id];
-    const order = s.todayOrder.filter((i) => i !== id);
-    saveTodayState(n, sm, dm, order);
-    return { todayIds: n, scheduleMap: sm, durationMap: dm, todayOrder: order };
-  }),
-  clearToday: () => {
-    saveTodayState(new Set(), {}, {}, []);
-    return set({ todayIds: new Set(), scheduleMap: {}, durationMap: {}, todayOrder: [] });
-  },
-  reorderToday: (orderedIds) => set((s) => {
-    saveTodayState(s.todayIds, s.scheduleMap, s.durationMap, orderedIds);
-    return { todayOrder: orderedIds };
-  }),
-  scheduleMap: initialToday.scheduleMap,
-  durationMap: initialToday.durationMap,
-  scheduleTask: (id, slot) => set((s) => {
-    const sm = { ...s.scheduleMap, [id]: slot };
-    saveTodayState(s.todayIds, sm, s.durationMap, s.todayOrder);
-    return { scheduleMap: sm };
-  }),
-  setTaskDuration: (id, duration) => set((s) => {
-    const dm = { ...s.durationMap, [id]: duration };
-    saveTodayState(s.todayIds, s.scheduleMap, dm, s.todayOrder);
-    return { durationMap: dm };
-  }),
-  unscheduleTask: (id) => set((s) => {
-    const m = { ...s.scheduleMap }; delete m[id];
-    const d = { ...s.durationMap }; delete d[id];
-    saveTodayState(s.todayIds, m, d, s.todayOrder);
-    return { scheduleMap: m, durationMap: d };
-  }),
-  clearSchedule: () => {
-    const s = get();
-    saveTodayState(s.todayIds, {}, {}, s.todayOrder);
-    return set({ scheduleMap: {}, durationMap: {} });
-  },
+  wbsNodes: [],
+  wbsDependencies: [],
+  actions: [],
+  waitingItems: [],
+  inboxItems: [],
+  routines: [],
+  routineCompletions: [],
+  sopItems: [],
+  webhookSources: [],
+  gathered: null,
 
   globalFilter: defaultGlobalFilter,
   setGlobalFilter: (filter) => set({ globalFilter: filter }),
   clearGlobalFilter: () => set({ globalFilter: defaultGlobalFilter }),
 
-  programmes: [],
-  projects: [],
-  workPackages: [],
-  actions: [],
-  waitingItems: [],
-  inboxItems: [],
-  sopItems: [],
+  resetTenancy: () => set({
+    dataLoaded: false,
+    currentOrg: null,
+    currentMembership: null,
+    profile: null,
+    needsOrgBootstrap: false,
+    wbsNodes: [],
+    wbsDependencies: [],
+    actions: [],
+    waitingItems: [],
+    inboxItems: [],
+    routines: [],
+    routineCompletions: [],
+    sopItems: [],
+    webhookSources: [],
+    gathered: null,
+    todayIds: new Set(),
+    globalFilter: defaultGlobalFilter,
+  }),
+
+  // --------------------------------------------------------------------------
+  // Load + bootstrap
+  // --------------------------------------------------------------------------
 
   loadAllData: async () => {
-    // completed_at backfill + auto-archive of Complete actions >24h old run
-    // server-side via the maintenance-archive-completed edge function (pg_cron).
-    // They used to run inline here; that added 2-7s of cold-start latency on
-    // large tenants and scaled with row count.
+    const uid = await getUserId();
 
-    // Hard limit on the per-table fetch so a runaway dataset can't blow up
-    // the initial payload. Ordering by created_at DESC means the newest rows
-    // are always present — if the user is over the limit, the oldest rows
-    // are what get clipped. A real paginated load is the proper long-term
-    // fix; until then, a console warning fires below when a table hits the
-    // limit so we can see who's getting close.
+    // 1. Find this user's organisation. v2 launch assumption: one org per user.
+    const { data: memberRows, error: memberErr } = await supabase
+      .from("memberships")
+      .select("*")
+      .eq("user_id", uid)
+      .limit(1);
+
+    if (memberErr) {
+      notifySaveError("Failed to load membership", memberErr);
+      set({ dataLoaded: true, needsOrgBootstrap: false });
+      return;
+    }
+
+    if (!memberRows || memberRows.length === 0) {
+      // No org yet — route to bootstrap.
+      set({ dataLoaded: true, needsOrgBootstrap: true });
+      return;
+    }
+
+    const membership = mapMembership(memberRows[0]);
+
+    // 2. Load org + profile in parallel.
+    const [{ data: orgRow }, { data: profileRow }] = await Promise.all([
+      supabase.from("organisations").select("*").eq("id", membership.organisationId).maybeSingle(),
+      supabase.from("profiles").select("*").eq("id", uid).maybeSingle(),
+    ]);
+
+    const org = orgRow ? mapOrganisation(orgRow) : null;
+    const profile = profileRow ? mapProfile(profileRow) : null;
+
+    if (!org) {
+      // Membership references a missing org — treat as needs bootstrap.
+      set({ dataLoaded: true, needsOrgBootstrap: true });
+      return;
+    }
+
+    // 3. Load all org-scoped domain data.
+    const orgId = org.id;
     const ROW_LIMIT = 10000;
 
     const [
-      { data: programmes },
-      { data: projects },
-      { data: workPackages },
-      { data: actions, count: actionsCount },
-      { data: waitingItems, count: waitingCount },
-      { data: inboxItems, count: inboxCount },
-      { data: sopItems },
+      { data: wbsRows },
+      { data: depRows },
+      { data: actionRows },
+      { data: waitingRows },
+      { data: inboxRows },
+      { data: routineRows },
+      { data: completionRows },
+      { data: sopRows },
+      { data: sourceRows },
+      { data: gatheredRow },
     ] = await Promise.all([
-      supabase.from("programmes").select("*"),
-      supabase.from("projects").select("*"),
-      supabase.from("work_packages").select("*"),
+      supabase.from("wbs_nodes").select("*").eq("organisation_id", orgId).is("archived_at", null),
+      supabase.from("wbs_node_dependencies").select("*").eq("organisation_id", orgId),
       supabase.from("actions")
-        .select("*", { count: "estimated" })
-        .eq("archived", false)
-        .order("created_at", { ascending: false })
-        .limit(ROW_LIMIT),
+        .select("*").eq("organisation_id", orgId).is("archived_at", null)
+        .order("created_at", { ascending: false }).limit(ROW_LIMIT),
       supabase.from("waiting_items")
-        .select("*", { count: "estimated" })
-        .order("created_at", { ascending: false })
-        .limit(ROW_LIMIT),
+        .select("*").eq("organisation_id", orgId)
+        .order("created_at", { ascending: false }).limit(ROW_LIMIT),
       supabase.from("inbox_items")
-        .select("*", { count: "estimated" })
-        .order("created_at", { ascending: false })
-        .limit(ROW_LIMIT),
-      supabase.from("sop_items").select("*"),
+        .select("*").eq("organisation_id", orgId).is("promoted_to_action_id", null)
+        .order("created_at", { ascending: false }).limit(ROW_LIMIT),
+      supabase.from("routines").select("*").eq("organisation_id", orgId).eq("owner_user_id", uid),
+      supabase.from("routine_completions").select("*").eq("organisation_id", orgId).eq("user_id", uid),
+      supabase.from("sop_items").select("*").eq("organisation_id", orgId).eq("owner_user_id", uid),
+      supabase.from("webhook_sources").select("*").eq("organisation_id", orgId),
+      supabase.from("gathered_state").select("*").eq("organisation_id", orgId).eq("user_id", uid).maybeSingle(),
     ]);
 
-    for (const [name, loaded, total] of [
-      ["actions", actions?.length ?? 0, actionsCount ?? 0],
-      ["waiting_items", waitingItems?.length ?? 0, waitingCount ?? 0],
-      ["inbox_items", inboxItems?.length ?? 0, inboxCount ?? 0],
-    ] as const) {
-      if (loaded >= ROW_LIMIT && total > loaded) {
-        console.warn(`[store] ${name}: loaded ${loaded} of ~${total} rows (limit hit). Older rows are not visible until pagination ships.`);
-      }
-    }
-
-    const mapProgramme = (r: any): Programme => ({ id: r.id, name: r.name, description: r.description });
-    const mapProject = (r: any): Project => ({ id: r.id, name: r.name, description: r.description, programmeId: r.programme_id, status: r.status });
-    const mapWP = (r: any): WorkPackage => ({ id: r.id, project: r.project, workPackage: r.work_package, wpLead: r.wp_lead, startDate: r.start_date, dueDate: r.due_date, ragStatus: r.rag_status, blockers: r.blockers, dependencies: r.dependencies || [] });
-    const mapAction = (r: any): Action => ({ id: r.id, task: r.task, project: r.project, workPackage: r.work_package, startDate: r.start_date, dueDate: r.due_date, priority: r.priority, status: r.status, notes: r.notes, completedAt: r.completed_at || undefined, labels: r.labels || [] });
-    const mapWaiting = (r: any): WaitingItem => ({ id: r.id, description: r.description, fromWhom: r.from_whom, projectWP: r.project_wp, askedOn: r.asked_on, dueBy: r.due_by, status: r.status, notes: r.notes, linkedProjectId: r.linked_project_id || undefined });
-    const mapInbox = (r: any): InboxItem => ({ id: r.id, task: r.task, priority: r.priority, dueDate: r.due_date, project: r.project, notes: r.notes, source: r.source, createdAt: r.created_at });
-    const mapSOP = (r: any): SOPItem => ({ id: r.id, when: r.trigger_when, instruction: r.instruction });
-
-    // Hydrate gathered state from cloud (overrides localStorage so it syncs across devices)
-    try {
-      const { data: gathered } = await supabase
-        .from("gathered_state")
-        .select("*")
-        .maybeSingle();
-      if (gathered) {
-        const ids: string[] = Array.isArray(gathered.ids) ? gathered.ids as any : [];
-        const schedule = (gathered.schedule || {}) as Record<string, number>;
-        const durations = (gathered.durations || {}) as Record<string, number>;
-        const order: string[] = Array.isArray(gathered.order_ids) ? gathered.order_ids as any : ids;
-        try {
-          localStorage.setItem(GATHERED_KEY, JSON.stringify({ ids, schedule, durations, order }));
-        } catch {}
-        set({
-          todayIds: new Set(ids),
-          scheduleMap: schedule,
-          durationMap: durations,
-          todayOrder: order,
-        });
-      } else {
-        // No cloud row yet — push current local state up so it syncs going forward
-        const s = get();
-        if (s.todayIds.size > 0) {
-          persistGatheredToCloud({
-            ids: Array.from(s.todayIds),
-            schedule: s.scheduleMap,
-            durations: s.durationMap,
-            order: s.todayOrder,
-          });
-        }
-      }
-    } catch (e) {
-      console.error("[gathered] cloud load failed", e);
-    }
-
-    const mappedSOP = (sopItems || []).map(mapSOP);
-
-    // If user has no SOP items yet, seed with defaults
-    if (mappedSOP.length === 0) {
-      const userId = await getUserId();
-      const sopRows = defaultSOP.map((s) => ({ user_id: userId, trigger_when: s.when, instruction: s.instruction }));
-      const { data: inserted } = await supabase.from("sop_items").insert(sopRows).select();
-      set({
-        dataLoaded: true,
-        programmes: (programmes || []).map(mapProgramme),
-        projects: (projects || []).map(mapProject),
-        workPackages: (workPackages || []).map(mapWP),
-        actions: (actions || []).map(mapAction),
-        waitingItems: (waitingItems || []).map(mapWaiting),
-        inboxItems: (inboxItems || []).map(mapInbox),
-        sopItems: (inserted || []).map(mapSOP),
-      });
-    } else {
-      set({
-        dataLoaded: true,
-        programmes: (programmes || []).map(mapProgramme),
-        projects: (projects || []).map(mapProject),
-        workPackages: (workPackages || []).map(mapWP),
-        actions: (actions || []).map(mapAction),
-        waitingItems: (waitingItems || []).map(mapWaiting),
-        inboxItems: (inboxItems || []).map(mapInbox),
-        sopItems: mappedSOP,
-      });
-    }
-  },
-
-  // --- Programmes ---
-  addProgramme: (p) => {
-    set((s) => ({ programmes: [...s.programmes, p] }));
-    runWriteWithUid(
-      "Programme could not be saved",
-      (uid) => supabase.from("programmes").insert({ id: p.id, user_id: uid, name: p.name, description: p.description }),
-      () => set((s) => ({ programmes: s.programmes.filter((x) => x.id !== p.id) })),
-    );
-  },
-  updateProgramme: (id, updates) => {
-    set((s) => ({ programmes: s.programmes.map((p) => (p.id === id ? { ...p, ...updates } : p)) }));
-    runWrite(
-      "Programme update could not be saved",
-      supabase.from("programmes").update(buildDbUpdate(updates, programmeFields)).eq("id", id),
-    );
-  },
-  deleteProgramme: (id) => {
-    const before = get().programmes.find((p) => p.id === id);
-    const affectedProjects = get().projects.filter((p) => p.programmeId === id);
-    set((s) => ({
-      programmes: s.programmes.filter((p) => p.id !== id),
-      projects: s.projects.map((p) => p.programmeId === id ? { ...p, programmeId: "" } : p),
-    }));
-    runWrite(
-      "Programme could not be deleted",
-      supabase.from("programmes").delete().eq("id", id),
-      before
-        ? () => set((s) => ({
-            programmes: [...s.programmes, before],
-            projects: s.projects.map((p) => affectedProjects.some((ap) => ap.id === p.id) ? { ...p, programmeId: id } : p),
-          }))
-        : undefined,
-    );
-    if (affectedProjects.length > 0) {
-      runWrite(
-        "Project unlink could not be saved",
-        supabase.from("projects").update({ programme_id: "" }).eq("programme_id", id),
-      );
-    }
-  },
-
-  // --- Projects ---
-  addProject: (p) => {
-    set((s) => ({ projects: [...s.projects, p] }));
-    runWriteWithUid(
-      "Project could not be saved",
-      (uid) => supabase.from("projects").insert({ id: p.id, user_id: uid, name: p.name, description: p.description, programme_id: p.programmeId, status: p.status }),
-      () => set((s) => ({ projects: s.projects.filter((x) => x.id !== p.id) })),
-    );
-  },
-  updateProject: (id, updates) => {
-    const before = get().projects.find((p) => p.id === id);
-    set((s) => ({ projects: s.projects.map((p) => (p.id === id ? { ...p, ...updates } : p)) }));
-    runWrite(
-      "Project update could not be saved",
-      supabase.from("projects").update(buildDbUpdate(updates, projectFields)).eq("id", id),
-    );
-    if (updates.name !== undefined && before && updates.name !== before.name) {
-      propagateProjectRename(before.name, updates.name, set);
-    }
-  },
-  deleteProject: (id) => {
-    const before = get().projects.find((p) => p.id === id);
-    set((s) => ({ projects: s.projects.filter((p) => p.id !== id) }));
-    runWrite(
-      "Project could not be deleted",
-      supabase.from("projects").delete().eq("id", id),
-      before ? () => set((s) => ({ projects: [...s.projects, before] })) : undefined,
-    );
-    if (before) {
-      cascadeProjectDelete(before.name, set);
-    }
-  },
-
-  // --- Actions ---
-  addAction: (action) => {
-    const safe = clampNotesField(action);
-    set((s) => ({ actions: [...s.actions, safe] }));
-    persistAction(safe).catch((error) => {
-      set((s) => ({ actions: s.actions.filter((a) => a.id !== safe.id) }));
-      notifySaveError("Action could not be saved", error);
+    set({
+      dataLoaded: true,
+      needsOrgBootstrap: false,
+      currentOrg: org,
+      currentMembership: membership,
+      profile,
+      wbsNodes: (wbsRows ?? []).map(mapWbsNode),
+      wbsDependencies: (depRows ?? []).map(mapWbsDependency),
+      actions: (actionRows ?? []).map(mapAction),
+      waitingItems: (waitingRows ?? []).map(mapWaiting),
+      inboxItems: (inboxRows ?? []).map(mapInbox),
+      routines: (routineRows ?? []).map(mapRoutine),
+      routineCompletions: (completionRows ?? []).map(mapRoutineCompletion),
+      sopItems: (sopRows ?? []).map(mapSop),
+      webhookSources: (sourceRows ?? []).map(mapWebhookSource),
+      gathered: gatheredRow ? mapGathered(gatheredRow) : null,
+      todayIds: new Set(gatheredRow ? mapGathered(gatheredRow).taskIds : []),
     });
   },
+
+  bootstrapOrganisation: async (name) => {
+    const uid = await getUserId();
+    const { data, error } = await supabase
+      .from("organisations")
+      .insert({ name, created_by: uid })
+      .select("*")
+      .single();
+    if (error) throw error;
+    // bootstrap_owner_membership trigger creates the owner row server-side.
+    // Re-run loadAllData to pick up the new membership and seed everything.
+    await get().loadAllData();
+    return mapOrganisation(data);
+  },
+
+  // --------------------------------------------------------------------------
+  // WBS nodes
+  // --------------------------------------------------------------------------
+
+  addWbsNode: (node) => {
+    set((s) => ({ wbsNodes: [...s.wbsNodes, node] }));
+    runWrite(
+      "WBS node could not be saved",
+      supabase.from("wbs_nodes").insert({
+        id: node.id,
+        organisation_id: node.organisationId,
+        parent_id: node.parentId,
+        node_type: node.nodeType,
+        name: node.name,
+        description: node.description,
+        position: node.position,
+        project_status: node.projectStatus,
+        lead_user_id: node.leadUserId,
+        start_date: node.startDate,
+        due_date: node.dueDate,
+        rag_status: node.ragStatus,
+        blockers: node.blockers,
+        created_by: node.createdBy,
+      }),
+      () => set((s) => ({ wbsNodes: s.wbsNodes.filter((n) => n.id !== node.id) })),
+    );
+  },
+  updateWbsNode: (id, updates) => {
+    set((s) => ({ wbsNodes: s.wbsNodes.map((n) => (n.id === id ? { ...n, ...updates } : n)) }));
+    runWrite(
+      "WBS node update could not be saved",
+      supabase.from("wbs_nodes").update(buildDbUpdate(updates, wbsNodeFields)).eq("id", id),
+    );
+  },
+  deleteWbsNode: (id) => {
+    const before = get().wbsNodes.find((n) => n.id === id);
+    set((s) => ({ wbsNodes: s.wbsNodes.filter((n) => n.id !== id) }));
+    // FK ON DELETE CASCADE handles dependent rows on the server. Local
+    // reconciliation: refetch on rollback, or trust the next loadAllData.
+    runWrite(
+      "WBS node could not be deleted",
+      supabase.from("wbs_nodes").delete().eq("id", id),
+      before ? () => set((s) => ({ wbsNodes: [...s.wbsNodes, before] })) : undefined,
+    );
+  },
+
+  // --------------------------------------------------------------------------
+  // Actions
+  // --------------------------------------------------------------------------
+
+  addAction: (action) => {
+    const safe = clampNotes(action);
+    set((s) => ({ actions: [...s.actions, safe] }));
+    void (async () => {
+      const { error } = await supabase.from("actions").insert({
+        id: safe.id,
+        organisation_id: safe.organisationId,
+        wbs_node_id: safe.wbsNodeId,
+        assigned_to: safe.assignedTo,
+        created_by: safe.createdBy,
+        task: safe.task,
+        priority: safe.priority,
+        status: safe.status,
+        start_date: safe.startDate,
+        due_date: safe.dueDate,
+        notes: safe.notes,
+        labels: safe.labels,
+      });
+      if (error) {
+        set((s) => ({ actions: s.actions.filter((a) => a.id !== safe.id) }));
+        notifySaveError("Action could not be saved", error);
+      }
+    })();
+  },
   updateAction: (id, updates) => {
-    // Track completed_at when status changes to Complete
-    const currentAction = get().actions.find((a) => a.id === id);
-    const patch: Partial<Action> & { completedAt?: string | null } = clampNotesField({ ...updates });
-    if (updates.status === "Complete" && currentAction?.status !== "Complete") {
-      patch.completedAt = new Date().toISOString();
-    } else if (updates.status && updates.status !== "Complete") {
-      patch.completedAt = null;
-    }
-    set((s) => ({ actions: s.actions.map((a) => (a.id === id ? { ...a, ...patch } : a)) }));
+    const safe = clampNotes(updates);
+    set((s) => ({ actions: s.actions.map((a) => (a.id === id ? { ...a, ...safe } : a)) }));
     runWrite(
       "Action update could not be saved",
-      supabase.from("actions").update(buildDbUpdate(patch, actionFields)).eq("id", id),
+      supabase.from("actions").update(buildDbUpdate(safe, actionFields)).eq("id", id),
     );
   },
   deleteAction: (id) => {
@@ -795,7 +696,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
     );
   },
   bulkUpdateActions: (ids, updates) => {
-    const safe = clampNotesField(updates);
+    const safe = clampNotes(updates);
     set((s) => ({ actions: s.actions.map((a) => (ids.includes(a.id) ? { ...a, ...safe } : a)) }));
     runWrite(
       "Bulk action update could not be saved",
@@ -812,89 +713,37 @@ export const useAppStore = create<AppState>()((set, get) => ({
     );
   },
 
-  // --- Work Packages ---
-  addWorkPackage: (wp) => {
-    set((s) => ({ workPackages: [...s.workPackages, wp] }));
-    runWriteWithUid(
-      "Work package could not be saved",
-      (uid) => supabase.from("work_packages").insert({
-        id: wp.id,
-        user_id: uid,
-        project: wp.project,
-        work_package: wp.workPackage,
-        wp_lead: wp.wpLead,
-        start_date: wp.startDate,
-        due_date: wp.dueDate,
-        rag_status: wp.ragStatus,
-        blockers: wp.blockers,
-        dependencies: wp.dependencies as any,
-      }),
-      () => set((s) => ({ workPackages: s.workPackages.filter((x) => x.id !== wp.id) })),
-    );
-  },
-  updateWorkPackage: (id, updates) => {
-    const before = get().workPackages.find((wp) => wp.id === id);
-    set((s) => ({ workPackages: s.workPackages.map((wp) => (wp.id === id ? { ...wp, ...updates } : wp)) }));
-    runWrite(
-      "Work package update could not be saved",
-      supabase.from("work_packages").update(buildDbUpdate(updates, workPackageFields)).eq("id", id),
-    );
-    if (
-      updates.workPackage !== undefined &&
-      before &&
-      updates.workPackage !== before.workPackage
-    ) {
-      // Use the (possibly new) project as the scope, so a simultaneous WP-name
-      // and project change still resolves to the right row set.
-      const projectScope = updates.project ?? before.project;
-      propagateWPRename(projectScope, before.workPackage, updates.workPackage, set);
-    }
-  },
-  deleteWorkPackage: (id) => {
-    const before = get().workPackages.find((wp) => wp.id === id);
-    set((s) => ({ workPackages: s.workPackages.filter((wp) => wp.id !== id) }));
-    runWrite(
-      "Work package could not be deleted",
-      supabase.from("work_packages").delete().eq("id", id),
-      before ? () => set((s) => ({ workPackages: [...s.workPackages, before] })) : undefined,
-    );
-    if (before) {
-      cascadeWPDelete(before.project, before.workPackage, set);
-    }
-  },
+  // --------------------------------------------------------------------------
+  // Waiting items
+  // --------------------------------------------------------------------------
 
-  // --- Waiting Items ---
   addWaitingItem: (item) => {
-    const safe = clampNotesField(item);
+    const safe = clampNotes(item);
     set((s) => ({ waitingItems: [...s.waitingItems, safe] }));
-    runWriteWithUid(
+    runWrite(
       "Waiting item could not be saved",
-      (uid) => supabase.from("waiting_items").insert({
+      supabase.from("waiting_items").insert({
         id: safe.id,
-        user_id: uid,
+        organisation_id: safe.organisationId,
+        wbs_node_id: safe.wbsNodeId,
+        from_user_id: safe.fromUserId,
+        from_whom_text: safe.fromWhomText,
         description: safe.description,
-        from_whom: safe.fromWhom,
-        project_wp: safe.projectWP,
         asked_on: safe.askedOn,
         due_by: safe.dueBy,
         status: safe.status,
         notes: safe.notes,
-        linked_project_id: safe.linkedProjectId || null,
-      } as any),
-      () => set((s) => ({ waitingItems: s.waitingItems.filter((x) => x.id !== safe.id) })),
+        created_by: safe.createdBy,
+      }),
+      () => set((s) => ({ waitingItems: s.waitingItems.filter((w) => w.id !== safe.id) })),
     );
   },
   updateWaitingItem: (id, updates) => {
-    const safe = clampNotesField(updates);
+    const safe = clampNotes(updates);
     set((s) => ({ waitingItems: s.waitingItems.map((w) => (w.id === id ? { ...w, ...safe } : w)) }));
-    // linked_project_id needs the empty-string-to-null coercion preserved
-    const dbUpdate = buildDbUpdate(safe, waitingFields);
-    if ("linked_project_id" in dbUpdate && !dbUpdate.linked_project_id) {
-      dbUpdate.linked_project_id = null;
-    }
     runWrite(
       "Waiting item update could not be saved",
-      supabase.from("waiting_items").update(dbUpdate).eq("id", id),
+      supabase.from("waiting_items").update(buildDbUpdate(safe, waitingFields)).eq("id", id),
     );
   },
   deleteWaitingItem: (id) => {
@@ -907,223 +756,49 @@ export const useAppStore = create<AppState>()((set, get) => ({
     );
   },
 
-  // --- Inbox Items ---
-  addInboxItem: (item) => {
-    const safe = clampNotesField(item);
-    set((s) => ({ inboxItems: [...s.inboxItems, safe] }));
-    runWriteWithUid(
-      "Inbox item could not be saved",
-      (uid) => supabase.from("inbox_items").insert({
-        id: safe.id,
-        user_id: uid,
-        task: safe.task,
-        priority: safe.priority,
-        due_date: safe.dueDate,
-        project: safe.project,
-        notes: safe.notes,
-        source: safe.source,
-      }),
-      () => set((s) => ({ inboxItems: s.inboxItems.filter((x) => x.id !== safe.id) })),
-    );
-  },
-  addInboxItems: (items) => {
-    const safeItems = items.map(clampNotesField);
-    set((s) => ({ inboxItems: [...s.inboxItems, ...safeItems] }));
-    const newIds = safeItems.map((i) => i.id);
-    runWriteWithUid(
-      "Inbox items could not be saved",
-      (uid) => supabase.from("inbox_items").insert(safeItems.map((i) => ({
-        id: i.id,
-        user_id: uid,
-        task: i.task,
-        priority: i.priority,
-        due_date: i.dueDate,
-        project: i.project,
-        notes: i.notes,
-        source: i.source,
-      }))),
-      () => set((s) => ({ inboxItems: s.inboxItems.filter((x) => !newIds.includes(x.id)) })),
-    );
-  },
-  updateInboxItem: (id, updates) => {
-    const safe = clampNotesField(updates);
-    set((s) => ({ inboxItems: s.inboxItems.map((i) => (i.id === id ? { ...i, ...safe } : i)) }));
-    runWrite(
-      "Inbox update could not be saved",
-      supabase.from("inbox_items").update(buildDbUpdate(safe, inboxFields)).eq("id", id),
-    );
-  },
-  bulkUpdateInboxItems: (ids, updates) => {
-    const safe = clampNotesField(updates);
-    set((s) => ({ inboxItems: s.inboxItems.map((i) => (ids.includes(i.id) ? { ...i, ...safe } : i)) }));
-    runWrite(
-      "Bulk inbox update could not be saved",
-      supabase.from("inbox_items").update(buildDbUpdate(safe, inboxFields)).in("id", ids),
-    );
-  },
-  deleteInboxItem: (id) => {
-    const before = get().inboxItems.find((i) => i.id === id);
-    set((s) => ({ inboxItems: s.inboxItems.filter((i) => i.id !== id) }));
-    runWrite(
-      "Inbox item could not be deleted",
-      supabase.from("inbox_items").delete().eq("id", id),
-      before ? () => set((s) => ({ inboxItems: [...s.inboxItems, before] })) : undefined,
-    );
-    if (before) {
-      runWriteWithUid(
-        "Inbox event log failed",
-        (uid) => supabase.from("inbox_item_events").insert({
-          inbox_item_id: id,
-          event: "deleted",
-          user_id: uid,
-          source: before.source || "",
-          created_at_snapshot: before.createdAt,
-        } as any),
-      );
-    }
-  },
-  bulkDeleteInboxItems: (ids) => {
-    const before = get().inboxItems.filter((i) => ids.includes(i.id));
-    set((s) => ({ inboxItems: s.inboxItems.filter((i) => !ids.includes(i.id)) }));
-    runWrite(
-      "Bulk inbox delete could not be saved",
-      supabase.from("inbox_items").delete().in("id", ids),
-      before.length > 0 ? () => set((s) => ({ inboxItems: [...s.inboxItems, ...before] })) : undefined,
-    );
-    if (before.length > 0) {
-      runWriteWithUid(
-        "Inbox event log failed",
-        (uid) => supabase.from("inbox_item_events").insert(
-          before.map((i) => ({
-            inbox_item_id: i.id,
-            event: "deleted" as const,
-            user_id: uid,
-            source: i.source || "",
-            created_at_snapshot: i.createdAt,
-          })) as any,
-        ),
-      );
-    }
-  },
-  promoteInboxToActions: (ids) => {
+  delegateAction: (actionId, params) => {
     const s = get();
-    const toPromote = s.inboxItems.filter((i) => ids.includes(i.id));
-    const newActions: Action[] = toPromote.map((i) => ({
-      id: crypto.randomUUID(),
-      task: i.task,
-      project: i.project,
-      workPackage: "",
-      startDate: "",
-      dueDate: i.dueDate,
-      priority: i.priority,
-      status: "Not Started" as const,
-      notes: i.notes,
-      labels: [],
-    }));
-    set({
-      inboxItems: s.inboxItems.filter((i) => !ids.includes(i.id)),
-      actions: [...s.actions, ...newActions],
-    });
-    // Two writes: delete the inbox rows, then insert the new actions. If the
-    // action insert fails we roll back both local state and (best-effort) the
-    // inbox delete by reinserting the rows.
-    runWrite(
-      "Inbox cleanup could not be saved",
-      supabase.from("inbox_items").delete().in("id", ids),
-    );
-    getUserId().then(async (uid) => {
-      const rows = newActions.map((a) => ({ id: a.id, user_id: uid, task: a.task, project: a.project, work_package: a.workPackage, start_date: a.startDate, due_date: a.dueDate, priority: a.priority, status: a.status, notes: a.notes }));
-      const { error } = await supabase.from("actions").insert(rows);
-      if (error) throw error;
-      // Log inbox promotion events
-      if (toPromote.length) {
-        const eventRows = toPromote.map((i) => ({ inbox_item_id: i.id, event: "promoted" as const, user_id: uid, source: i.source || "", created_at_snapshot: i.createdAt }));
-        supabase.from("inbox_item_events").insert(eventRows as any).then(({ error: evErr }) => {
-          if (evErr) console.error("inbox promotion event log failed", evErr);
-        });
-      }
-    }).catch((error) => {
-      set((state) => ({ actions: state.actions.filter((a) => !newActions.some((na) => na.id === a.id)) }));
-      notifySaveError("Promoted actions could not be saved", error);
-    });
-  },
-
-  bulkAddActions: (actions) => {
-    set((s) => ({ actions: [...s.actions, ...actions] }));
-    getUserId().then(async (uid) => {
-      const rows = actions.map((a) => ({
-        id: a.id, user_id: uid, task: a.task, project: a.project,
-        work_package: a.workPackage, start_date: a.startDate, due_date: a.dueDate,
-        priority: a.priority, status: a.status, notes: a.notes, labels: a.labels ?? [],
-      }));
-      const { error } = await supabase.from("actions").insert(rows);
-      if (error) throw error;
-    }).catch((error) => {
-      set((state) => ({ actions: state.actions.filter((a) => !actions.some((na) => na.id === a.id)) }));
-      notifySaveError("Actions could not be saved", error);
-    });
-  },
-  updateSOPItem: (id, updates) => {
-    set((s) => ({ sopItems: s.sopItems.map((item) => (item.id === id ? { ...item, ...updates } : item)) }));
-    runWrite(
-      "SOP update could not be saved",
-      supabase.from("sop_items").update(buildDbUpdate(updates, sopFields)).eq("id", id),
-    );
-  },
-  addSOPItem: (item) => {
-    set((s) => ({ sopItems: [...s.sopItems, item] }));
-    runWriteWithUid(
-      "SOP item could not be saved",
-      (uid) => supabase.from("sop_items").insert({ id: item.id, user_id: uid, trigger_when: item.when, instruction: item.instruction }),
-      () => set((s) => ({ sopItems: s.sopItems.filter((x) => x.id !== item.id) })),
-    );
-  },
-  deleteSOPItem: (id) => {
-    const before = get().sopItems.find((item) => item.id === id);
-    set((s) => ({ sopItems: s.sopItems.filter((item) => item.id !== id) }));
-    runWrite(
-      "SOP item could not be deleted",
-      supabase.from("sop_items").delete().eq("id", id),
-      before ? () => set((s) => ({ sopItems: [...s.sopItems, before] })) : undefined,
-    );
-  },
-
-  // --- Cross-entity operations ---
-  delegateAction: (id, toWhom) => {
-    const s = get();
-    const action = s.actions.find((a) => a.id === id);
-    if (!action) return;
+    const action = s.actions.find((a) => a.id === actionId);
+    const org = s.currentOrg;
+    if (!action || !org) return;
     const newWaiting: WaitingItem = {
       id: crypto.randomUUID(),
+      organisationId: org.id,
+      wbsNodeId: action.wbsNodeId,
+      fromUserId: params.fromUserId ?? null,
+      fromWhomText: params.fromWhomText ?? null,
       description: action.task,
-      fromWhom: toWhom,
-      projectWP: [action.project, action.workPackage].filter(Boolean).join(" / "),
-      askedOn: new Date().toISOString().split("T")[0],
+      askedOn: new Date().toISOString().slice(0, 10),
       dueBy: action.dueDate,
-      status: "Pending",
+      status: "pending",
       notes: action.notes,
+      createdBy: s.currentMembership?.userId ?? null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     };
     set({
-      actions: s.actions.filter((a) => a.id !== id),
+      actions: s.actions.filter((a) => a.id !== actionId),
       waitingItems: [...s.waitingItems, newWaiting],
     });
     runWrite(
       "Delegation (action delete) could not be saved",
-      supabase.from("actions").delete().eq("id", id),
+      supabase.from("actions").delete().eq("id", actionId),
       () => set((state) => ({ actions: [...state.actions, action] })),
     );
-    runWriteWithUid(
+    runWrite(
       "Delegation (waiting insert) could not be saved",
-      (uid) => supabase.from("waiting_items").insert({
+      supabase.from("waiting_items").insert({
         id: newWaiting.id,
-        user_id: uid,
+        organisation_id: newWaiting.organisationId,
+        wbs_node_id: newWaiting.wbsNodeId,
+        from_user_id: newWaiting.fromUserId,
+        from_whom_text: newWaiting.fromWhomText,
         description: newWaiting.description,
-        from_whom: newWaiting.fromWhom,
-        project_wp: newWaiting.projectWP,
         asked_on: newWaiting.askedOn,
         due_by: newWaiting.dueBy,
         status: newWaiting.status,
         notes: newWaiting.notes,
+        created_by: newWaiting.createdBy,
       }),
       () => set((state) => ({ waitingItems: state.waitingItems.filter((w) => w.id !== newWaiting.id) })),
     );
@@ -1132,18 +807,26 @@ export const useAppStore = create<AppState>()((set, get) => ({
   takeBackWaiting: (id) => {
     const s = get();
     const item = s.waitingItems.find((w) => w.id === id);
-    if (!item) return;
+    const org = s.currentOrg;
+    if (!item || !org) return;
     const newAction: Action = {
       id: crypto.randomUUID(),
+      organisationId: org.id,
+      wbsNodeId: item.wbsNodeId,
+      assignedTo: s.currentMembership?.userId ?? null,
+      createdBy: s.currentMembership?.userId ?? null,
       task: item.description,
-      project: item.projectWP.split(" / ")[0] ?? "",
-      workPackage: item.projectWP.split(" / ")[1] ?? "",
-      startDate: "",
+      priority: "medium",
+      status: "not_started",
+      startDate: null,
       dueDate: item.dueBy,
-      priority: "Medium",
-      status: "Not Started",
+      completedAt: null,
       notes: item.notes,
       labels: [],
+      notStartedSince: null,
+      archivedAt: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     };
     set({
       waitingItems: s.waitingItems.filter((w) => w.id !== id),
@@ -1154,9 +837,497 @@ export const useAppStore = create<AppState>()((set, get) => ({
       supabase.from("waiting_items").delete().eq("id", id),
       () => set((state) => ({ waitingItems: [...state.waitingItems, item] })),
     );
-    persistAction(newAction).catch((error) => {
-      set((state) => ({ actions: state.actions.filter((a) => a.id !== newAction.id) }));
-      notifySaveError("Action could not be saved", error);
+    void (async () => {
+      const { error } = await supabase.from("actions").insert({
+        id: newAction.id,
+        organisation_id: newAction.organisationId,
+        wbs_node_id: newAction.wbsNodeId,
+        assigned_to: newAction.assignedTo,
+        created_by: newAction.createdBy,
+        task: newAction.task,
+        priority: newAction.priority,
+        status: newAction.status,
+        due_date: newAction.dueDate,
+        notes: newAction.notes,
+        labels: newAction.labels,
+      });
+      if (error) {
+        set((state) => ({ actions: state.actions.filter((a) => a.id !== newAction.id) }));
+        notifySaveError("Take-back (action insert) could not be saved", error);
+      }
+    })();
+  },
+
+  // --------------------------------------------------------------------------
+  // Inbox items
+  // --------------------------------------------------------------------------
+
+  addInboxItem: (item) => {
+    const safe = clampNotes(item);
+    set((s) => ({ inboxItems: [...s.inboxItems, safe] }));
+    runWrite(
+      "Inbox item could not be saved",
+      supabase.from("inbox_items").insert({
+        id: safe.id,
+        organisation_id: safe.organisationId,
+        source_id: safe.sourceId,
+        wbs_node_id: safe.wbsNodeId,
+        task: safe.task,
+        priority: safe.priority,
+        due_date: safe.dueDate,
+        notes: safe.notes,
+        external_id: safe.externalId,
+        external_url: safe.externalUrl,
+        created_by: safe.createdBy,
+      }),
+      () => set((s) => ({ inboxItems: s.inboxItems.filter((i) => i.id !== safe.id) })),
+    );
+  },
+  addInboxItems: (items) => {
+    const safeItems = items.map(clampNotes);
+    set((s) => ({ inboxItems: [...s.inboxItems, ...safeItems] }));
+    const newIds = safeItems.map((i) => i.id);
+    runWrite(
+      "Inbox items could not be saved",
+      supabase.from("inbox_items").insert(safeItems.map((i) => ({
+        id: i.id,
+        organisation_id: i.organisationId,
+        source_id: i.sourceId,
+        wbs_node_id: i.wbsNodeId,
+        task: i.task,
+        priority: i.priority,
+        due_date: i.dueDate,
+        notes: i.notes,
+        external_id: i.externalId,
+        external_url: i.externalUrl,
+        created_by: i.createdBy,
+      }))),
+      () => set((s) => ({ inboxItems: s.inboxItems.filter((i) => !newIds.includes(i.id)) })),
+    );
+  },
+  updateInboxItem: (id, updates) => {
+    const safe = clampNotes(updates);
+    set((s) => ({ inboxItems: s.inboxItems.map((i) => (i.id === id ? { ...i, ...safe } : i)) }));
+    runWrite(
+      "Inbox update could not be saved",
+      supabase.from("inbox_items").update(buildDbUpdate(safe, inboxFields)).eq("id", id),
+    );
+  },
+  bulkUpdateInboxItems: (ids, updates) => {
+    const safe = clampNotes(updates);
+    set((s) => ({ inboxItems: s.inboxItems.map((i) => (ids.includes(i.id) ? { ...i, ...safe } : i)) }));
+    runWrite(
+      "Bulk inbox update could not be saved",
+      supabase.from("inbox_items").update(buildDbUpdate(safe, inboxFields)).in("id", ids),
+    );
+  },
+  deleteInboxItem: (id) => {
+    const before = get().inboxItems.find((i) => i.id === id);
+    set((s) => ({ inboxItems: s.inboxItems.filter((i) => i.id !== id) }));
+    // The DB BEFORE DELETE trigger writes a 'deleted' inbox_item_event with
+    // the snapshot — no app-side event-log call needed any more.
+    runWrite(
+      "Inbox item could not be deleted",
+      supabase.from("inbox_items").delete().eq("id", id),
+      before ? () => set((s) => ({ inboxItems: [...s.inboxItems, before] })) : undefined,
+    );
+  },
+  bulkDeleteInboxItems: (ids) => {
+    const before = get().inboxItems.filter((i) => ids.includes(i.id));
+    set((s) => ({ inboxItems: s.inboxItems.filter((i) => !ids.includes(i.id)) }));
+    runWrite(
+      "Bulk inbox delete could not be saved",
+      supabase.from("inbox_items").delete().in("id", ids),
+      before.length > 0 ? () => set((s) => ({ inboxItems: [...s.inboxItems, ...before] })) : undefined,
+    );
+  },
+  promoteInboxToActions: (ids) => {
+    const s = get();
+    const org = s.currentOrg;
+    if (!org) return;
+    const toPromote = s.inboxItems.filter((i) => ids.includes(i.id));
+    const now = new Date().toISOString();
+    const newActions: Action[] = toPromote.map((i) => ({
+      id: crypto.randomUUID(),
+      organisationId: org.id,
+      wbsNodeId: i.wbsNodeId,
+      assignedTo: s.currentMembership?.userId ?? null,
+      createdBy: s.currentMembership?.userId ?? null,
+      task: i.task,
+      priority: i.priority,
+      status: "not_started",
+      startDate: null,
+      dueDate: i.dueDate,
+      completedAt: null,
+      notes: i.notes,
+      labels: [],
+      notStartedSince: null,
+      archivedAt: null,
+      createdAt: now,
+      updatedAt: now,
+    }));
+    const promotedMap = new Map(toPromote.map((i, idx) => [i.id, newActions[idx].id]));
+    set({
+      inboxItems: s.inboxItems.map((i) =>
+        promotedMap.has(i.id)
+          ? { ...i, promotedToActionId: promotedMap.get(i.id)!, promotedAt: now }
+          : i,
+      ),
+      actions: [...s.actions, ...newActions],
     });
+
+    void (async () => {
+      const { error } = await supabase.from("actions").insert(newActions.map((a) => ({
+        id: a.id,
+        organisation_id: a.organisationId,
+        wbs_node_id: a.wbsNodeId,
+        assigned_to: a.assignedTo,
+        created_by: a.createdBy,
+        task: a.task,
+        priority: a.priority,
+        status: a.status,
+        due_date: a.dueDate,
+        notes: a.notes,
+        labels: a.labels,
+      })));
+      if (error) {
+        set((state) => ({
+          actions: state.actions.filter((a) => !newActions.some((na) => na.id === a.id)),
+          inboxItems: state.inboxItems.map((i) =>
+            promotedMap.has(i.id) ? { ...i, promotedToActionId: null, promotedAt: null } : i,
+          ),
+        }));
+        notifySaveError("Promoted actions could not be saved", error);
+        return;
+      }
+      // Mark inbox items as promoted (filtered out of working set on next load).
+      for (const [inboxId, actionId] of promotedMap.entries()) {
+        await supabase
+          .from("inbox_items")
+          .update({ promoted_to_action_id: actionId, promoted_at: now })
+          .eq("id", inboxId);
+      }
+    })();
+  },
+  bulkAddActions: (actions) => {
+    const safe = actions.map(clampNotes);
+    set((s) => ({ actions: [...s.actions, ...safe] }));
+    const newIds = safe.map((a) => a.id);
+    void (async () => {
+      const { error } = await supabase.from("actions").insert(safe.map((a) => ({
+        id: a.id,
+        organisation_id: a.organisationId,
+        wbs_node_id: a.wbsNodeId,
+        assigned_to: a.assignedTo,
+        created_by: a.createdBy,
+        task: a.task,
+        priority: a.priority,
+        status: a.status,
+        due_date: a.dueDate,
+        notes: a.notes,
+        labels: a.labels,
+      })));
+      if (error) {
+        set((state) => ({ actions: state.actions.filter((a) => !newIds.includes(a.id)) }));
+        notifySaveError("Actions could not be saved", error);
+      }
+    })();
+  },
+
+  // --------------------------------------------------------------------------
+  // Routines + SOPs
+  // --------------------------------------------------------------------------
+
+  addRoutine: (r) => {
+    set((s) => ({ routines: [...s.routines, r] }));
+    runWrite(
+      "Routine could not be saved",
+      supabase.from("routines").insert({
+        id: r.id,
+        organisation_id: r.organisationId,
+        owner_user_id: r.ownerUserId,
+        name: r.name,
+        description: r.description,
+        time_of_day: r.timeOfDay,
+        frequency_type: r.frequencyType,
+        frequency_config: r.frequencyConfig as Json,
+      }),
+      () => set((s) => ({ routines: s.routines.filter((x) => x.id !== r.id) })),
+    );
+  },
+  updateRoutine: (id, updates) => {
+    set((s) => ({ routines: s.routines.map((r) => (r.id === id ? { ...r, ...updates } : r)) }));
+    runWrite(
+      "Routine update could not be saved",
+      supabase.from("routines").update(buildDbUpdate(updates, routineFields)).eq("id", id),
+    );
+  },
+  deleteRoutine: (id) => {
+    const before = get().routines.find((r) => r.id === id);
+    set((s) => ({ routines: s.routines.filter((r) => r.id !== id) }));
+    runWrite(
+      "Routine could not be deleted",
+      supabase.from("routines").delete().eq("id", id),
+      before ? () => set((s) => ({ routines: [...s.routines, before] })) : undefined,
+    );
+  },
+  addRoutineCompletion: (rc) => {
+    set((s) => ({ routineCompletions: [...s.routineCompletions, rc] }));
+    runWrite(
+      "Routine completion could not be saved",
+      supabase.from("routine_completions").insert({
+        id: rc.id,
+        organisation_id: rc.organisationId,
+        routine_id: rc.routineId,
+        user_id: rc.userId,
+        completed_date: rc.completedDate,
+      }),
+      () => set((s) => ({ routineCompletions: s.routineCompletions.filter((x) => x.id !== rc.id) })),
+    );
+  },
+  deleteRoutineCompletion: (id) => {
+    const before = get().routineCompletions.find((rc) => rc.id === id);
+    set((s) => ({ routineCompletions: s.routineCompletions.filter((rc) => rc.id !== id) }));
+    runWrite(
+      "Routine completion could not be removed",
+      supabase.from("routine_completions").delete().eq("id", id),
+      before ? () => set((s) => ({ routineCompletions: [...s.routineCompletions, before] })) : undefined,
+    );
+  },
+  addSopItem: (item) => {
+    set((s) => ({ sopItems: [...s.sopItems, item] }));
+    runWrite(
+      "SOP item could not be saved",
+      supabase.from("sop_items").insert({
+        id: item.id,
+        organisation_id: item.organisationId,
+        owner_user_id: item.ownerUserId,
+        trigger_when: item.triggerWhen,
+        instruction: item.instruction,
+        position: item.position,
+      }),
+      () => set((s) => ({ sopItems: s.sopItems.filter((x) => x.id !== item.id) })),
+    );
+  },
+  updateSopItem: (id, updates) => {
+    set((s) => ({ sopItems: s.sopItems.map((x) => (x.id === id ? { ...x, ...updates } : x)) }));
+    runWrite(
+      "SOP item update could not be saved",
+      supabase.from("sop_items").update(buildDbUpdate(updates, sopFields)).eq("id", id),
+    );
+  },
+  deleteSopItem: (id) => {
+    const before = get().sopItems.find((x) => x.id === id);
+    set((s) => ({ sopItems: s.sopItems.filter((x) => x.id !== id) }));
+    runWrite(
+      "SOP item could not be deleted",
+      supabase.from("sop_items").delete().eq("id", id),
+      before ? () => set((s) => ({ sopItems: [...s.sopItems, before] })) : undefined,
+    );
+  },
+
+  // --------------------------------------------------------------------------
+  // Webhook sources (Integrations)
+  // --------------------------------------------------------------------------
+
+  addWebhookSource: (source) => {
+    set((s) => ({ webhookSources: [...s.webhookSources, source] }));
+    runWrite(
+      "Webhook source could not be saved",
+      supabase.from("webhook_sources").insert({
+        id: source.id,
+        organisation_id: source.organisationId,
+        name: source.name,
+        slug: source.slug,
+        description: source.description,
+        created_by: source.createdBy,
+      }),
+      () => set((s) => ({ webhookSources: s.webhookSources.filter((x) => x.id !== source.id) })),
+    );
+  },
+  updateWebhookSource: (id, updates) => {
+    set((s) => ({
+      webhookSources: s.webhookSources.map((x) => (x.id === id ? { ...x, ...updates } : x)),
+    }));
+    runWrite(
+      "Webhook source update could not be saved",
+      supabase.from("webhook_sources").update(buildDbUpdate(updates, webhookSourceFields)).eq("id", id),
+    );
+  },
+  deleteWebhookSource: (id) => {
+    const before = get().webhookSources.find((x) => x.id === id);
+    set((s) => ({ webhookSources: s.webhookSources.filter((x) => x.id !== id) }));
+    runWrite(
+      "Webhook source could not be deleted",
+      supabase.from("webhook_sources").delete().eq("id", id),
+      before ? () => set((s) => ({ webhookSources: [...s.webhookSources, before] })) : undefined,
+    );
+  },
+
+  // --------------------------------------------------------------------------
+  // Profile
+  // --------------------------------------------------------------------------
+
+  updateProfile: (updates) => {
+    set((s) => (s.profile ? { profile: { ...s.profile, ...updates } } : {}));
+    const profile = get().profile;
+    if (!profile) return;
+    const dbUpdate: Record<string, unknown> = {};
+    if (updates.displayName !== undefined) dbUpdate.display_name = updates.displayName;
+    if (updates.avatarUrl !== undefined) dbUpdate.avatar_url = updates.avatarUrl;
+    if (updates.preferences !== undefined) dbUpdate.preferences = updates.preferences;
+    if (Object.keys(dbUpdate).length === 0) return;
+    runWrite(
+      "Profile update could not be saved",
+      supabase.from("profiles").update(dbUpdate).eq("id", profile.id),
+    );
+  },
+
+  // --------------------------------------------------------------------------
+  // Gathered ("Today")
+  // --------------------------------------------------------------------------
+
+  setGatheredTasks: (taskIds, orderIds) => {
+    upsertGathered(set, get, { taskIds, orderIds });
+  },
+  scheduleGatheredTask: (taskId, slot) => {
+    const current = get().gathered?.schedule ?? {};
+    upsertGathered(set, get, { schedule: { ...current, [taskId]: slot } });
+  },
+  setGatheredTaskDuration: (taskId, duration) => {
+    const current = get().gathered?.durations ?? {};
+    upsertGathered(set, get, { durations: { ...current, [taskId]: duration } });
+  },
+  unscheduleGatheredTask: (taskId) => {
+    const sched = { ...(get().gathered?.schedule ?? {}) };
+    const dur = { ...(get().gathered?.durations ?? {}) };
+    delete sched[taskId];
+    delete dur[taskId];
+    upsertGathered(set, get, { schedule: sched, durations: dur });
+  },
+  clearGathered: () => {
+    upsertGathered(set, get, { taskIds: [], orderIds: [], schedule: {}, durations: {} });
+  },
+
+  // Today convenience — kept in lockstep with `gathered.taskIds` via
+  // upsertGathered. Reads stay cheap (a Set ref); writes go through the
+  // debounced persistence path so the UI feels instant.
+  todayIds: new Set<string>(),
+  addToday: (id) => {
+    const g = get().gathered;
+    const existing = g?.taskIds ?? [];
+    if (existing.includes(id)) return;
+    const taskIds = [...existing, id];
+    const orderIds = [...(g?.orderIds ?? []), id];
+    upsertGathered(set, get, { taskIds, orderIds });
+  },
+  removeToday: (id) => {
+    const g = get().gathered;
+    if (!g) return;
+    const taskIds = g.taskIds.filter((x) => x !== id);
+    const orderIds = g.orderIds.filter((x) => x !== id);
+    const schedule = { ...g.schedule }; delete schedule[id];
+    const durations = { ...g.durations }; delete durations[id];
+    upsertGathered(set, get, { taskIds, orderIds, schedule, durations });
+  },
+  clearToday: () => {
+    upsertGathered(set, get, { taskIds: [], orderIds: [], schedule: {}, durations: {} });
   },
 }));
+
+// ============================================================================
+// Gathered-state helper (debounced upsert preserved from v1)
+// ============================================================================
+
+type GatheredPatch = {
+  taskIds?: string[];
+  orderIds?: string[];
+  schedule?: Record<string, number>;
+  durations?: Record<string, number>;
+};
+
+let gatheredSaveTimer: ReturnType<typeof setTimeout> | null = null;
+let pendingGatheredPatch: { userId: string; organisationId: string; payload: GatheredState } | null = null;
+
+function upsertGathered(
+  set: (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void,
+  get: () => AppState,
+  patch: GatheredPatch,
+) {
+  const state = get();
+  const org = state.currentOrg;
+  const userId = state.currentMembership?.userId;
+  if (!org || !userId) return;
+
+  const merged: GatheredState = state.gathered
+    ? { ...state.gathered, ...patch, updatedAt: new Date().toISOString() }
+    : {
+        id: crypto.randomUUID(),
+        userId,
+        organisationId: org.id,
+        taskIds: patch.taskIds ?? [],
+        orderIds: patch.orderIds ?? [],
+        schedule: patch.schedule ?? {},
+        durations: patch.durations ?? {},
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+  set({ gathered: merged, todayIds: new Set(merged.taskIds) });
+  pendingGatheredPatch = { userId, organisationId: org.id, payload: merged };
+
+  if (gatheredSaveTimer) clearTimeout(gatheredSaveTimer);
+  gatheredSaveTimer = setTimeout(() => {
+    gatheredSaveTimer = null;
+    const p = pendingGatheredPatch;
+    pendingGatheredPatch = null;
+    if (p) void writeGatheredNow(p);
+  }, 400);
+}
+
+async function writeGatheredNow(p: { userId: string; organisationId: string; payload: GatheredState }) {
+  try {
+    await supabase.from("gathered_state").upsert({
+      user_id: p.userId,
+      organisation_id: p.organisationId,
+      task_ids: p.payload.taskIds,
+      order_ids: p.payload.orderIds,
+      schedule: p.payload.schedule,
+      durations: p.payload.durations,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "user_id,organisation_id" });
+  } catch (e) {
+    console.error("[gathered] save failed", e);
+  }
+}
+
+function flushPendingGathered() {
+  if (!pendingGatheredPatch) return;
+  if (gatheredSaveTimer) {
+    clearTimeout(gatheredSaveTimer);
+    gatheredSaveTimer = null;
+  }
+  const p = pendingGatheredPatch;
+  pendingGatheredPatch = null;
+  void writeGatheredNow(p);
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("pagehide", flushPendingGathered);
+  window.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") flushPendingGathered();
+  });
+}
+
+// ============================================================================
+// Derived selectors — bridges so v1-style pages keep compiling during the
+// page-by-page rewrite in phases 3–4. Delete once consumers use wbsNodes
+// directly.
+// ============================================================================
+
+export function selectByType(nodes: WbsNode[], type: NodeType): WbsNode[] {
+  return nodes.filter((n) => n.nodeType === type);
+}
+
+export function selectChildren(nodes: WbsNode[], parentId: string | null): WbsNode[] {
+  return nodes.filter((n) => n.parentId === parentId);
+}

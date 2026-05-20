@@ -26,13 +26,31 @@ export default function OrgBootstrapPage() {
       await bootstrapOrganisation(parsed.data.name);
       toast.success(`Created ${parsed.data.name}`);
     } catch (e) {
-      toast.error("Could not create organisation", {
-        description: e instanceof Error ? e.message : "Unknown error",
-      });
+      // Supabase PostgrestError is a plain object with .message/.code/.hint,
+      // not an Error instance — so a bare `instanceof Error` check swallows
+      // the real reason. Pull the message off whatever shape we got.
+      console.error("[bootstrap] failed", e);
+      const description = describeError(e);
+      toast.error("Could not create organisation", { description });
     } finally {
       setSubmitting(false);
     }
   };
+
+  function describeError(e: unknown): string {
+    if (!e) return "Unknown error";
+    if (typeof e === "string") return e;
+    if (typeof e === "object") {
+      const o = e as { message?: unknown; hint?: unknown; code?: unknown; details?: unknown };
+      const parts: string[] = [];
+      if (typeof o.message === "string" && o.message) parts.push(o.message);
+      if (typeof o.hint === "string" && o.hint) parts.push(`Hint: ${o.hint}`);
+      if (typeof o.details === "string" && o.details && o.details !== o.message) parts.push(o.details);
+      if (typeof o.code === "string" && o.code) parts.push(`(${o.code})`);
+      if (parts.length) return parts.join(" — ");
+    }
+    return "Unknown error";
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background px-4">

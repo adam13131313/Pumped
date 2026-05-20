@@ -592,14 +592,35 @@ export const useAppStore = create<AppState>()((set, get) => ({
 
   bootstrapOrganisation: async (name) => {
     const uid = await getUserId();
-    const { data, error } = await supabase
+    const orgId = crypto.randomUUID();
+
+    // Two-step instead of `.insert().select().single()`. The combined form
+    // runs INSERT…RETURNING which forces the organisations_select RLS
+    // (is_org_member) to evaluate against state visible *during* the same
+    // statement — and the `bootstrap_owner_membership` AFTER-trigger inserts
+    // the membership row in that same statement. Depending on the snapshot
+    // PostgREST reads from, RLS can filter the returned row out and
+    // `.single()` then surfaces an opaque "no rows" failure that looks like
+    // a write rejection. Splitting the calls means the SELECT happens in
+    // its own statement, where the membership is unambiguously visible.
+    const { error: insertError } = await supabase
       .from("organisations")
-      .insert({ name, created_by: uid })
+      .insert({ id: orgId, name, created_by: uid });
+    if (insertError) {
+      console.error("[bootstrap] insert failed", insertError);
+      throw insertError;
+    }
+
+    const { data, error: selectError } = await supabase
+      .from("organisations")
       .select("*")
+      .eq("id", orgId)
       .single();
-    if (error) throw error;
-    // bootstrap_owner_membership trigger creates the owner row server-side.
-    // Re-run loadAllData to pick up the new membership and seed everything.
+    if (selectError || !data) {
+      console.error("[bootstrap] select-back failed", selectError);
+      throw selectError ?? new Error("Organisation was created but could not be read back");
+    }
+
     await get().loadAllData();
     return mapOrganisation(data);
   },

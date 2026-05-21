@@ -213,22 +213,34 @@ export function TaskLinks({ actionId, waitingItemId, wbsNodeId }: TaskLinksProps
             const isEditing = editingId === link.id;
             if (isEditing) {
               return (
-                <li key={link.id} className="rounded-lg border border-primary/40 bg-card p-3 space-y-2">
-                  <Input
-                    value={editLabel}
-                    onChange={(e) => setEditLabel(e.target.value)}
-                    placeholder="Name *"
-                    maxLength={MAX_LABEL}
-                    className="h-8 text-sm"
-                    autoFocus
-                  />
-                  <Input
-                    value={editUrl}
-                    onChange={(e) => setEditUrl(e.target.value)}
-                    placeholder="https://…"
-                    maxLength={MAX_URL}
-                    className="h-8 text-sm font-mono"
-                  />
+                <li key={link.id} className="rounded-lg border border-primary/40 bg-card p-3 space-y-3">
+                  <div className="space-y-1">
+                    <Label htmlFor={`link-label-${link.id}`} className="text-xs font-medium">
+                      Label <span className="text-destructive">*</span>
+                    </Label>
+                    <Input
+                      id={`link-label-${link.id}`}
+                      value={editLabel}
+                      onChange={(e) => setEditLabel(e.target.value)}
+                      placeholder="e.g. Project Brief"
+                      maxLength={MAX_LABEL}
+                      className="h-8 text-sm"
+                      autoFocus
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor={`link-url-${link.id}`} className="text-xs font-medium">
+                      URL <span className="text-destructive">*</span>
+                    </Label>
+                    <Input
+                      id={`link-url-${link.id}`}
+                      value={editUrl}
+                      onChange={(e) => setEditUrl(e.target.value)}
+                      placeholder="https://..."
+                      maxLength={MAX_URL}
+                      className="h-8 text-sm font-mono"
+                    />
+                  </div>
                   <div className="flex gap-1.5">
                     <Button
                       size="sm"
@@ -300,33 +312,40 @@ export function TaskLinks({ actionId, waitingItemId, wbsNodeId }: TaskLinksProps
       )}
 
       {showAdd && (
-        <div className="rounded-lg border border-primary/40 bg-card p-3 space-y-2">
+        <div className="rounded-lg border border-primary/40 bg-card p-3 space-y-3">
           <div className="space-y-1">
+            <Label htmlFor="new-link-label" className="text-xs font-medium">
+              Label <span className="text-destructive">*</span>
+            </Label>
             <Input
+              id="new-link-label"
               value={newLabel}
               onChange={(e) => setNewLabel(e.target.value)}
-              placeholder="Name * (e.g. 'Design spec', 'Q3 budget sheet')"
+              placeholder="e.g. Project Brief"
               maxLength={MAX_LABEL}
               className="h-8 text-sm"
               autoFocus
             />
-            <p className="text-[11px] text-muted-foreground px-0.5">
-              A short, recognisable name. Required so you can spot it in lists.
-            </p>
           </div>
-          <Input
-            value={newUrl}
-            onChange={(e) => setNewUrl(e.target.value)}
-            placeholder="https://drive.google.com/…"
-            maxLength={MAX_URL}
-            className="h-8 text-sm font-mono"
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && newLabel.trim() && newUrl.trim()) {
-                e.preventDefault();
-                void handleAdd();
-              }
-            }}
-          />
+          <div className="space-y-1">
+            <Label htmlFor="new-link-url" className="text-xs font-medium">
+              URL <span className="text-destructive">*</span>
+            </Label>
+            <Input
+              id="new-link-url"
+              value={newUrl}
+              onChange={(e) => setNewUrl(e.target.value)}
+              placeholder="https://..."
+              maxLength={MAX_URL}
+              className="h-8 text-sm font-mono"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && newLabel.trim() && newUrl.trim()) {
+                  e.preventDefault();
+                  void handleAdd();
+                }
+              }}
+            />
+          </div>
           <div className="flex gap-1.5">
             <Button
               size="sm"

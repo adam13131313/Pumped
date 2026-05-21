@@ -1,8 +1,12 @@
-import { useMemo, useState, KeyboardEvent, ClipboardEvent } from "react";
+import { useMemo, ClipboardEvent } from "react";
 import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Plus, X, Link as LinkIcon } from "lucide-react";
+import { ExternalLink, FileSpreadsheet, FileText, Presentation, Globe, Github, Figma, X } from "lucide-react";
+
+// Notes field with passive URL extraction. URLs typed or pasted into the
+// textarea are pulled out and rendered as chips below it for legibility.
+// The explicit "Add link" button used to live here, but it duplicated the
+// Documents section on the dialog — link-adding is now consolidated there.
+// Pasted URLs still extract here so legacy notes keep working.
 
 const URL_REGEX = /(https?:\/\/[^\s<]+)/g;
 
@@ -35,11 +39,8 @@ interface NotesWithLinksProps {
 
 export function NotesWithLinks({ value, onChange, rows = 2, maxLength = 1000, placeholder }: NotesWithLinksProps) {
   const { prose, urls } = useMemo(() => splitNotes(value), [value]);
-  const [adding, setAdding] = useState(false);
-  const [draft, setDraft] = useState("");
 
   const updateProse = (nextProse: string) => {
-    // If user pasted/typed URLs into prose, extract them into urls
     const found = nextProse.match(URL_REGEX) ?? [];
     if (found.length) {
       const cleaned = nextProse.replace(URL_REGEX, "").replace(/[ \t]+\n/g, "\n");
@@ -54,42 +55,16 @@ export function NotesWithLinks({ value, onChange, rows = 2, maxLength = 1000, pl
     onChange(combine(prose, urls.filter((u) => u !== url)));
   };
 
-  const addUrl = () => {
-    const trimmed = draft.trim();
-    if (!trimmed) {
-      setAdding(false);
-      return;
-    }
-    const valid = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
-    if (urls.includes(valid)) {
-      setDraft("");
-      setAdding(false);
-      return;
-    }
-    onChange(combine(prose, [...urls, valid]));
-    setDraft("");
-    setAdding(false);
-  };
-
-  const onKey = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      addUrl();
-    } else if (e.key === "Escape") {
-      setDraft("");
-      setAdding(false);
-    }
-  };
-
-  const onPaste = (e: ClipboardEvent<HTMLInputElement>) => {
+  const onPaste = (e: ClipboardEvent<HTMLTextAreaElement>) => {
     const text = e.clipboardData.getData("text");
-    if (URL_REGEX.test(text)) {
+    const found = text.match(URL_REGEX);
+    if (found && found.length > 0 && !text.replace(URL_REGEX, "").trim()) {
+      // The clipboard is *only* a URL (or a few). Skip default paste so the
+      // URLs don't also end up inline in the textarea — they already get
+      // hoisted into the chip row.
       e.preventDefault();
-      const found = Array.from(new Set(text.match(URL_REGEX) ?? []));
       const merged = Array.from(new Set([...urls, ...found]));
       onChange(combine(prose, merged));
-      setDraft("");
-      setAdding(false);
     }
   };
 
@@ -98,6 +73,7 @@ export function NotesWithLinks({ value, onChange, rows = 2, maxLength = 1000, pl
       <Textarea
         value={prose}
         onChange={(e) => updateProse(e.target.value)}
+        onPaste={onPaste}
         rows={rows}
         maxLength={maxLength}
         placeholder={placeholder ?? "Add notes. Pasted links are extracted below."}
@@ -110,54 +86,26 @@ export function NotesWithLinks({ value, onChange, rows = 2, maxLength = 1000, pl
           ))}
         </div>
       )}
-      {adding ? (
-        <div className="flex items-center gap-1.5">
-          <LinkIcon className="h-3.5 w-3.5 text-muted-foreground" />
-          <Input
-            autoFocus
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={onKey}
-            onPaste={onPaste}
-            onBlur={addUrl}
-            placeholder="Paste a URL and press Enter"
-            className="h-8 text-xs"
-          />
-        </div>
-      ) : (
-        <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground" onClick={() => setAdding(true)}>
-          <Plus className="mr-1 h-3.5 w-3.5" /> Add link
-        </Button>
-      )}
     </div>
   );
 }
 
-import { ExternalLink, FileSpreadsheet, FileText, Presentation, Globe, Github, Figma } from "lucide-react";
-
 function chipMeta(url: string): { Icon: typeof Globe; label: string } {
-  const patterns: { re: RegExp; Icon: typeof Globe; type: string }[] = [
-    { re: /docs\.google\.com\/spreadsheets/i, Icon: FileSpreadsheet, type: "Sheet" },
-    { re: /docs\.google\.com\/document/i, Icon: FileText, type: "Doc" },
-    { re: /docs\.google\.com\/presentation/i, Icon: Presentation, type: "Slides" },
-    { re: /drive\.google\.com/i, Icon: Globe, type: "Drive" },
-    { re: /notion\.so/i, Icon: FileText, type: "Notion" },
-    { re: /figma\.com/i, Icon: Figma, type: "Figma" },
-    { re: /github\.com/i, Icon: Github, type: "GitHub" },
+  const patterns: { re: RegExp; Icon: typeof Globe }[] = [
+    { re: /docs\.google\.com\/spreadsheets/i, Icon: FileSpreadsheet },
+    { re: /docs\.google\.com\/document/i, Icon: FileText },
+    { re: /docs\.google\.com\/presentation/i, Icon: Presentation },
+    { re: /drive\.google\.com/i, Icon: Globe },
+    { re: /notion\.so/i, Icon: FileText },
+    { re: /figma\.com/i, Icon: Figma },
+    { re: /github\.com/i, Icon: Github },
   ];
-  const idMatch = url.match(/\/d\/([A-Za-z0-9_-]+)/);
-  const tail = idMatch ? idMatch[1].slice(0, 6) : (() => {
-    try {
-      const u = new URL(url);
-      const seg = u.pathname.split("/").filter(Boolean).pop() ?? u.hostname;
-      return seg.length > 12 ? seg.slice(0, 10) + "…" : seg;
-    } catch { return "link"; }
-  })();
+  let host = "link";
+  try { host = new URL(url).hostname.replace(/^www\./, ""); } catch { /* fall through */ }
   for (const p of patterns) {
-    if (p.re.test(url)) return { Icon: p.Icon, label: `${p.type} · ${tail}` };
+    if (p.re.test(url)) return { Icon: p.Icon, label: host };
   }
-  try { return { Icon: ExternalLink, label: new URL(url).hostname.replace("www.", "") }; }
-  catch { return { Icon: ExternalLink, label: "link" }; }
+  return { Icon: ExternalLink, label: host };
 }
 
 function RemovableLinkChip({ url, onRemove }: { url: string; onRemove: () => void }) {

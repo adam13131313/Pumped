@@ -9,9 +9,9 @@ import { Check, ExternalLink, Link2, Pencil, Plus, Trash2, X } from "lucide-reac
 import { toast } from "sonner";
 
 // Task-linked documents. Polymorphic via three nullable FK columns — pass
-// exactly one of actionId / waitingItemId / wbsNodeId. Matches the shape
-// of TaskAttachments and TaskComments so the three components feel
-// uniform on the dialog.
+// exactly one of actionId / waitingItemId / wbsNodeId. Renders each link
+// as a card (label, full URL underneath, edit + remove buttons) so it
+// reads cleanly alongside attachments and comments.
 
 interface LinkRow {
   id: string;
@@ -32,7 +32,6 @@ const MAX_LABEL = 200;
 function normaliseUrl(input: string): string {
   const trimmed = input.trim();
   if (!trimmed) return "";
-  // If it already has a scheme, leave it alone. Otherwise assume https.
   if (/^https?:\/\//i.test(trimmed) || /^[a-z][a-z0-9+.-]*:/i.test(trimmed)) return trimmed;
   return `https://${trimmed}`;
 }
@@ -192,26 +191,26 @@ export function TaskLinks({ actionId, waitingItemId, wbsNodeId }: TaskLinksProps
   }
 
   return (
-    <div className="space-y-2">
+    <div className="mt-6 space-y-3 border-t pt-6">
       <div className="flex items-center justify-between">
-        <Label className="flex items-center gap-1.5">
-          <Link2 className="h-3.5 w-3.5" />
+        <Label className="flex items-center gap-1.5 text-sm font-semibold">
+          <Link2 className="h-4 w-4" />
           Documents
         </Label>
         {!showAdd && (
-          <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setShowAdd(true)}>
+          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setShowAdd(true)}>
             <Plus className="mr-1 h-3 w-3" /> Add link
           </Button>
         )}
       </div>
 
       {links.length > 0 && (
-        <ul className="space-y-1.5">
+        <ul className="space-y-2">
           {links.map((link) => {
             const isEditing = editingId === link.id;
             if (isEditing) {
               return (
-                <li key={link.id} className="rounded-md border border-primary/40 bg-card p-2 space-y-2">
+                <li key={link.id} className="rounded-lg border border-primary/40 bg-card p-3 space-y-2">
                   <Input
                     value={editLabel}
                     onChange={(e) => setEditLabel(e.target.value)}
@@ -238,40 +237,45 @@ export function TaskLinks({ actionId, waitingItemId, wbsNodeId }: TaskLinksProps
                 </li>
               );
             }
-            const displayLabel = link.label || hostnameFor(link.url);
+            const heading = link.label || hostnameFor(link.url);
             return (
-              <li key={link.id} className="group flex items-center gap-2 rounded-md border bg-card px-2.5 py-1.5 text-sm hover:bg-accent/40 transition-colors">
-                <ExternalLink className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+              <li key={link.id} className="group flex items-start gap-3 rounded-lg border bg-card p-3 hover:bg-accent/30 transition-colors">
+                <Link2 className="h-4 w-4 text-primary mt-0.5 shrink-0" />
                 <a
                   href={link.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex-1 min-w-0 truncate hover:underline"
+                  className="flex-1 min-w-0 block"
                   title={link.url}
                 >
-                  <span className="font-medium">{displayLabel}</span>
-                  {link.label && (
-                    <span className="ml-2 text-xs text-muted-foreground">{hostnameFor(link.url)}</span>
-                  )}
+                  <div className="flex items-center gap-1.5 font-medium text-sm hover:underline">
+                    <span className="truncate">{heading}</span>
+                    <ExternalLink className="h-3 w-3 text-muted-foreground shrink-0" />
+                  </div>
+                  <div className="mt-0.5 truncate text-xs font-mono text-muted-foreground">
+                    {link.url}
+                  </div>
                 </a>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                  onClick={(e) => { e.stopPropagation(); startEdit(link); }}
-                  aria-label="Edit link"
-                >
-                  <Pencil className="h-3 w-3" />
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
-                  onClick={(e) => { e.stopPropagation(); void handleDelete(link); }}
-                  aria-label="Remove link"
-                >
-                  <Trash2 className="h-3 w-3" />
-                </Button>
+                <div className="flex gap-1 shrink-0">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+                    onClick={(e) => { e.stopPropagation(); startEdit(link); }}
+                    aria-label="Edit link"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                    onClick={(e) => { e.stopPropagation(); void handleDelete(link); }}
+                    aria-label="Remove link"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
               </li>
             );
           })}
@@ -279,11 +283,13 @@ export function TaskLinks({ actionId, waitingItemId, wbsNodeId }: TaskLinksProps
       )}
 
       {!loading && links.length === 0 && !showAdd && (
-        <p className="text-xs text-muted-foreground">No documents linked yet.</p>
+        <p className="rounded-lg border border-dashed bg-muted/20 px-4 py-6 text-center text-xs text-muted-foreground">
+          No documents linked yet. Add Google Drive, SharePoint, Dropbox or any other URL.
+        </p>
       )}
 
       {showAdd && (
-        <div className="rounded-md border border-primary/40 bg-card p-2 space-y-2">
+        <div className="rounded-lg border border-primary/40 bg-card p-3 space-y-2">
           <Input
             value={newLabel}
             onChange={(e) => setNewLabel(e.target.value)}

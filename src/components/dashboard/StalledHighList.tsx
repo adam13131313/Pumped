@@ -4,7 +4,7 @@ import { differenceInCalendarDays } from "date-fns";
 import { WidgetEmpty } from "./WidgetTitle";
 import { CheckCircle2 } from "lucide-react";
 import { nodePath } from "@/components/NodePicker";
-import { CompleteActionButton } from "@/components/CompleteActionButton";
+import { StatusPicker } from "@/components/StatusPicker";
 
 export function StalledHighList({
   actions,
@@ -36,8 +36,7 @@ export function StalledHighList({
       {stalled.map(({ action, ageDays }) => {
         const path = action.wbsNodeId ? nodePath(wbsNodes, action.wbsNodeId).map((n) => n.name).join(" / ") : "";
         return (
-          <div key={action.id} className="flex items-center gap-3 p-2 rounded-md border bg-card hover:bg-accent/50 transition-colors">
-            <CompleteActionButton action={action} size="sm" />
+          <div key={action.id} className="flex items-start justify-between gap-3 p-2 rounded-md border bg-card hover:bg-accent/50 transition-colors">
             <div className="min-w-0 flex-1">
               <div className="text-sm font-medium truncate">{action.task}</div>
               {path && (
@@ -48,7 +47,7 @@ export function StalledHighList({
               <Badge variant="outline" className="text-[10px] bg-rag-red/10 text-rag-red border-rag-red/30 font-mono">
                 {ageDays}d
               </Badge>
-              <Badge variant="outline" className="text-[10px] border-rag-red/40 text-rag-red">High</Badge>
+              <StatusPicker action={action} size="sm" />
             </div>
           </div>
         );

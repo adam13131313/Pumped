@@ -20,7 +20,7 @@ import { allowedChildTypes } from "@/lib/schemas";
 import type { NodeType, WbsNode } from "@/lib/types";
 import { NodeDialog } from "@/components/NodeDialog";
 import { nodePath } from "@/components/NodePicker";
-import { CompleteActionButton } from "@/components/CompleteActionButton";
+import { StatusPicker } from "@/components/StatusPicker";
 
 const TYPE_LABEL: Record<NodeType, string> = {
   portfolio: "Portfolio",
@@ -221,12 +221,9 @@ export default function WbsNodeDetailPage() {
           {linkedActions.length > 0 && (
             <CardContent className="pt-0 pb-3 space-y-1">
               {linkedActions.slice(0, 10).map((a) => (
-                <div key={a.id} className="flex items-center gap-2 text-sm">
-                  <CompleteActionButton action={a} size="sm" />
+                <div key={a.id} className="flex items-center justify-between gap-2 text-sm">
                   <span className="truncate flex-1 min-w-0">{a.task}</span>
-                  <Badge variant="outline" className="text-[10px] uppercase tracking-wider flex-shrink-0">
-                    {a.status.replace("_", " ")}
-                  </Badge>
+                  <StatusPicker action={a} size="sm" />
                 </div>
               ))}
               {linkedActions.length > 10 && (

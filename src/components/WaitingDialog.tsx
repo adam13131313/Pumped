@@ -25,6 +25,7 @@ import { NodePicker } from "@/components/NodePicker";
 import { LinkRenderer } from "@/components/LinkRenderer";
 import { TaskAttachments } from "@/components/TaskAttachments";
 import { TaskComments } from "@/components/TaskComments";
+import { TaskLinks } from "@/components/TaskLinks";
 
 interface WaitingDialogProps {
   open: boolean;
@@ -214,6 +215,7 @@ export function WaitingDialog({
 
           {isEdit && item && (
             <>
+              <TaskLinks waitingItemId={item.id} />
               <TaskAttachments waitingItemId={item.id} />
               <TaskComments waitingItemId={item.id} />
             </>

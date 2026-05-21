@@ -27,6 +27,7 @@ import { NodePicker } from "@/components/NodePicker";
 import { NotesWithLinks } from "@/components/NotesWithLinks";
 import { TaskAttachments } from "@/components/TaskAttachments";
 import { TaskComments } from "@/components/TaskComments";
+import { TaskLinks } from "@/components/TaskLinks";
 import { DuplicateHint } from "@/components/DuplicateHint";
 
 // v2 ActionDialog: replaces the v1 three-cascading-dropdown UI
@@ -277,6 +278,7 @@ export function ActionDialog({
 
           {isEdit && action && (
             <>
+              <TaskLinks actionId={action.id} />
               <TaskAttachments actionId={action.id} />
               <TaskComments actionId={action.id} />
             </>

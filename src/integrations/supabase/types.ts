@@ -1058,6 +1058,77 @@ export type Database = {
         }
         Relationships: []
       }
+      task_links: {
+        Row: {
+          action_id: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          label: string
+          organisation_id: string
+          position: number
+          updated_at: string
+          url: string
+          waiting_item_id: string | null
+          wbs_node_id: string | null
+        }
+        Insert: {
+          action_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          label?: string
+          organisation_id: string
+          position?: number
+          updated_at?: string
+          url: string
+          waiting_item_id?: string | null
+          wbs_node_id?: string | null
+        }
+        Update: {
+          action_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          label?: string
+          organisation_id?: string
+          position?: number
+          updated_at?: string
+          url?: string
+          waiting_item_id?: string | null
+          wbs_node_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_links_organisation_id_action_id_fkey"
+            columns: ["organisation_id", "action_id"]
+            isOneToOne: false
+            referencedRelation: "actions"
+            referencedColumns: ["organisation_id", "id"]
+          },
+          {
+            foreignKeyName: "task_links_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_links_organisation_id_waiting_item_id_fkey"
+            columns: ["organisation_id", "waiting_item_id"]
+            isOneToOne: false
+            referencedRelation: "waiting_items"
+            referencedColumns: ["organisation_id", "id"]
+          },
+          {
+            foreignKeyName: "task_links_organisation_id_wbs_node_id_fkey"
+            columns: ["organisation_id", "wbs_node_id"]
+            isOneToOne: false
+            referencedRelation: "wbs_nodes"
+            referencedColumns: ["organisation_id", "id"]
+          },
+        ]
+      }
       waiting_items: {
         Row: {
           asked_on: string | null

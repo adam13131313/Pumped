@@ -1,6 +1,7 @@
 import { useMemo, ClipboardEvent } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { ExternalLink, FileSpreadsheet, FileText, Presentation, Globe, Github, Figma, X } from "lucide-react";
+import { shortUrl } from "@/lib/urlDisplay";
 
 // Notes field with passive URL extraction. URLs typed or pasted into the
 // textarea are pulled out and rendered as chips below it for legibility.
@@ -100,12 +101,11 @@ function chipMeta(url: string): { Icon: typeof Globe; label: string } {
     { re: /figma\.com/i, Icon: Figma },
     { re: /github\.com/i, Icon: Github },
   ];
-  let host = "link";
-  try { host = new URL(url).hostname.replace(/^www\./, ""); } catch { /* fall through */ }
+  const label = shortUrl(url, 50);
   for (const p of patterns) {
-    if (p.re.test(url)) return { Icon: p.Icon, label: host };
+    if (p.re.test(url)) return { Icon: p.Icon, label };
   }
-  return { Icon: ExternalLink, label: host };
+  return { Icon: ExternalLink, label };
 }
 
 function RemovableLinkChip({ url, onRemove }: { url: string; onRemove: () => void }) {

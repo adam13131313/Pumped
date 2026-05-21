@@ -1,9 +1,10 @@
 import { ExternalLink, FileSpreadsheet, FileText, Presentation, Globe, Github, Figma } from "lucide-react";
+import { shortUrl } from "@/lib/urlDisplay";
 
 // Inline link rendering for free-text fields (waiting notes, comments).
 // Detects URLs in arbitrary prose and replaces each occurrence with a
-// labelled chip. The label is just the host (e.g. "docs.google.com") —
-// short, scannable, no truncated UUIDs.
+// labelled chip. The label is host + truncated path so two Google Docs
+// no longer both read as "docs.google.com".
 
 type Meta = { icon: typeof Globe; label: string };
 
@@ -18,16 +19,11 @@ const ICON_PATTERNS: { pattern: RegExp; icon: typeof Globe }[] = [
 ];
 
 function getLinkMeta(url: string): Meta {
-  let host = "link";
-  try {
-    host = new URL(url).hostname.replace(/^www\./, "");
-  } catch {
-    // fall through
-  }
+  const label = shortUrl(url, 50);
   for (const { pattern, icon } of ICON_PATTERNS) {
-    if (pattern.test(url)) return { icon, label: host };
+    if (pattern.test(url)) return { icon, label };
   }
-  return { icon: ExternalLink, label: host };
+  return { icon: ExternalLink, label };
 }
 
 const URL_REGEX = /(https?:\/\/[^\s<]+)/g;

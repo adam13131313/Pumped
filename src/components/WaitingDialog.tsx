@@ -128,7 +128,7 @@ export function WaitingDialog({
         <DialogHeader>
           <DialogTitle>{isEdit ? "Edit Waiting Item" : "New Waiting Item"}</DialogTitle>
         </DialogHeader>
-        <div className="space-y-4 py-2">
+        <div className="min-w-0 space-y-4 py-2">
           <div>
             <Label htmlFor="desc">What I'm waiting for *</Label>
             <Textarea

@@ -189,7 +189,7 @@ export function TaskLinks({ actionId, waitingItemId, wbsNodeId }: TaskLinksProps
 
   if (!ready) {
     return (
-      <div className="mt-6 space-y-3 border-t pt-6">
+      <div className="mt-6 w-full min-w-0 space-y-3 border-t pt-6">
         <Label className="flex items-center gap-1.5 text-sm font-semibold">
           <Link2 className="h-4 w-4" />
           Resources
@@ -202,7 +202,7 @@ export function TaskLinks({ actionId, waitingItemId, wbsNodeId }: TaskLinksProps
   }
 
   return (
-    <div className="mt-6 space-y-3 border-t pt-6">
+    <div className="mt-6 w-full min-w-0 space-y-3 border-t pt-6">
       <div className="flex items-center justify-between">
         <Label className="flex items-center gap-1.5 text-sm font-semibold">
           <Link2 className="h-4 w-4" />

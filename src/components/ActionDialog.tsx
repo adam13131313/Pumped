@@ -165,7 +165,7 @@ export function ActionDialog({
         <DialogHeader>
           <DialogTitle>{isEdit ? "Edit Action" : "New Action"}</DialogTitle>
         </DialogHeader>
-        <div className="space-y-4 py-2">
+        <div className="min-w-0 space-y-4 py-2">
           <div>
             <Label htmlFor="task">Task *</Label>
             <Textarea

@@ -24,7 +24,6 @@ import { useAppStore } from "@/lib/store";
 import { actionSchema, firstZodError } from "@/lib/schemas";
 import type { Action, ActionPriority, ActionStatus } from "@/lib/types";
 import { NodePicker } from "@/components/NodePicker";
-import { NotesWithLinks } from "@/components/NotesWithLinks";
 import { TaskAttachments } from "@/components/TaskAttachments";
 import { TaskComments } from "@/components/TaskComments";
 import { TaskLinks } from "@/components/TaskLinks";
@@ -240,12 +239,14 @@ export function ActionDialog({
 
           <div>
             <Label htmlFor="notes">Notes</Label>
-            <NotesWithLinks
+            <Textarea
+              id="notes"
               value={form.notes}
-              onChange={(next) => setForm({ ...form, notes: next })}
+              onChange={(e) => setForm({ ...form, notes: e.target.value })}
+              className="mt-1"
               rows={2}
               maxLength={1000}
-              placeholder="Add notes. Paste a URL — it'll appear as a link chip below."
+              placeholder="Add notes"
             />
           </div>
 

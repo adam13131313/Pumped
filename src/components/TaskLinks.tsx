@@ -9,7 +9,7 @@ import { Check, ExternalLink, Link2, Pencil, Plus, Trash2, X } from "lucide-reac
 import { toast } from "sonner";
 import { shortUrl } from "@/lib/urlDisplay";
 
-// Task-linked documents. Polymorphic via three nullable FK columns — pass
+// Task-linked resources. Polymorphic via three nullable FK columns — pass
 // exactly one of actionId / waitingItemId / wbsNodeId. Renders each link
 // as a card (label, full URL underneath, edit + remove buttons) so it
 // reads cleanly alongside attachments and comments.
@@ -189,7 +189,7 @@ export function TaskLinks({ actionId, waitingItemId, wbsNodeId }: TaskLinksProps
 
   if (!ready) {
     return (
-      <p className="text-xs text-muted-foreground italic">Save this item first to add documents.</p>
+      <p className="text-xs text-muted-foreground italic">Save this item first to add resources.</p>
     );
   }
 
@@ -198,7 +198,7 @@ export function TaskLinks({ actionId, waitingItemId, wbsNodeId }: TaskLinksProps
       <div className="flex items-center justify-between">
         <Label className="flex items-center gap-1.5 text-sm font-semibold">
           <Link2 className="h-4 w-4" />
-          Documents
+          Resources
         </Label>
         {!showAdd && (
           <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setShowAdd(true)}>
@@ -307,7 +307,7 @@ export function TaskLinks({ actionId, waitingItemId, wbsNodeId }: TaskLinksProps
 
       {!loading && links.length === 0 && !showAdd && (
         <p className="rounded-lg border border-dashed bg-muted/20 px-4 py-6 text-center text-xs text-muted-foreground">
-          No documents linked yet. Add Google Drive, SharePoint, Dropbox or any other URL.
+          No resources linked yet. Add Google Drive, SharePoint, Dropbox or any other URL.
         </p>
       )}
 

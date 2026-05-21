@@ -22,7 +22,6 @@ import { useAppStore } from "@/lib/store";
 import { firstZodError, waitingItemSchema } from "@/lib/schemas";
 import type { WaitingItem, WaitingStatus } from "@/lib/types";
 import { NodePicker } from "@/components/NodePicker";
-import { LinkRenderer } from "@/components/LinkRenderer";
 import { TaskAttachments } from "@/components/TaskAttachments";
 import { TaskComments } from "@/components/TaskComments";
 import { TaskLinks } from "@/components/TaskLinks";
@@ -206,11 +205,8 @@ export function WaitingDialog({
               className="mt-1"
               rows={2}
               maxLength={1000}
-              placeholder="Add notes or paste links"
+              placeholder="Add notes"
             />
-            {form.notes && /(https?:\/\/[^\s]+)/.test(form.notes) && (
-              <div className="mt-1.5 text-sm"><LinkRenderer text={form.notes} /></div>
-            )}
           </div>
 
           {isEdit && item && (

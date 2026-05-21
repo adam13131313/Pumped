@@ -270,24 +270,41 @@ export function TaskLinks({ actionId, waitingItemId, wbsNodeId }: TaskLinksProps
             // fall back to a shortened URL so they're not unidentifiable.
             const heading = link.label || shortUrl(link.url, 60);
             return (
-              <li key={link.id} className="group flex items-start gap-3 rounded-lg border bg-card p-3 hover:bg-accent/30 transition-colors">
-                <Link2 className="h-4 w-4 text-primary mt-1 shrink-0" />
-                <a
-                  href={link.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex-1 min-w-0 block"
-                  title={link.url}
-                >
-                  <div className="flex items-center gap-1.5 text-base font-semibold leading-snug hover:underline">
-                    <span className="truncate">{heading}</span>
-                    <ExternalLink className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                  </div>
-                  <div className="mt-1 truncate text-xs font-mono text-muted-foreground/80">
-                    {link.url}
-                  </div>
-                </a>
-                <div className="flex gap-1 shrink-0">
+              // overflow-hidden on the row guarantees nothing inside can
+              // push past the card's edge, even when long unbroken URLs
+              // try to defeat truncation in nested flex children.
+              <li
+                key={link.id}
+                className="group flex items-start gap-3 overflow-hidden rounded-lg border bg-card p-3 hover:bg-accent/30 transition-colors"
+              >
+                <Link2 className="mt-1 h-4 w-4 shrink-0 text-primary" />
+
+                {/* Content column. flex-1 + min-w-0 makes this column
+                    happy to shrink below its content's intrinsic width,
+                    which is what allows the children's truncate to bite. */}
+                <div className="min-w-0 flex-1">
+                  <a
+                    href={link.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={link.url}
+                    className="block min-w-0"
+                  >
+                    <div className="flex min-w-0 items-center gap-1.5 hover:underline">
+                      <span className="min-w-0 flex-1 truncate text-base font-semibold leading-snug">
+                        {heading}
+                      </span>
+                      <ExternalLink className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                    </div>
+                    <div
+                      className="mt-1 block max-w-full overflow-hidden truncate whitespace-nowrap text-xs font-mono text-muted-foreground/80"
+                    >
+                      {link.url}
+                    </div>
+                  </a>
+                </div>
+
+                <div className="flex shrink-0 gap-1">
                   <Button
                     size="sm"
                     variant="ghost"

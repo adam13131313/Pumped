@@ -189,7 +189,15 @@ export function TaskLinks({ actionId, waitingItemId, wbsNodeId }: TaskLinksProps
 
   if (!ready) {
     return (
-      <p className="text-xs text-muted-foreground italic">Save this item first to add resources.</p>
+      <div className="mt-6 space-y-3 border-t pt-6">
+        <Label className="flex items-center gap-1.5 text-sm font-semibold">
+          <Link2 className="h-4 w-4" />
+          Resources
+        </Label>
+        <p className="rounded-lg border border-dashed bg-muted/20 px-4 py-6 text-center text-xs text-muted-foreground">
+          Save this action first, then come back here to link Google Drive, SharePoint, Dropbox or any URL.
+        </p>
+      </div>
     );
   }
 

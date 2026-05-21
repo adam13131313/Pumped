@@ -209,13 +209,11 @@ export function WaitingDialog({
             />
           </div>
 
-          {isEdit && item && (
-            <>
-              <TaskLinks waitingItemId={item.id} />
-              <TaskAttachments waitingItemId={item.id} />
-              <TaskComments waitingItemId={item.id} />
-            </>
-          )}
+          {/* Always-rendered. Each child shows a "save this item first"
+              placeholder when no waitingItemId is available yet. */}
+          <TaskLinks waitingItemId={item?.id} />
+          <TaskAttachments waitingItemId={item?.id} />
+          <TaskComments waitingItemId={item?.id} />
         </div>
         <DialogFooter className="flex flex-wrap justify-between gap-2">
           <div className="flex gap-2">

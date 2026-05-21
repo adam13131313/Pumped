@@ -277,13 +277,11 @@ export function ActionDialog({
             </div>
           </div>
 
-          {isEdit && action && (
-            <>
-              <TaskLinks actionId={action.id} />
-              <TaskAttachments actionId={action.id} />
-              <TaskComments actionId={action.id} />
-            </>
-          )}
+          {/* Always-rendered. Each child shows a "save this action first"
+              placeholder when no actionId is available yet (new dialog). */}
+          <TaskLinks actionId={action?.id} />
+          <TaskAttachments actionId={action?.id} />
+          <TaskComments actionId={action?.id} />
         </div>
         <DialogFooter className="flex flex-wrap justify-between gap-2">
           <div className="flex gap-2">

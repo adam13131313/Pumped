@@ -98,14 +98,22 @@ export function TaskComments({ actionId, waitingItemId, wbsNodeId }: TaskComment
 
   if (!ready) {
     return (
-      <p className="text-xs text-muted-foreground italic">Save this item first to add comments.</p>
+      <div className="mt-6 space-y-3 border-t pt-6">
+        <Label className="flex items-center gap-1.5 text-sm font-semibold">
+          <MessageSquare className="h-4 w-4" />
+          Comments
+        </Label>
+        <p className="rounded-lg border border-dashed bg-muted/20 px-4 py-6 text-center text-xs text-muted-foreground">
+          Save this action first, then leave comments here.
+        </p>
+      </div>
     );
   }
 
   return (
-    <div className="space-y-2">
-      <Label className="flex items-center gap-1.5">
-        <MessageSquare className="h-3.5 w-3.5" />
+    <div className="mt-6 space-y-3 border-t pt-6">
+      <Label className="flex items-center gap-1.5 text-sm font-semibold">
+        <MessageSquare className="h-4 w-4" />
         Comments
       </Label>
 

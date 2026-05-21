@@ -3,7 +3,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAppStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
-import { X, Upload, FileIcon, Image as ImageIcon, Loader2 } from "lucide-react";
+import { Label } from "@/components/ui/label";
+import { X, Upload, FileIcon, Image as ImageIcon, Loader2, Paperclip } from "lucide-react";
 import { toast } from "sonner";
 
 // v2 attachments. Polymorphic via three nullable FK columns: pass exactly one
@@ -129,12 +130,16 @@ export function TaskAttachments({ actionId, waitingItemId, wbsNodeId }: TaskAtta
   const isImage = (type: string) => type.startsWith("image/");
 
   return (
-    <div className="space-y-2">
+    <div className="mt-6 space-y-3 border-t pt-6">
+      <Label className="flex items-center gap-1.5 text-sm font-semibold">
+        <Paperclip className="h-4 w-4" />
+        Attachments
+      </Label>
       <div
         onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
         onDragLeave={() => setDragOver(false)}
         onDrop={handleDrop}
-        onClick={() => fileInputRef.current?.click()}
+        onClick={() => ready && fileInputRef.current?.click()}
         className={`flex items-center justify-center gap-2 rounded-lg border-2 border-dashed p-3 text-xs cursor-pointer transition-colors ${
           dragOver ? "border-primary bg-primary/5" : "border-muted-foreground/25 hover:border-muted-foreground/50"
         }`}

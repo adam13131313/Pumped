@@ -20,13 +20,15 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import {
-  Copy, Loader2, Plus, Trash2, Plug, KeyRound, AlertTriangle, RefreshCw, Eye, EyeOff,
+  Copy, Loader2, Plus, Trash2, Plug, KeyRound, AlertTriangle, RefreshCw, Eye, EyeOff, Terminal,
 } from "lucide-react";
 import { format } from "date-fns";
 
-// v2 Integrations console. Manages webhook_sources (the named external
-// integrations a user has wired up) and their integration_tokens (bearer
-// credentials, stored as SHA-256 hash, displayed once at mint time).
+// v2 Integrations console. Manages webhook_sources (named external
+// integrations) and their integration_tokens (bearer credentials, stored
+// as SHA-256 hash, displayed once at mint time). Top-of-page panel
+// surfaces the endpoint URL and a "how to use" guide so users see what to
+// do with the token they're about to mint.
 
 interface TokenRow {
   id: string;
@@ -36,7 +38,12 @@ interface TokenRow {
   created_at: string;
 }
 
-const FUNCTION_URL = `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.functions.supabase.co/ingest-task`;
+// Build the URL from VITE_SUPABASE_URL rather than the project ID so the
+// pattern survives any future hostname change. The CLI exposes URL as the
+// full base (e.g. https://zcybqreiksrgaisnkauj.supabase.co) and functions
+// always live under /functions/v1/<name>.
+const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL as string | undefined) ?? "";
+const FUNCTION_URL = SUPABASE_URL ? `${SUPABASE_URL}/functions/v1/ingest-task` : "";
 
 function slugify(s: string) {
   return s.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
@@ -68,6 +75,33 @@ function curlSnippet(token: string) {
   }'`;
 }
 
+function CopyButton({
+  value, label = "Copy", successMessage = "Copied", size = "sm", variant = "outline",
+}: {
+  value: string;
+  label?: string;
+  successMessage?: string;
+  size?: "sm" | "icon";
+  variant?: "outline" | "ghost";
+}) {
+  const onClick = () => {
+    void navigator.clipboard.writeText(value);
+    toast.success(successMessage);
+  };
+  if (size === "icon") {
+    return (
+      <Button size="sm" variant={variant} className="h-7 w-7 p-0 shrink-0" onClick={onClick} aria-label={label}>
+        <Copy className="h-3.5 w-3.5" />
+      </Button>
+    );
+  }
+  return (
+    <Button size="sm" variant={variant} onClick={onClick}>
+      <Copy className="mr-1.5 h-3 w-3" /> {label}
+    </Button>
+  );
+}
+
 export default function IntegrationsPage() {
   const { user } = useAuth();
   const currentOrg = useAppStore((s) => s.currentOrg);
@@ -79,14 +113,13 @@ export default function IntegrationsPage() {
   const [tokens, setTokens] = useState<TokenRow[]>([]);
   const [loadingTokens, setLoadingTokens] = useState(false);
 
-  // Create-source dialog state
   const [createOpen, setCreateOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [newDescription, setNewDescription] = useState("");
   const [creating, setCreating] = useState(false);
 
-  // Show-token-once modal state. The cleartext token only lives in memory
-  // long enough for the user to copy it — we never persist or re-display it.
+  // Cleartext token only lives in state long enough for the user to copy
+  // it. We never persist or re-display it.
   const [newToken, setNewToken] = useState<string | null>(null);
   const [newTokenSourceName, setNewTokenSourceName] = useState<string>("");
   const [tokenVisible, setTokenVisible] = useState(false);
@@ -125,7 +158,6 @@ export default function IntegrationsPage() {
     const name = newName.trim();
     if (!name) return;
     const baseSlug = slugify(name) || `source-${Math.random().toString(36).slice(2, 7)}`;
-    // Disambiguate slug if it collides with an existing source.
     let slug = baseSlug;
     let suffix = 1;
     while (sources.some((s) => s.slug === slug)) {
@@ -149,7 +181,6 @@ export default function IntegrationsPage() {
       };
       addWebhookSource(source);
 
-      // Mint the first token immediately so the user has something to copy.
       const token = await mintTokenFor(sourceId);
       if (token) {
         setNewToken(token);
@@ -214,15 +245,9 @@ export default function IntegrationsPage() {
   };
 
   const handleDeleteSource = (source: WebhookSource) => {
-    // ON DELETE CASCADE on integration_tokens cleans up the token rows.
     deleteWebhookSource(source.id);
     setTokens((prev) => prev.filter((t) => t.source_id !== source.id));
     toast.success(`Deleted "${source.name}"`);
-  };
-
-  const copyToClipboard = (text: string, label = "Copied") => {
-    void navigator.clipboard.writeText(text);
-    toast.success(label);
   };
 
   if (!currentOrg) {
@@ -240,13 +265,73 @@ export default function IntegrationsPage() {
           <Plug className="h-6 w-6 text-primary" />
           <div>
             <h1 className="text-2xl font-bold">Integrations</h1>
-            <p className="text-sm text-muted-foreground">Webhook sources that can push tasks into your Rapid Capture inbox.</p>
+            <p className="text-sm text-muted-foreground">External systems can POST tasks straight into your Rapid Capture inbox.</p>
           </div>
         </div>
         <Button onClick={() => setCreateOpen(true)}>
           <Plus className="mr-1.5 h-4 w-4" /> New Source
         </Button>
       </div>
+
+      {/* How-to panel — always visible, explains the wiring */}
+      <Card className="border-primary/30 bg-primary/[0.02]">
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Terminal className="h-4 w-4 text-primary" />
+            How to use this
+          </CardTitle>
+          <CardDescription>
+            Pumped exposes a single webhook endpoint. Each "source" you create here gets its own bearer token. Paste the URL and token into whatever tool is sending you tasks.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-1.5">
+            <Label className="text-xs uppercase tracking-wider text-muted-foreground">Endpoint URL</Label>
+            <div className="flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2">
+              <code className="flex-1 break-all font-mono text-xs">{FUNCTION_URL || "Set VITE_SUPABASE_URL in your environment"}</code>
+              {FUNCTION_URL && <CopyButton value={FUNCTION_URL} label="Copy URL" successMessage="URL copied" />}
+            </div>
+          </div>
+
+          <ol className="space-y-2 text-sm">
+            <li className="flex gap-3">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">1</span>
+              <div>
+                <span className="font-medium">Create a source</span> for the system you're connecting (e.g. "Linear inbox", "Zapier from Gmail"). Each source can have its own token, revoked independently.
+              </div>
+            </li>
+            <li className="flex gap-3">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">2</span>
+              <div>
+                <span className="font-medium">Mint a token</span> for that source. The full token is shown <strong>once</strong> — copy it into a password manager or directly into your integration's config. We only keep the SHA-256 hash.
+              </div>
+            </li>
+            <li className="flex gap-3">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">3</span>
+              <div>
+                <span className="font-medium">Configure your external system</span> to POST JSON to the endpoint above with <code className="font-mono text-xs">Authorization: Bearer &lt;your-token&gt;</code>. In Zapier or Make use the "Webhooks → POST" action; in custom code use any HTTP client.
+              </div>
+            </li>
+          </ol>
+
+          <details className="rounded-md border bg-background">
+            <summary className="cursor-pointer px-3 py-2 text-sm font-medium select-none">Show example curl</summary>
+            <div className="border-t p-3 space-y-2">
+              <pre className="overflow-x-auto rounded bg-muted/40 p-2 text-[11px] leading-relaxed">{curlSnippet("YOUR_TOKEN_HERE")}</pre>
+              <div className="flex items-center gap-2">
+                <CopyButton value={curlSnippet("YOUR_TOKEN_HERE")} label="Copy curl" successMessage="Snippet copied" />
+                <span className="text-xs text-muted-foreground">
+                  Replace <code className="font-mono">YOUR_TOKEN_HERE</code> with the token you minted.
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Required fields: <code className="font-mono">source_id</code> (idempotency key) and <code className="font-mono">task</code>.
+                Optional: <code className="font-mono">priority</code>, <code className="font-mono">due_date</code>, <code className="font-mono">notes</code>, <code className="font-mono">source_url</code>, <code className="font-mono">wbs_node_id</code>.
+              </p>
+            </div>
+          </details>
+        </CardContent>
+      </Card>
 
       {sources.length === 0 ? (
         <Card>
@@ -289,7 +374,7 @@ export default function IntegrationsPage() {
                     </div>
                   </div>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-3">
                   <div className="space-y-2">
                     <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Tokens ({activeTokens.length} active)</div>
                     {sourceTokens.length === 0 ? (
@@ -322,18 +407,6 @@ export default function IntegrationsPage() {
                       </ul>
                     )}
                   </div>
-
-                  <details className="rounded-md border bg-muted/30">
-                    <summary className="cursor-pointer px-3 py-2 text-xs font-medium select-none">
-                      Show curl example
-                    </summary>
-                    <div className="border-t p-3 space-y-2">
-                      <pre className="overflow-x-auto rounded bg-background p-2 text-[11px] leading-relaxed">{curlSnippet("YOUR_TOKEN_HERE")}</pre>
-                      <Button size="sm" variant="outline" onClick={() => copyToClipboard(curlSnippet("YOUR_TOKEN_HERE"), "Snippet copied")}>
-                        <Copy className="mr-1.5 h-3 w-3" /> Copy snippet
-                      </Button>
-                    </div>
-                  </details>
                 </CardContent>
               </Card>
             );
@@ -387,34 +460,56 @@ export default function IntegrationsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Show-token-once modal */}
+      {/* Show-token-once modal — surfaces URL + token + curl together so
+          the user has every piece they need to paste into Zapier/Make. */}
       <AlertDialog open={!!newToken} onOpenChange={(v) => { if (!v) { setNewToken(null); setTokenVisible(false); } }}>
-        <AlertDialogContent>
+        <AlertDialogContent className="sm:max-w-xl">
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               <KeyRound className="h-5 w-5 text-primary" />
               Token minted for "{newTokenSourceName}"
             </AlertDialogTitle>
-            <AlertDialogDescription className="space-y-2">
-              <span className="block">
-                Copy this token now — it's the only time we'll show it. We only keep the SHA-256 hash, so we can't recover it if you lose it.
-              </span>
-              <span className="block flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2 font-mono text-xs">
-                <span className="flex-1 break-all">
-                  {tokenVisible ? newToken : (newToken ? `${newToken.slice(0, 8)}${"•".repeat(40)}` : "")}
-                </span>
-                <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setTokenVisible((v) => !v)}>
-                  {tokenVisible ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                </Button>
-                <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => newToken && copyToClipboard(newToken, "Token copied")}>
-                  <Copy className="h-3.5 w-3.5" />
-                </Button>
-              </span>
-              <span className="flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400">
-                <AlertTriangle className="h-3.5 w-3.5" /> Store this in a password manager or secrets vault.
-              </span>
+            <AlertDialogDescription>
+              Copy these now — the token is shown only this once. We only keep the SHA-256 hash, so we can't recover it if you lose it.
             </AlertDialogDescription>
           </AlertDialogHeader>
+
+          <div className="space-y-3 py-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs uppercase tracking-wider text-muted-foreground">Endpoint URL</Label>
+              <div className="flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2">
+                <code className="flex-1 break-all font-mono text-xs">{FUNCTION_URL}</code>
+                {FUNCTION_URL && <CopyButton value={FUNCTION_URL} size="icon" label="Copy URL" successMessage="URL copied" />}
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs uppercase tracking-wider text-muted-foreground">Bearer Token</Label>
+              <div className="flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2">
+                <code className="flex-1 break-all font-mono text-xs">
+                  {tokenVisible ? newToken : (newToken ? `${newToken.slice(0, 8)}${"•".repeat(40)}` : "")}
+                </code>
+                <Button size="sm" variant="outline" className="h-7 w-7 p-0 shrink-0" onClick={() => setTokenVisible((v) => !v)} aria-label="Toggle token visibility">
+                  {tokenVisible ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                </Button>
+                {newToken && <CopyButton value={newToken} size="icon" label="Copy token" successMessage="Token copied" />}
+              </div>
+            </div>
+
+            <details className="rounded-md border bg-muted/30">
+              <summary className="cursor-pointer px-3 py-2 text-xs font-medium select-none">Example curl (pre-filled with your token)</summary>
+              <div className="border-t p-3 space-y-2">
+                <pre className="overflow-x-auto rounded bg-background p-2 text-[11px] leading-relaxed">{newToken ? curlSnippet(newToken) : ""}</pre>
+                {newToken && <CopyButton value={curlSnippet(newToken)} label="Copy full curl command" successMessage="Snippet copied" />}
+              </div>
+            </details>
+
+            <div className="flex items-start gap-1.5 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+              <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+              <span>Store the token in a password manager or your integration's secret vault. We cannot show it again.</span>
+            </div>
+          </div>
+
           <AlertDialogFooter>
             <AlertDialogAction onClick={() => { setNewToken(null); setTokenVisible(false); }}>
               I've saved it

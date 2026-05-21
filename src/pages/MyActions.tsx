@@ -18,12 +18,19 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { nodePath } from "@/components/NodePicker";
 
+// Kanban only renders the active-flow statuses (not_started → … → complete).
+// Cards in `deferred` or `cancelled` are filtered out of kanban view by
+// design — they show up in list view and can be filtered to explicitly.
 const STATUS_COLUMNS: ActionStatus[] = ["not_started", "in_progress", "blocked", "complete"];
+// Used by every dropdown (filter, bulk edit) — full enum.
+const ALL_STATUSES: ActionStatus[] = ["not_started", "in_progress", "blocked", "complete", "deferred", "cancelled"];
 const STATUS_LABEL: Record<ActionStatus, string> = {
   not_started: "Not Started",
   in_progress: "In Progress",
   blocked: "Blocked",
   complete: "Complete",
+  deferred: "Deferred",
+  cancelled: "Cancelled",
 };
 const PRIORITY_LABEL: Record<ActionPriority, string> = { high: "High", medium: "Medium", low: "Low" };
 const PRIORITIES: ActionPriority[] = ["high", "medium", "low"];
@@ -301,7 +308,7 @@ export default function MyActions() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All statuses</SelectItem>
-            {STATUS_COLUMNS.map((s) => <SelectItem key={s} value={s}>{STATUS_LABEL[s]}</SelectItem>)}
+            {ALL_STATUSES.map((s) => <SelectItem key={s} value={s}>{STATUS_LABEL[s]}</SelectItem>)}
           </SelectContent>
         </Select>
         {hasActiveFilters && (
@@ -338,7 +345,7 @@ export default function MyActions() {
               <SelectValue placeholder="Set status" />
             </SelectTrigger>
             <SelectContent>
-              {STATUS_COLUMNS.map((s) => (
+              {ALL_STATUSES.map((s) => (
                 <SelectItem key={s} value={s}>{STATUS_LABEL[s]}</SelectItem>
               ))}
             </SelectContent>

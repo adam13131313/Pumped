@@ -1404,7 +1404,7 @@ export type Database = {
     }
     Enums: {
       action_priority: "high" | "medium" | "low"
-      action_status: "not_started" | "in_progress" | "complete" | "blocked"
+      action_status: "not_started" | "in_progress" | "complete" | "blocked" | "cancelled" | "deferred"
       dependency_type: "fs" | "ff" | "ss" | "sf"
       domain_entity_kind: "action" | "waiting_item" | "wbs_node"
       inbox_event_type: "created" | "promoted" | "deleted"
@@ -1544,7 +1544,7 @@ export const Constants = {
   public: {
     Enums: {
       action_priority: ["high", "medium", "low"],
-      action_status: ["not_started", "in_progress", "complete", "blocked"],
+      action_status: ["not_started", "in_progress", "complete", "blocked", "cancelled", "deferred"],
       dependency_type: ["fs", "ff", "ss", "sf"],
       domain_entity_kind: ["action", "waiting_item", "wbs_node"],
       inbox_event_type: ["created", "promoted", "deleted"],

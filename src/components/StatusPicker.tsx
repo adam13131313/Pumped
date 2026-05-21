@@ -21,15 +21,16 @@ interface StatusOption {
   dot: string;
 }
 
-// NOTE: only the four statuses defined in the action_status Postgres
-// enum (foundation migration §3) — not_started / in_progress / blocked
-// / complete. "Cancelled" and "Deferred" aren't in the schema; adding
-// them needs an ALTER TYPE migration.
+// Mirrors the action_status Postgres enum — active flow first
+// (not_started → in_progress → blocked → complete), then the two
+// terminal/parked states (deferred, cancelled).
 const STATUS_OPTIONS: StatusOption[] = [
   { value: "not_started", label: "Not Started", pill: "bg-secondary text-muted-foreground border-muted-foreground/20", dot: "bg-muted-foreground/40" },
   { value: "in_progress", label: "In Progress", pill: "bg-primary/10 text-primary border-primary/30",                  dot: "bg-primary" },
   { value: "blocked",     label: "Blocked",     pill: "bg-rag-red-bg text-rag-red border-rag-red/30",                 dot: "bg-rag-red" },
   { value: "complete",    label: "Complete",    pill: "bg-rag-green-bg text-rag-green border-rag-green/30",           dot: "bg-rag-green" },
+  { value: "deferred",    label: "Deferred",    pill: "bg-rag-amber-bg text-rag-amber border-rag-amber/30",           dot: "bg-rag-amber" },
+  { value: "cancelled",   label: "Cancelled",   pill: "bg-muted text-muted-foreground border-muted-foreground/30 line-through", dot: "bg-muted-foreground/40" },
 ];
 
 const OPTION_BY_VALUE: Record<ActionStatus, StatusOption> =

@@ -50,10 +50,12 @@ const STATUS_LABEL: Record<ActionStatus, string> = {
   in_progress: "In Progress",
   blocked: "Blocked",
   complete: "Complete",
+  deferred: "Deferred",
+  cancelled: "Cancelled",
 };
 
 const PRIORITIES: ActionPriority[] = ["high", "medium", "low"];
-const STATUSES: ActionStatus[] = ["not_started", "in_progress", "blocked", "complete"];
+const STATUSES: ActionStatus[] = ["not_started", "in_progress", "blocked", "complete", "deferred", "cancelled"];
 
 interface FormState {
   task: string;

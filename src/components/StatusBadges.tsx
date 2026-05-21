@@ -7,6 +7,8 @@ const STATUS_LABEL: Record<ActionStatus, string> = {
   in_progress: "In Progress",
   blocked: "Blocked",
   complete: "Complete",
+  deferred: "Deferred",
+  cancelled: "Cancelled",
 };
 
 export function PriorityBadge({ priority }: { priority: ActionPriority }) {
@@ -33,6 +35,8 @@ export function StatusBadge({ status }: { status: ActionStatus }) {
         status === "in_progress" && "bg-primary/10 text-primary",
         status === "not_started" && "bg-secondary text-muted-foreground",
         status === "blocked" && "bg-rag-red-bg text-rag-red",
+        status === "deferred" && "bg-rag-amber-bg text-rag-amber",
+        status === "cancelled" && "bg-muted text-muted-foreground line-through",
       )}
     >
       {STATUS_LABEL[status]}

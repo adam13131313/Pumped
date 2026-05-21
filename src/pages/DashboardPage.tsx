@@ -211,22 +211,95 @@ export default function DashboardPage() {
             <WaitingRiskMatrix waitingItems={scopedWaiting} wbsNodes={wbsNodes} />
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="pb-2"><WidgetTitle title="At a glance" info="Quick scope summary." /></CardHeader>
-          <CardContent>
-            <dl className="grid grid-cols-2 sm:grid-cols-3 gap-y-2 text-sm">
-              <dt className="text-muted-foreground">Portfolios</dt><dd className="font-mono">{counts.portfolio}</dd>
-              <dt className="text-muted-foreground">Programmes</dt><dd className="font-mono">{counts.programme}</dd>
-              <dt className="text-muted-foreground">Projects</dt><dd className="font-mono">{counts.project}</dd>
-              <dt className="text-muted-foreground">Work packages</dt><dd className="font-mono">{counts.work_package}</dd>
-              <dt className="text-muted-foreground">Active actions</dt><dd className="font-mono">{scopedActions.length}</dd>
-              <dt className="text-muted-foreground">Pending waiting</dt><dd className="font-mono">{scopedWaiting.filter((w) => w.status === "pending").length}</dd>
-              <dt className="text-muted-foreground">Inbox items</dt><dd className="font-mono">{scopedInbox.length}</dd>
-            </dl>
-          </CardContent>
-        </Card>
+        <AtAGlance
+          counts={counts}
+          activeActions={scopedActions.length}
+          pendingWaiting={scopedWaiting.filter((w) => w.status === "pending").length}
+          inboxItems={scopedInbox.length}
+        />
       </div>
-
     </div>
   );
 }
+
+// ---------------------------------------------------------------------------
+// At a glance
+// ---------------------------------------------------------------------------
+// Two grouped stat blocks. Numbers are the protagonist (text-2xl bold);
+// labels sit underneath as tiny muted text. Zero counts get dimmed so they
+// fade into the background instead of competing with real data. Empty state
+// surfaces when the entire scope has nothing in it — typical for a fresh
+// organisation right after bootstrap.
+
+function AtAGlance({
+  counts,
+  activeActions,
+  pendingWaiting,
+  inboxItems,
+}: {
+  counts: { portfolio: number; programme: number; project: number; work_package: number };
+  activeActions: number;
+  pendingWaiting: number;
+  inboxItems: number;
+}) {
+  const structure = [
+    { label: "Portfolios", value: counts.portfolio },
+    { label: "Programmes", value: counts.programme },
+    { label: "Projects",   value: counts.project },
+    { label: "Work pkgs.", value: counts.work_package },
+  ];
+  const openWork = [
+    { label: "Active actions", value: activeActions },
+    { label: "Awaiting reply", value: pendingWaiting },
+    { label: "Inbox",          value: inboxItems },
+  ];
+
+  const totalStructure = structure.reduce((s, x) => s + x.value, 0);
+  const totalOpenWork = openWork.reduce((s, x) => s + x.value, 0);
+  const isEmpty = totalStructure === 0 && totalOpenWork === 0;
+
+  return (
+    <Card>
+      <CardHeader className="pb-2"><WidgetTitle title="At a glance" info="Counts of WBS structure and open work within the current scope." /></CardHeader>
+      <CardContent className="space-y-5">
+        {isEmpty ? (
+          <p className="rounded-lg border border-dashed bg-muted/20 px-4 py-8 text-center text-sm text-muted-foreground">
+            Nothing in this scope yet — create a programme, project, or capture a task to get going.
+          </p>
+        ) : (
+          <>
+            <StatGroup heading="Structure" stats={structure} cols="grid-cols-2 sm:grid-cols-4" />
+            <StatGroup heading="Open work" stats={openWork}  cols="grid-cols-3" />
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function StatGroup({
+  heading, stats, cols,
+}: {
+  heading: string;
+  stats: { label: string; value: number }[];
+  cols: string;
+}) {
+  return (
+    <div>
+      <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        {heading}
+      </div>
+      <div className={`grid ${cols} gap-3`}>
+        {stats.map((s) => (
+          <div key={s.label} className="rounded-md border bg-card px-3 py-2">
+            <div className={`text-2xl font-bold tabular-nums leading-none ${s.value === 0 ? "text-muted-foreground/40" : "text-foreground"}`}>
+              {s.value}
+            </div>
+            <div className="mt-1 text-[11px] text-muted-foreground">{s.label}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+

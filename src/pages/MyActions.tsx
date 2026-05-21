@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { nodePath } from "@/components/NodePicker";
+import { CompleteActionButton } from "@/components/CompleteActionButton";
 
 const STATUS_COLUMNS: ActionStatus[] = ["not_started", "in_progress", "blocked", "complete"];
 const STATUS_LABEL: Record<ActionStatus, string> = {
@@ -511,6 +512,7 @@ function ListView({
                 <Checkbox checked={allSelected} onCheckedChange={onToggleAll} aria-label="Select all" />
               </th>
               <th className="w-10" />
+              <th className="w-10" />
               <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Task</th>
               <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Linked to</th>
               <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Due</th>
@@ -551,6 +553,9 @@ function ListView({
                       </TooltipTrigger>
                       <TooltipContent side="right">{gathered ? "Scatter (remove from gathered)" : "Gather"}</TooltipContent>
                     </Tooltip>
+                  </td>
+                  <td className="px-2 py-3" onClick={(e) => e.stopPropagation()}>
+                    <CompleteActionButton action={a} />
                   </td>
                   <td className="max-w-md px-4 py-3">
                     <p className="font-medium truncate">{a.task}</p>
@@ -637,6 +642,7 @@ function ListView({
               <div className="flex items-start gap-2.5">
                 <div className="flex flex-col items-center gap-1.5 pt-0.5" onClick={(e) => e.stopPropagation()}>
                   <Checkbox checked={isSelected} onCheckedChange={() => onToggle(a.id)} aria-label={`Select ${a.task}`} />
+                  <CompleteActionButton action={a} size="sm" />
                   <button
                     onClick={() => gathered ? removeToday(a.id) : addToday(a.id)}
                     className={cn(
@@ -806,8 +812,9 @@ function KanbanView({
                       )}
                     >
                       <div className="flex items-start gap-2">
-                        <div className="pt-0.5" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex flex-col items-center gap-1.5 pt-0.5" onClick={(e) => e.stopPropagation()}>
                           <Checkbox checked={isSelected} onCheckedChange={() => onToggle(a.id)} aria-label={`Select ${a.task}`} />
+                          <CompleteActionButton action={a} size="sm" />
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between gap-1">

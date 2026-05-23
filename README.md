@@ -195,3 +195,4 @@ npm run build
 ```
 
 Deploy the `dist` folder to any static hosting platform (Vercel, Netlify, Cloudflare Pages, etc.). Set the three Supabase environment variables in your hosting provider's settings.
+# project-finance

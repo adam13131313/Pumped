@@ -44,16 +44,28 @@ interface StatusPickerProps {
 
 export function StatusPicker({ action, size = "md", className }: StatusPickerProps) {
   const updateAction = useAppStore((s) => s.updateAction);
+  const completeAction = useAppStore((s) => s.completeAction);
+  const cancelAction = useAppStore((s) => s.cancelAction);
   const current = OPTION_BY_VALUE[action.status] ?? STATUS_OPTIONS[0];
 
   const onPick = (next: ActionStatus) => {
     if (next === action.status) return;
+    // Terminal transitions go through dedicated mutators so the synthesis
+    // toast fires for any successors that just became ready. Non-terminal
+    // transitions stay on the simple updateAction path.
+    if (next === "complete") {
+      completeAction(action.id);
+      return;
+    }
+    if (next === "cancelled") {
+      cancelAction(action.id);
+      return;
+    }
+
     const patch: Partial<Action> = { status: next };
-    // completed_at is what dashboards / streaks key off, so keep it
-    // honest on the transitions in and out of `complete`.
-    if (next === "complete" && action.status !== "complete") {
-      patch.completedAt = new Date().toISOString();
-    } else if (next !== "complete" && action.status === "complete") {
+    // completed_at follows the CHECK constraint complete_has_timestamp:
+    // clear it on transitions OUT of complete.
+    if (action.status === "complete") {
       patch.completedAt = null;
     }
     updateAction(action.id, patch);

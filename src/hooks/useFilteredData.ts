@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useAppStore } from "@/lib/store";
+import { useAppStore, actionReadiness } from "@/lib/store";
 import type { Action, InboxItem, WaitingItem, WbsNode } from "@/lib/types";
 
 // Filters domain rows by the current global filter. Two modes:
@@ -44,8 +44,10 @@ function useScopeNodeIds(): { mode: "all" | "unassigned" | "subtree"; ids: Set<s
 export function useFilteredData() {
   const wbsNodes = useAppStore((s) => s.wbsNodes);
   const actions = useAppStore((s) => s.actions);
+  const actionDeps = useAppStore((s) => s.actionDependencies);
   const waitingItems = useAppStore((s) => s.waitingItems);
   const inboxItems = useAppStore((s) => s.inboxItems);
+  const readyOnly = useAppStore((s) => s.globalFilter.readyOnly);
 
   const scope = useScopeNodeIds();
 
@@ -56,10 +58,18 @@ export function useFilteredData() {
   }, [wbsNodes, scope]);
 
   const filteredActions = useMemo<Action[]>(() => {
-    if (scope.mode === "all") return actions;
-    if (scope.mode === "unassigned") return actions.filter((a) => !a.wbsNodeId);
-    return actions.filter((a) => a.wbsNodeId && scope.ids.has(a.wbsNodeId));
-  }, [actions, scope]);
+    let result: Action[];
+    if (scope.mode === "all") result = actions;
+    else if (scope.mode === "unassigned") result = actions.filter((a) => !a.wbsNodeId);
+    else result = actions.filter((a) => a.wbsNodeId && scope.ids.has(a.wbsNodeId));
+
+    // ReadyOnly composes on top of the node scope. Computed once per render,
+    // and only when the toggle is on, so it's free in the default case.
+    if (readyOnly) {
+      result = result.filter((a) => actionReadiness(a.id, actions, actionDeps) === "ready");
+    }
+    return result;
+  }, [actions, actionDeps, scope, readyOnly]);
 
   const filteredWaiting = useMemo<WaitingItem[]>(() => {
     if (scope.mode === "all") return waitingItems;

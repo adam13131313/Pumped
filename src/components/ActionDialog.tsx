@@ -26,6 +26,7 @@ import type { Action, ActionPriority, ActionStatus } from "@/lib/types";
 import { NodePicker } from "@/components/NodePicker";
 import { TaskAttachments } from "@/components/TaskAttachments";
 import { TaskComments } from "@/components/TaskComments";
+import { TaskDependencies } from "@/components/TaskDependencies";
 import { TaskLinks } from "@/components/TaskLinks";
 import { DuplicateHint } from "@/components/DuplicateHint";
 
@@ -281,6 +282,7 @@ export function ActionDialog({
 
           {/* Always-rendered. Each child shows a "save this action first"
               placeholder when no actionId is available yet (new dialog). */}
+          <TaskDependencies actionId={action?.id} />
           <TaskLinks actionId={action?.id} />
           <TaskAttachments actionId={action?.id} />
           <TaskComments actionId={action?.id} />

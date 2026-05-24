@@ -1,8 +1,9 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
-import { useAppStore } from "@/lib/store";
+import { useAppStore, actionReadiness } from "@/lib/store";
 import { useFilteredData } from "@/hooks/useFilteredData";
 import { PriorityBadge } from "@/components/StatusBadges";
+import { ReadinessBadge } from "@/components/ReadinessBadge";
 import { StatusPicker } from "@/components/StatusPicker";
 import type { Action, ActionStatus, ActionPriority, WbsNode } from "@/lib/types";
 import { ActionDialog } from "@/components/ActionDialog";
@@ -43,6 +44,8 @@ export default function MyActions() {
   const deleteAction = useAppStore((s) => s.deleteAction);
   const delegateAction = useAppStore((s) => s.delegateAction);
   const bulkUpdateActions = useAppStore((s) => s.bulkUpdateActions);
+  const bulkCompleteActions = useAppStore((s) => s.bulkCompleteActions);
+  const bulkCancelActions = useAppStore((s) => s.bulkCancelActions);
   const bulkDeleteActions = useAppStore((s) => s.bulkDeleteActions);
   const todayIds = useAppStore((s) => s.todayIds);
   const addToday = useAppStore((s) => s.addToday);
@@ -118,8 +121,18 @@ export default function MyActions() {
   const clearSelection = () => setSelected(new Set());
 
   const handleBulkStatusChange = (status: ActionStatus) => {
-    bulkUpdateActions([...selected], { status });
-    toast.success(`${selected.size} task(s) updated to "${STATUS_LABEL[status]}"`);
+    const ids = [...selected];
+    if (status === "complete") {
+      // Routes through the synthesis path — fires its own toast (including
+      // any successors that just unblocked) and stamps completed_at, which
+      // bulkUpdateActions doesn't.
+      bulkCompleteActions(ids);
+    } else if (status === "cancelled") {
+      bulkCancelActions(ids);
+    } else {
+      bulkUpdateActions(ids, { status });
+      toast.success(`${ids.length} task(s) updated to "${STATUS_LABEL[status]}"`);
+    }
     clearSelection();
   };
 
@@ -455,6 +468,10 @@ function ListView({
   const todayIds = useAppStore((s) => s.todayIds);
   const addToday = useAppStore((s) => s.addToday);
   const removeToday = useAppStore((s) => s.removeToday);
+  // Readiness needs to see the WHOLE graph, not the filtered subset — a
+  // predecessor may sit outside the current node-scope but still block this row.
+  const allActions = useAppStore((s) => s.actions);
+  const actionDeps = useAppStore((s) => s.actionDependencies);
   const allSelected = actions.length > 0 && selected.size === actions.length;
 
   const [loadingId, setLoadingId] = useState<string | null>(null);
@@ -535,6 +552,7 @@ function ListView({
               const suggestion = suggestions[a.id];
               const isLoading = loadingId === a.id;
               const path = nodeLabel(wbsNodes, a.wbsNodeId);
+              const readiness = actionReadiness(a.id, allActions, actionDeps);
               return (
                 <tr key={a.id} className={cn(
                   "border-b last:border-0 hover:bg-muted/30 transition-colors group cursor-pointer",
@@ -561,7 +579,10 @@ function ListView({
                     </Tooltip>
                   </td>
                   <td className="max-w-md px-4 py-3">
-                    <p className="font-medium truncate">{a.task}</p>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <ReadinessBadge readiness={readiness} variant="compact" className="flex-shrink-0" />
+                      <p className="font-medium truncate">{a.task}</p>
+                    </div>
                     <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                       {unassigned ? (
                         <span className="text-[10px] font-medium uppercase tracking-wide text-amber-600 dark:text-amber-500">Unassigned</span>
@@ -632,6 +653,7 @@ function ListView({
           const suggestion = suggestions[a.id];
           const isLoading = loadingId === a.id;
           const path = nodeLabel(wbsNodes, a.wbsNodeId);
+          const readiness = actionReadiness(a.id, allActions, actionDeps);
           return (
             <div
               key={a.id}
@@ -656,7 +678,10 @@ function ListView({
                   </button>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium text-sm leading-snug">{a.task}</p>
+                  <div className="flex items-start gap-1.5">
+                    <ReadinessBadge readiness={readiness} variant="compact" className="mt-0.5 flex-shrink-0" />
+                    <p className="font-medium text-sm leading-snug">{a.task}</p>
+                  </div>
                   {!unassigned ? (
                     <p className="text-xs text-muted-foreground mt-0.5 truncate">{path}</p>
                   ) : (

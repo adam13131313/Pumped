@@ -1,6 +1,6 @@
 import { useAppStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
-import { Filter, X, ChevronRight } from "lucide-react";
+import { Filter, X, ChevronRight, CheckCircle2 } from "lucide-react";
 import { NodePicker, nodePath } from "@/components/NodePicker";
 
 // Single-control replacement for the v1 three-dropdown (Programme / Project /
@@ -15,15 +15,19 @@ export function GlobalFilter() {
   const setGlobalFilter = useAppStore((s) => s.setGlobalFilter);
   const clearGlobalFilter = useAppStore((s) => s.clearGlobalFilter);
 
-  const hasFilter = !!globalFilter.nodeId || globalFilter.unassigned;
+  const hasFilter = !!globalFilter.nodeId || globalFilter.unassigned || globalFilter.readyOnly;
   const path = nodePath(wbsNodes, globalFilter.nodeId);
 
   const toggleUnassigned = () => {
     if (globalFilter.unassigned) {
-      clearGlobalFilter();
+      setGlobalFilter({ nodeId: null, unassigned: false });
     } else {
       setGlobalFilter({ nodeId: null, unassigned: true });
     }
+  };
+
+  const toggleReadyOnly = () => {
+    setGlobalFilter({ readyOnly: !globalFilter.readyOnly });
   };
 
   return (
@@ -47,6 +51,17 @@ export function GlobalFilter() {
           onClick={toggleUnassigned}
         >
           Unassigned
+        </Button>
+
+        <Button
+          variant={globalFilter.readyOnly ? "secondary" : "ghost"}
+          size="sm"
+          className="h-7 px-2 text-xs gap-1"
+          onClick={toggleReadyOnly}
+          title="Hide blocked and not-yet-started actions"
+        >
+          <CheckCircle2 className="h-3 w-3" />
+          Ready only
         </Button>
 
         {hasFilter && (

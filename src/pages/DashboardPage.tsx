@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { HealthRing, HealthBreakdown } from "@/components/dashboard/HealthRing";
+import { ReadinessMix } from "@/components/dashboard/ReadinessMix";
 import { StalledHighList } from "@/components/dashboard/StalledHighList";
 import { VelocityChartWithCreated } from "@/components/dashboard/VelocityChart";
 import { WorkloadHeatmap } from "@/components/dashboard/WorkloadHeatmap";
@@ -175,6 +176,10 @@ export default function DashboardPage() {
             <StalledHighList actions={scopedActions} wbsNodes={wbsNodes} notStartedSinceMap={actionMeta.notStartedSince} />
           </CardContent>
         </Card>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        <ReadinessMix scopedActions={scopedActions} />
       </div>
 
       <Card>

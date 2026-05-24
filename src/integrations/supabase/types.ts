@@ -14,6 +14,58 @@ export type Database = {
   }
   public: {
     Tables: {
+      action_dependencies: {
+        Row: {
+          created_at: string
+          dependency_type: Database["public"]["Enums"]["dependency_type"]
+          id: string
+          lag_days: number
+          organisation_id: string
+          source_action_id: string
+          target_action_id: string
+        }
+        Insert: {
+          created_at?: string
+          dependency_type?: Database["public"]["Enums"]["dependency_type"]
+          id?: string
+          lag_days?: number
+          organisation_id: string
+          source_action_id: string
+          target_action_id: string
+        }
+        Update: {
+          created_at?: string
+          dependency_type?: Database["public"]["Enums"]["dependency_type"]
+          id?: string
+          lag_days?: number
+          organisation_id?: string
+          source_action_id?: string
+          target_action_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "action_dependencies_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "action_dependencies_organisation_id_source_action_id_fkey"
+            columns: ["organisation_id", "source_action_id"]
+            isOneToOne: false
+            referencedRelation: "actions"
+            referencedColumns: ["organisation_id", "id"]
+          },
+          {
+            foreignKeyName: "action_dependencies_organisation_id_target_action_id_fkey"
+            columns: ["organisation_id", "target_action_id"]
+            isOneToOne: false
+            referencedRelation: "actions"
+            referencedColumns: ["organisation_id", "id"]
+          },
+        ]
+      }
       action_status_log: {
         Row: {
           action_id: string
@@ -1404,7 +1456,13 @@ export type Database = {
     }
     Enums: {
       action_priority: "high" | "medium" | "low"
-      action_status: "not_started" | "in_progress" | "complete" | "blocked" | "cancelled" | "deferred"
+      action_status:
+        | "not_started"
+        | "in_progress"
+        | "complete"
+        | "blocked"
+        | "cancelled"
+        | "deferred"
       dependency_type: "fs" | "ff" | "ss" | "sf"
       domain_entity_kind: "action" | "waiting_item" | "wbs_node"
       inbox_event_type: "created" | "promoted" | "deleted"
@@ -1544,7 +1602,14 @@ export const Constants = {
   public: {
     Enums: {
       action_priority: ["high", "medium", "low"],
-      action_status: ["not_started", "in_progress", "complete", "blocked", "cancelled", "deferred"],
+      action_status: [
+        "not_started",
+        "in_progress",
+        "complete",
+        "blocked",
+        "cancelled",
+        "deferred",
+      ],
       dependency_type: ["fs", "ff", "ss", "sf"],
       domain_entity_kind: ["action", "waiting_item", "wbs_node"],
       inbox_event_type: ["created", "promoted", "deleted"],
@@ -1559,3 +1624,5 @@ export const Constants = {
     },
   },
 } as const
+A new version of Supabase CLI is available: v2.101.0 (currently installed v)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli

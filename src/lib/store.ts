@@ -5,7 +5,6 @@ import type {
   Action,
   ActionDependency,
   ActionReadiness,
-  DependencyType,
   GatheredState,
   InboxItem,
   Membership,
@@ -238,20 +237,7 @@ const mapWbsDependency = (r: Rows["wbs_node_dependencies"]["Row"]): WbsNodeDepen
   createdAt: r.created_at,
 });
 
-// `action_dependencies` is added by the 20260523000000 migration; until the
-// generated types are regenerated against the new schema, fall back to a
-// structural row shape (matches the table verbatim, snake_case).
-type ActionDependencyRow = {
-  id: string;
-  organisation_id: string;
-  source_action_id: string;
-  target_action_id: string;
-  dependency_type: DependencyType;
-  lag_days: number;
-  created_at: string;
-};
-
-const mapActionDependency = (r: ActionDependencyRow): ActionDependency => ({
+const mapActionDependency = (r: Rows["action_dependencies"]["Row"]): ActionDependency => ({
   id: r.id,
   organisationId: r.organisation_id,
   sourceActionId: r.source_action_id,
@@ -597,15 +583,6 @@ export const useAppStore = create<AppState>()((set, get) => ({
     const orgId = org.id;
     const ROW_LIMIT = 10000;
 
-    // `action_dependencies` was added after the generated supabase types were
-    // last regenerated, so we route through an untyped client until the next
-    // `supabase gen types` run. Same query shape as the others.
-    type ActionDepResult = { data: ActionDependencyRow[] | null };
-    const fetchActionDeps: Promise<ActionDepResult> = (
-      supabase.from("action_dependencies" as never)
-        .select("*").eq("organisation_id", orgId) as unknown as Promise<ActionDepResult>
-    );
-
     const [
       { data: wbsRows },
       { data: depRows },
@@ -624,7 +601,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
       supabase.from("actions")
         .select("*").eq("organisation_id", orgId).is("archived_at", null)
         .order("created_at", { ascending: false }).limit(ROW_LIMIT),
-      fetchActionDeps,
+      supabase.from("action_dependencies").select("*").eq("organisation_id", orgId),
       supabase.from("waiting_items")
         .select("*").eq("organisation_id", orgId)
         .order("created_at", { ascending: false }).limit(ROW_LIMIT),
@@ -839,14 +816,14 @@ export const useAppStore = create<AppState>()((set, get) => ({
     }
     set((s) => ({ actionDependencies: [...s.actionDependencies, dep] }));
     void (async () => {
-      const { error } = await (supabase.from("action_dependencies" as never).insert({
+      const { error } = await supabase.from("action_dependencies").insert({
         id: dep.id,
         organisation_id: dep.organisationId,
         source_action_id: dep.sourceActionId,
         target_action_id: dep.targetActionId,
         dependency_type: dep.dependencyType,
         lag_days: dep.lagDays,
-      } as never) as unknown as Promise<SbResult>);
+      });
       if (error) {
         set((s) => ({ actionDependencies: s.actionDependencies.filter((d) => d.id !== dep.id) }));
         notifySaveError("Dependency could not be saved", error);
@@ -861,9 +838,9 @@ export const useAppStore = create<AppState>()((set, get) => ({
     }));
     runWrite(
       "Dependency update could not be saved",
-      (supabase.from("action_dependencies" as never)
-        .update(buildDbUpdate(updates, actionDependencyFields) as never)
-        .eq("id", id) as unknown as Promise<SbResult>),
+      supabase.from("action_dependencies")
+        .update(buildDbUpdate(updates, actionDependencyFields))
+        .eq("id", id),
     );
   },
 
@@ -872,7 +849,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
     set((s) => ({ actionDependencies: s.actionDependencies.filter((d) => d.id !== id) }));
     runWrite(
       "Dependency could not be removed",
-      (supabase.from("action_dependencies" as never).delete().eq("id", id) as unknown as Promise<SbResult>),
+      supabase.from("action_dependencies").delete().eq("id", id),
       before ? () => set((s) => ({ actionDependencies: [...s.actionDependencies, before] })) : undefined,
     );
   },

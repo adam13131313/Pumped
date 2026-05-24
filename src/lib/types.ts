@@ -107,6 +107,26 @@ export interface WbsNodeDependency {
   createdAt: string;
 }
 
+// Action-to-action scheduling dependency. Mirrors WbsNodeDependency one-for-one
+// at the action layer. Semantics: `target` depends on `source` — source is the
+// predecessor, target is the successor. Cycle prevention is enforced in the
+// store's add mutator, not at the DB layer.
+export interface ActionDependency {
+  id: string;
+  organisationId: string;
+  sourceActionId: string;
+  targetActionId: string;
+  dependencyType: DependencyType;
+  lagDays: number;
+  createdAt: string;
+}
+
+// Derived per-action scheduling state. Computed from actions + action_dependencies.
+//   'ready'   — no incomplete FS predecessors, start_date is reached (or null)
+//   'blocked' — at least one FS predecessor is incomplete
+//   'future'  — no incomplete predecessors but start_date is in the future
+export type ActionReadiness = "ready" | "blocked" | "future";
+
 // ---------------------------------------------------------------------------
 // Actions / Waiting / Inbox — all FK to wbs_nodes by UUID
 // ---------------------------------------------------------------------------

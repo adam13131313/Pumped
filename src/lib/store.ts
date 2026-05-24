@@ -3,6 +3,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import type {
   Action,
+  ActionDependency,
+  ActionReadiness,
+  DependencyType,
   GatheredState,
   InboxItem,
   Membership,
@@ -161,6 +164,13 @@ const webhookSourceFields: FieldMap<WebhookSource> = {
   lastReceivedAt: "last_received_at",
 };
 
+// Only the two mutable fields. id / org / source / target / createdAt are
+// immutable once a dep is created — to change those you delete + re-add.
+const actionDependencyFields: FieldMap<ActionDependency> = {
+  dependencyType: "dependency_type",
+  lagDays: "lag_days",
+};
+
 // ============================================================================
 // Row → domain mappers (one per table)
 // ============================================================================
@@ -223,6 +233,29 @@ const mapWbsDependency = (r: Rows["wbs_node_dependencies"]["Row"]): WbsNodeDepen
   organisationId: r.organisation_id,
   sourceNodeId: r.source_node_id,
   targetNodeId: r.target_node_id,
+  dependencyType: r.dependency_type,
+  lagDays: r.lag_days,
+  createdAt: r.created_at,
+});
+
+// `action_dependencies` is added by the 20260523000000 migration; until the
+// generated types are regenerated against the new schema, fall back to a
+// structural row shape (matches the table verbatim, snake_case).
+type ActionDependencyRow = {
+  id: string;
+  organisation_id: string;
+  source_action_id: string;
+  target_action_id: string;
+  dependency_type: DependencyType;
+  lag_days: number;
+  created_at: string;
+};
+
+const mapActionDependency = (r: ActionDependencyRow): ActionDependency => ({
+  id: r.id,
+  organisationId: r.organisation_id,
+  sourceActionId: r.source_action_id,
+  targetActionId: r.target_action_id,
   dependencyType: r.dependency_type,
   lagDays: r.lag_days,
   createdAt: r.created_at,
@@ -348,9 +381,12 @@ export interface GlobalFilter {
   // Either a specific node, or 'unassigned' (rows with no wbs_node_id).
   nodeId: string | null;
   unassigned: boolean;
+  // When true, hide actions that are blocked or have a future start date.
+  // Composable with node / unassigned scoping. Defaults false.
+  readyOnly: boolean;
 }
 
-const defaultGlobalFilter: GlobalFilter = { nodeId: null, unassigned: false };
+const defaultGlobalFilter: GlobalFilter = { nodeId: null, unassigned: false, readyOnly: false };
 
 // ============================================================================
 // Store state
@@ -368,6 +404,7 @@ interface AppState {
   wbsNodes: WbsNode[];
   wbsDependencies: WbsNodeDependency[];
   actions: Action[];
+  actionDependencies: ActionDependency[];
   waitingItems: WaitingItem[];
   inboxItems: InboxItem[];
   routines: Routine[];
@@ -377,7 +414,9 @@ interface AppState {
   gathered: GatheredState | null;
 
   globalFilter: GlobalFilter;
-  setGlobalFilter: (filter: GlobalFilter) => void;
+  // Partial merge: callers can update one axis (e.g. just `readyOnly`) without
+  // having to know about every field on the filter shape.
+  setGlobalFilter: (filter: Partial<GlobalFilter>) => void;
   clearGlobalFilter: () => void;
 
   // Lifecycle
@@ -393,9 +432,24 @@ interface AppState {
   // Actions
   addAction: (action: Action) => void;
   updateAction: (id: string, updates: Partial<Action>) => void;
+  // Terminal-status helpers. Use these instead of updateAction({status:'complete'})
+  // when the user *chose to end* the action — they trigger the synthesis toast
+  // for any successors that just became ready.
+  completeAction: (id: string) => void;
+  cancelAction: (id: string) => void;
   deleteAction: (id: string) => void;
   bulkUpdateActions: (ids: string[], updates: Partial<Action>) => void;
+  // Bulk terminal-status helpers. Fan-in aware: completing A+B together
+  // unblocks C even though completing A alone wouldn't have.
+  bulkCompleteActions: (ids: string[]) => void;
+  bulkCancelActions: (ids: string[]) => void;
   bulkDeleteActions: (ids: string[]) => void;
+
+  // Action dependencies (source = predecessor, target = successor).
+  // `addActionDependency` rejects edges that would create a cycle.
+  addActionDependency: (dep: ActionDependency) => { ok: true } | { ok: false; reason: "cycle" | "self" };
+  updateActionDependency: (id: string, updates: Partial<Pick<ActionDependency, "dependencyType" | "lagDays">>) => void;
+  removeActionDependency: (id: string) => void;
 
   // Waiting
   addWaitingItem: (item: WaitingItem) => void;
@@ -461,6 +515,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
   wbsNodes: [],
   wbsDependencies: [],
   actions: [],
+  actionDependencies: [],
   waitingItems: [],
   inboxItems: [],
   routines: [],
@@ -470,7 +525,8 @@ export const useAppStore = create<AppState>()((set, get) => ({
   gathered: null,
 
   globalFilter: defaultGlobalFilter,
-  setGlobalFilter: (filter) => set({ globalFilter: filter }),
+  setGlobalFilter: (filter) =>
+    set((s) => ({ globalFilter: { ...s.globalFilter, ...filter } })),
   clearGlobalFilter: () => set({ globalFilter: defaultGlobalFilter }),
 
   resetTenancy: () => set({
@@ -482,6 +538,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
     wbsNodes: [],
     wbsDependencies: [],
     actions: [],
+    actionDependencies: [],
     waitingItems: [],
     inboxItems: [],
     routines: [],
@@ -540,10 +597,20 @@ export const useAppStore = create<AppState>()((set, get) => ({
     const orgId = org.id;
     const ROW_LIMIT = 10000;
 
+    // `action_dependencies` was added after the generated supabase types were
+    // last regenerated, so we route through an untyped client until the next
+    // `supabase gen types` run. Same query shape as the others.
+    type ActionDepResult = { data: ActionDependencyRow[] | null };
+    const fetchActionDeps: Promise<ActionDepResult> = (
+      supabase.from("action_dependencies" as never)
+        .select("*").eq("organisation_id", orgId) as unknown as Promise<ActionDepResult>
+    );
+
     const [
       { data: wbsRows },
       { data: depRows },
       { data: actionRows },
+      { data: actionDepRows },
       { data: waitingRows },
       { data: inboxRows },
       { data: routineRows },
@@ -557,6 +624,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
       supabase.from("actions")
         .select("*").eq("organisation_id", orgId).is("archived_at", null)
         .order("created_at", { ascending: false }).limit(ROW_LIMIT),
+      fetchActionDeps,
       supabase.from("waiting_items")
         .select("*").eq("organisation_id", orgId)
         .order("created_at", { ascending: false }).limit(ROW_LIMIT),
@@ -579,6 +647,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
       wbsNodes: (wbsRows ?? []).map(mapWbsNode),
       wbsDependencies: (depRows ?? []).map(mapWbsDependency),
       actions: (actionRows ?? []).map(mapAction),
+      actionDependencies: (actionDepRows ?? []).map(mapActionDependency),
       waitingItems: (waitingRows ?? []).map(mapWaiting),
       inboxItems: (inboxRows ?? []).map(mapInbox),
       routines: (routineRows ?? []).map(mapRoutine),
@@ -707,6 +776,15 @@ export const useAppStore = create<AppState>()((set, get) => ({
       supabase.from("actions").update(buildDbUpdate(safe, actionFields)).eq("id", id),
     );
   },
+
+  completeAction: (id) => {
+    transitionToTerminal(get, set, id, "complete");
+  },
+
+  cancelAction: (id) => {
+    transitionToTerminal(get, set, id, "cancelled");
+  },
+
   deleteAction: (id) => {
     const before = get().actions.find((a) => a.id === id);
     set((s) => ({ actions: s.actions.filter((a) => a.id !== id) }));
@@ -724,6 +802,15 @@ export const useAppStore = create<AppState>()((set, get) => ({
       supabase.from("actions").update(buildDbUpdate(safe, actionFields)).in("id", ids),
     );
   },
+
+  bulkCompleteActions: (ids) => {
+    transitionManyToTerminal(get, set, ids, "complete");
+  },
+
+  bulkCancelActions: (ids) => {
+    transitionManyToTerminal(get, set, ids, "cancelled");
+  },
+
   bulkDeleteActions: (ids) => {
     const before = get().actions.filter((a) => ids.includes(a.id));
     set((s) => ({ actions: s.actions.filter((a) => !ids.includes(a.id)) }));
@@ -731,6 +818,62 @@ export const useAppStore = create<AppState>()((set, get) => ({
       "Bulk action delete could not be saved",
       supabase.from("actions").delete().in("id", ids),
       before.length > 0 ? () => set((s) => ({ actions: [...s.actions, ...before] })) : undefined,
+    );
+  },
+
+  // --------------------------------------------------------------------------
+  // Action dependencies
+  //
+  // Semantics: source = predecessor, target = successor. Edge direction in the
+  // execution graph is source -> target. Cycle prevention is enforced here,
+  // not in SQL: a recursive trigger on every insert is overkill for our scale.
+  // --------------------------------------------------------------------------
+
+  addActionDependency: (dep) => {
+    if (dep.sourceActionId === dep.targetActionId) {
+      return { ok: false, reason: "self" };
+    }
+    const existing = get().actionDependencies;
+    if (wouldCreateCycle(existing, dep.sourceActionId, dep.targetActionId)) {
+      return { ok: false, reason: "cycle" };
+    }
+    set((s) => ({ actionDependencies: [...s.actionDependencies, dep] }));
+    void (async () => {
+      const { error } = await (supabase.from("action_dependencies" as never).insert({
+        id: dep.id,
+        organisation_id: dep.organisationId,
+        source_action_id: dep.sourceActionId,
+        target_action_id: dep.targetActionId,
+        dependency_type: dep.dependencyType,
+        lag_days: dep.lagDays,
+      } as never) as unknown as Promise<SbResult>);
+      if (error) {
+        set((s) => ({ actionDependencies: s.actionDependencies.filter((d) => d.id !== dep.id) }));
+        notifySaveError("Dependency could not be saved", error);
+      }
+    })();
+    return { ok: true };
+  },
+
+  updateActionDependency: (id, updates) => {
+    set((s) => ({
+      actionDependencies: s.actionDependencies.map((d) => (d.id === id ? { ...d, ...updates } : d)),
+    }));
+    runWrite(
+      "Dependency update could not be saved",
+      (supabase.from("action_dependencies" as never)
+        .update(buildDbUpdate(updates, actionDependencyFields) as never)
+        .eq("id", id) as unknown as Promise<SbResult>),
+    );
+  },
+
+  removeActionDependency: (id) => {
+    const before = get().actionDependencies.find((d) => d.id === id);
+    set((s) => ({ actionDependencies: s.actionDependencies.filter((d) => d.id !== id) }));
+    runWrite(
+      "Dependency could not be removed",
+      (supabase.from("action_dependencies" as never).delete().eq("id", id) as unknown as Promise<SbResult>),
+      before ? () => set((s) => ({ actionDependencies: [...s.actionDependencies, before] })) : undefined,
     );
   },
 
@@ -1340,6 +1483,111 @@ if (typeof window !== "undefined") {
 }
 
 // ============================================================================
+// Terminal-status transition helpers (completeAction / cancelAction / bulk)
+// ============================================================================
+
+// Both helpers feed through one implementation because the synthesis they fire
+// downstream — successors potentially unblocking — is the same shape regardless
+// of how many actions transitioned. Sonner's `toast.success` fires once with a
+// summary of the bulk's effect.
+//
+// We pre-compute the successor list against the CURRENT graph (where the
+// transitioning actions are NOT yet terminal) so the result reads as
+// "completing these caused those to unblock," not "those happen to be ready
+// now."
+type AppStateGetter = () => AppState;
+type AppStateSetter = (
+  partial: Partial<AppState> | ((s: AppState) => Partial<AppState>),
+) => void;
+
+function transitionToTerminal(
+  get: AppStateGetter,
+  set: AppStateSetter,
+  id: string,
+  newStatus: "complete" | "cancelled",
+) {
+  transitionManyToTerminal(get, set, [id], newStatus);
+}
+
+function transitionManyToTerminal(
+  get: AppStateGetter,
+  set: AppStateSetter,
+  ids: string[],
+  newStatus: "complete" | "cancelled",
+) {
+  if (ids.length === 0) return;
+
+  const s = get();
+  // Only act on actions that exist and aren't already in the target state.
+  // This makes the helper idempotent — calling it twice with the same ids
+  // doesn't double-fire toasts or thrash the network.
+  const targets = ids
+    .map((id) => s.actions.find((a) => a.id === id))
+    .filter((a): a is Action => !!a && a.status !== newStatus);
+  if (targets.length === 0) return;
+  const targetIds = targets.map((a) => a.id);
+
+  const unblocked = unblockedSuccessorsByMany(
+    targetIds,
+    s.actions,
+    s.actionDependencies,
+  );
+
+  const nowIso = new Date().toISOString();
+  // completed_at follows the CHECK constraint complete_has_timestamp:
+  // set only when transitioning to 'complete'; cleared otherwise.
+  const patch: Partial<Action> = {
+    status: newStatus,
+    completedAt: newStatus === "complete" ? nowIso : null,
+  };
+
+  set((s2) => ({
+    actions: s2.actions.map((a) =>
+      targetIds.includes(a.id) ? { ...a, ...patch } : a,
+    ),
+  }));
+
+  // Snapshot the prior state so rollback can restore each action precisely.
+  const beforeById = new Map(targets.map((a) => [a.id, a]));
+
+  runWrite(
+    "Action update could not be saved",
+    supabase.from("actions").update(buildDbUpdate(patch, actionFields)).in("id", targetIds),
+    () =>
+      set((s2) => ({
+        actions: s2.actions.map((a) => {
+          const before = beforeById.get(a.id);
+          return before
+            ? { ...a, status: before.status, completedAt: before.completedAt }
+            : a;
+        }),
+      })),
+  );
+
+  const verb = newStatus === "complete" ? "Completed" : "Cancelled";
+  const prefix = targets.length === 1 ? verb : `${verb} ${targets.length}`;
+  if (unblocked.length === 0) {
+    toast.success(prefix);
+  } else {
+    const succActions = s.actions.filter((a) => unblocked.includes(a.id));
+    const names = succActions.map((a) => a.task);
+    if (names.length === 1) {
+      toast.success(prefix, { description: `"${truncate(names[0], 60)}" is now ready.` });
+    } else {
+      const preview = names.slice(0, 3).map((n) => `"${truncate(n, 40)}"`).join(", ");
+      const rest = names.length > 3 ? ` and ${names.length - 3} more` : "";
+      toast.success(prefix, {
+        description: `${names.length} actions now ready: ${preview}${rest}.`,
+      });
+    }
+  }
+}
+
+function truncate(s: string, n: number): string {
+  return s.length <= n ? s : s.slice(0, n - 1) + "…";
+}
+
+// ============================================================================
 // Derived selectors — bridges so v1-style pages keep compiling during the
 // page-by-page rewrite in phases 3–4. Delete once consumers use wbsNodes
 // directly.
@@ -1351,4 +1599,151 @@ export function selectByType(nodes: WbsNode[], type: NodeType): WbsNode[] {
 
 export function selectChildren(nodes: WbsNode[], parentId: string | null): WbsNode[] {
   return nodes.filter((n) => n.parentId === parentId);
+}
+
+// ============================================================================
+// Action dependency helpers
+// ============================================================================
+
+// Would adding source -> target create a cycle? Equivalent: is there already a
+// path from target back to source? BFS over existing edges, following the
+// successor direction (source -> target).
+export function wouldCreateCycle(
+  deps: ActionDependency[],
+  sourceId: string,
+  targetId: string,
+): boolean {
+  if (sourceId === targetId) return true;
+  // Adjacency: for any node, the set of its direct successors.
+  const successors = new Map<string, string[]>();
+  for (const d of deps) {
+    const arr = successors.get(d.sourceActionId);
+    if (arr) arr.push(d.targetActionId);
+    else successors.set(d.sourceActionId, [d.targetActionId]);
+  }
+  // BFS from target. If we reach source, the new edge would close a cycle.
+  const seen = new Set<string>([targetId]);
+  const queue: string[] = [targetId];
+  while (queue.length > 0) {
+    const node = queue.shift()!;
+    const nexts = successors.get(node);
+    if (!nexts) continue;
+    for (const n of nexts) {
+      if (n === sourceId) return true;
+      if (!seen.has(n)) {
+        seen.add(n);
+        queue.push(n);
+      }
+    }
+  }
+  return false;
+}
+
+// Compute the derived readiness state of a single action.
+//   blocked — at least one incoming FS dependency whose source action is not
+//             yet 'complete'.
+//   future  — no incomplete blockers, but start_date is in the future relative
+//             to `today`.
+//   ready   — actionable now.
+//
+// Today defaults to the local date. SS/FF/SF and lag are NOT factored in v1:
+// FS-only readiness keeps the UI honest until calendars + working-day math
+// land. Other dep types are stored but treated as informational.
+export function actionReadiness(
+  actionId: string,
+  actions: Action[],
+  deps: ActionDependency[],
+  today: Date = new Date(),
+): ActionReadiness {
+  const action = actions.find((a) => a.id === actionId);
+  if (!action) return "ready"; // missing actions are not the selector's problem
+
+  const todayStr = today.toISOString().slice(0, 10);
+
+  // Status indices for O(1) blocker lookup.
+  const statusById = new Map<string, Action["status"]>();
+  for (const a of actions) statusById.set(a.id, a.status);
+
+  // Any FS predecessor not complete -> blocked.
+  for (const d of deps) {
+    if (d.targetActionId !== actionId) continue;
+    if (d.dependencyType !== "fs") continue;
+    const predStatus = statusById.get(d.sourceActionId);
+    // If predecessor is missing (deleted, or in another tenant) we skip; an
+    // orphan dep shouldn't block.
+    if (!predStatus) continue;
+    if (predStatus !== "complete" && predStatus !== "cancelled") {
+      return "blocked";
+    }
+  }
+
+  // No blockers — but is the start_date in the future?
+  if (action.startDate && action.startDate > todayStr) return "future";
+  return "ready";
+}
+
+// Given the current state (where the given actions are NOT yet complete or
+// cancelled), return the IDs of direct FS successors that WOULD transition to
+// ready/future once every action in `actionIds` reaches a terminal status.
+//
+// "Direct" is deliberate: transitive unblocking gets confusing for users
+// because it implies status changes ripple multiple hops in one step, when
+// what really happened is "you completed A, B is now ready — B still needs to
+// be done before C can start." We surface one hop at a time.
+//
+// The bulk variant matters for fan-in: if A and B both block C and you
+// complete them in one batch, calling the single-action version twice would
+// return [] both times. This version sees the full transitioning set, so it
+// reports C correctly.
+//
+// `cancelled` predecessors are also treated as non-blocking (matches
+// actionReadiness), so cancelling an action unblocks the same successors.
+export function unblockedSuccessorsByMany(
+  actionIds: string[],
+  actions: Action[],
+  deps: ActionDependency[],
+): string[] {
+  if (actionIds.length === 0) return [];
+  const transitioning = new Set(actionIds);
+
+  // Candidate successors: any FS target whose source is in the transitioning
+  // set. Use a Set to dedupe across multi-source successors.
+  const candidates = new Set<string>();
+  for (const d of deps) {
+    if (d.dependencyType !== "fs") continue;
+    if (transitioning.has(d.sourceActionId)) candidates.add(d.targetActionId);
+  }
+  if (candidates.size === 0) return [];
+
+  const statusById = new Map<string, Action["status"]>();
+  for (const a of actions) statusById.set(a.id, a.status);
+
+  const result: string[] = [];
+  for (const succId of candidates) {
+    // A transitioning action shouldn't be reported as "newly ready" — it's
+    // being closed, not opened.
+    if (transitioning.has(succId)) continue;
+
+    const preds = deps.filter(
+      (d) => d.targetActionId === succId && d.dependencyType === "fs",
+    );
+    const allDone = preds.every((d) => {
+      if (transitioning.has(d.sourceActionId)) return true;
+      const st = statusById.get(d.sourceActionId);
+      if (!st) return true; // orphan pred — non-blocking
+      return st === "complete" || st === "cancelled";
+    });
+    if (allDone) result.push(succId);
+  }
+  return result;
+}
+
+// Convenience wrapper for the single-action case. Same semantics; just an
+// ergonomic call site for callers that know only one action is transitioning.
+export function unblockedSuccessors(
+  actionId: string,
+  actions: Action[],
+  deps: ActionDependency[],
+): string[] {
+  return unblockedSuccessorsByMany([actionId], actions, deps);
 }

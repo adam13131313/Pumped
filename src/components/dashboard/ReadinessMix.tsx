@@ -7,17 +7,20 @@ import { actionReadiness, useAppStore } from "@/lib/store";
 import type { Action, ActionReadiness } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-// Pulse-side aggregate of the readiness state across scoped actions.
+// Personal readiness mix on Pulse.
 //
-// Two design calls worth knowing:
+// Three design calls worth knowing:
 //
-// 1. Counts come from `scopedActions` (the dashboard scope) but readiness is
-//    computed against `allActions` + `allDeps`. Reason: a scoped action can
-//    have an out-of-scope blocker, and clipping the graph would mis-classify
-//    it as ready.
+// 1. Counts come from `scopedActions` (the dashboard scope) filtered to the
+//    current user's assignments only. Pumped's job here is personal coherence
+//    — "what can I do right now?" — not portfolio-level monitoring. Aggregate
+//    org-wide views of readiness belong in the scheduler product, not here.
 //
-// 2. Terminal actions (complete / cancelled) are excluded from the totals —
-//    they're not "future work to do". So the mix is about *live* commitments.
+// 2. Readiness is computed against `allActions` + `allDeps` (the full graph)
+//    so a personal action with an out-of-scope blocker is classified correctly.
+//
+// 3. Terminal actions (complete / cancelled) are excluded — they're not "work
+//    to do." The mix is about live commitments only.
 
 interface ReadinessMixProps {
   scopedActions: Action[];
@@ -37,18 +40,23 @@ export function ReadinessMix({ scopedActions }: ReadinessMixProps) {
   const allActions = useAppStore((s) => s.actions);
   const allDeps = useAppStore((s) => s.actionDependencies);
   const setGlobalFilter = useAppStore((s) => s.setGlobalFilter);
+  const currentUserId = useAppStore((s) => s.currentMembership?.userId ?? null);
   const navigate = useNavigate();
 
   const { counts, total } = useMemo(() => {
     const counts: Record<ActionReadiness, number> = { ready: 0, blocked: 0, future: 0 };
     let total = 0;
+    // Without a current user (signed-out / dev-bypass mode) we render zero —
+    // the widget is meaningless without a "me" to anchor against.
+    if (!currentUserId) return { counts, total };
     for (const a of scopedActions) {
+      if (a.assignedTo !== currentUserId) continue;
       if (a.status === "complete" || a.status === "cancelled") continue;
       counts[actionReadiness(a.id, allActions, allDeps)]++;
       total++;
     }
     return { counts, total };
-  }, [scopedActions, allActions, allDeps]);
+  }, [scopedActions, allActions, allDeps, currentUserId]);
 
   const rows: MixRow[] = [
     {
@@ -84,8 +92,8 @@ export function ReadinessMix({ scopedActions }: ReadinessMixProps) {
     <Card>
       <CardContent className="p-4 space-y-3">
         <WidgetTitle
-          title="Readiness mix"
-          info="Of your live (non-terminal) actions in scope: how many can be worked on right now, how many are waiting on a blocker, and how many haven't reached their start date yet."
+          title="Your readiness mix"
+          info="Across the actions assigned to you in this scope: how many you can work on right now, how many are waiting on a blocker, and how many haven't reached their start date. Portfolio-level monitoring lives elsewhere — this is your personal view."
         />
 
         {/* Stacked bar — visual cue of the mix. Hidden when nothing live. */}
@@ -106,7 +114,7 @@ export function ReadinessMix({ scopedActions }: ReadinessMixProps) {
           </div>
         ) : (
           <div className="text-xs text-muted-foreground italic">
-            No live actions in scope.
+            Nothing assigned to you in this scope.
           </div>
         )}
 

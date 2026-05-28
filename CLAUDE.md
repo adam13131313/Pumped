@@ -24,6 +24,16 @@ Env vars required for the app to talk to Supabase (`.env`):
 
 Pumped is a single-page React app (Vite + TS + shadcn/ui + Tailwind) backed by Supabase (Postgres + Auth + Edge Functions + pg_cron). It is a WBS-structured task manager: **Programme → Project → Work Package → Action**, plus Inbox, Waiting For, Routines, and a Pulse dashboard.
 
+### Suite integration (cross-product)
+
+Pumped is one module of a product suite (with project-finance, the Scheduler, and more to follow). The suite is integrated by **contract, not shared code**: Pumped owns its schema and talks to sibling modules over HTTP, referencing shared WBS nodes by a system-neutral `correlation_id` — kept strictly distinct from the satellite `external_id`/`external_source` ingest identity. No module imports another's types; there is no shared kernel and no gatekeeper agent. Before building any cross-module integration point, conform to the conventions doc.
+
+- **Backbone (start here):** `~/.claude/memory/project_suite_conventions.md` — the invariant rules every module conforms to.
+- **Pumped ↔ Finance:** `~/.claude/memory/project_pumped_finance_contract.md`
+- **Pumped ↔ Scheduler:** `~/.claude/memory/project_scheduler_integration_contract.md` (+ boundary memo `project_pumped_scheduler_boundary.md`)
+
+Note: `wbs_nodes` has no `correlation_id` column yet — it's an additive, nullable column to land when the first shared programme forces it.
+
 ### State model — single Zustand store with optimistic Supabase writes
 
 `src/lib/store.ts` (`useAppStore`) is the source of truth for the entire app's domain data (programmes, projects, work_packages, actions, waiting_items, inbox_items, sop_items, plus "gathered" focus state). Every mutator follows the same pattern:

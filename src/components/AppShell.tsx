@@ -10,6 +10,7 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { MobileBottomNav } from "./MobileBottomNav";
 import { CommandPalette } from "./CommandPalette";
 import { FeedbackButton } from "./FeedbackButton";
+import { OfflineBanner } from "./OfflineBanner";
 const pumpedLogo = "/logo-icon-512-white.png";
 const pumpedHorizontal = "/logo-navbar-dark.png";
 
@@ -102,6 +103,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <FeedbackButton />
             </div>
           </div>
+          <OfflineBanner />
         </header>
         <main className={cn("flex-1 px-3 py-4 sm:px-6 sm:py-6 animate-fade-in", isMobile && "pb-20")}>
           <div className="mx-auto max-w-7xl">

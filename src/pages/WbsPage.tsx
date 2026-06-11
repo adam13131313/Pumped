@@ -1,4 +1,5 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import {
   Card,
@@ -33,6 +34,7 @@ import {
   Package,
   Plus,
   Settings,
+  Undo2,
   Upload,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -79,6 +81,79 @@ const RAG_BADGE: Record<string, string> = {
   amber: "bg-amber-500/10 text-amber-600 border-amber-500/30",
   red: "bg-red-500/10 text-red-600 border-red-500/30",
 };
+
+// -----------------------------------------------------------------------------
+// Undo-last-import: persistence + fallback-window query
+// -----------------------------------------------------------------------------
+
+const UNDO_BATCH_STORAGE_KEY = "pumped:wbs-last-import-batch";
+const FALLBACK_WINDOW_HOURS = 2;
+
+interface UndoBatch {
+  importedAt: string;
+  fileName: string;
+  orgId: string;
+  wbsIds: string[];
+  actionIds: string[];
+}
+
+function readUndoBatch(orgId: string | undefined): UndoBatch | null {
+  if (!orgId || typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(UNDO_BATCH_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as UndoBatch;
+    if (parsed.orgId !== orgId) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writeUndoBatch(batch: UndoBatch): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(UNDO_BATCH_STORAGE_KEY, JSON.stringify(batch));
+}
+
+function clearUndoBatch(): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(UNDO_BATCH_STORAGE_KEY);
+}
+
+interface RecentCandidate {
+  wbsIds: string[];
+  actionIds: string[];
+}
+
+async function fetchRecentCandidates(
+  orgId: string,
+  createdBy: string | null,
+  hours: number,
+): Promise<RecentCandidate> {
+  const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+
+  const wbsQuery = supabase
+    .from("wbs_nodes")
+    .select("id")
+    .eq("organisation_id", orgId)
+    .gte("created_at", cutoff);
+  const actQuery = supabase
+    .from("actions")
+    .select("id")
+    .eq("organisation_id", orgId)
+    .gte("created_at", cutoff)
+    .is("archived_at", null);
+
+  const [{ data: wbsRows }, { data: actRows }] = await Promise.all([
+    createdBy ? wbsQuery.eq("created_by", createdBy) : wbsQuery,
+    createdBy ? actQuery.eq("created_by", createdBy) : actQuery,
+  ]);
+
+  return {
+    wbsIds: (wbsRows ?? []).map((r) => r.id as string),
+    actionIds: (actRows ?? []).map((r) => r.id as string),
+  };
+}
 
 // -----------------------------------------------------------------------------
 // Import-preview helpers
@@ -271,6 +346,7 @@ export default function WbsPage() {
   const addWbsNode = useAppStore((s) => s.addWbsNode);
   const updateWbsNode = useAppStore((s) => s.updateWbsNode);
   const bulkAddActions = useAppStore((s) => s.bulkAddActions);
+  const bulkDeleteImported = useAppStore((s) => s.bulkDeleteImported);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editNode, setEditNode] = useState<WbsNode | null>(null);
   const [defaultParent, setDefaultParent] = useState<string | null>(null);
@@ -280,6 +356,23 @@ export default function WbsPage() {
   const [importPreview, setImportPreview] = useState<WbsCsvPreview | null>(null);
   const [importFilename, setImportFilename] = useState<string>("");
   const [importing, setImporting] = useState(false);
+
+  // Undo state — either a tracked batch from localStorage, or a fallback
+  // search for anything this user created in the recent window.
+  const [undoBatch, setUndoBatch] = useState<UndoBatch | null>(null);
+  const [undoDialogOpen, setUndoDialogOpen] = useState(false);
+  const [undoCandidate, setUndoCandidate] = useState<{
+    source: "batch" | "window";
+    wbsIds: string[];
+    actionIds: string[];
+    label: string;
+  } | null>(null);
+  const [undoBusy, setUndoBusy] = useState(false);
+  const [undoSearching, setUndoSearching] = useState(false);
+
+  useEffect(() => {
+    setUndoBatch(readUndoBatch(currentOrg?.id));
+  }, [currentOrg?.id]);
 
   const { roots, childrenByParent } = useMemo(() => {
     const visible = wbsNodes.filter((n) => !n.archivedAt);
@@ -356,12 +449,83 @@ export default function WbsPage() {
       if (result.errors.length) {
         console.warn("[WBS import] errors:", result.errors);
       }
+
+      // Record this batch so the user can undo it.
+      if (result.createdWbsIds.length > 0 || result.createdActionIds.length > 0) {
+        const batch: UndoBatch = {
+          importedAt: new Date().toISOString(),
+          fileName: importFilename,
+          orgId: currentOrg.id,
+          wbsIds: result.createdWbsIds,
+          actionIds: result.createdActionIds,
+        };
+        writeUndoBatch(batch);
+        setUndoBatch(batch);
+      }
+
       setImportPreview(null);
       setImportFilename("");
     } finally {
       setImporting(false);
     }
   };
+
+  const openUndoDialog = async () => {
+    if (!currentOrg) return;
+    if (undoBatch) {
+      setUndoCandidate({
+        source: "batch",
+        wbsIds: undoBatch.wbsIds,
+        actionIds: undoBatch.actionIds,
+        label: `Tracked import "${undoBatch.fileName}" (${new Date(undoBatch.importedAt).toLocaleString()})`,
+      });
+      setUndoDialogOpen(true);
+      return;
+    }
+    // Fallback: search the recent window.
+    setUndoSearching(true);
+    try {
+      const candidates = await fetchRecentCandidates(
+        currentOrg.id,
+        profile?.id ?? null,
+        FALLBACK_WINDOW_HOURS,
+      );
+      setUndoCandidate({
+        source: "window",
+        wbsIds: candidates.wbsIds,
+        actionIds: candidates.actionIds,
+        label: `All WBS nodes and actions you created in the last ${FALLBACK_WINDOW_HOURS} hours`,
+      });
+      setUndoDialogOpen(true);
+    } catch (e) {
+      toast.error("Could not load recent items", {
+        description: e instanceof Error ? e.message : "Unknown error",
+      });
+    } finally {
+      setUndoSearching(false);
+    }
+  };
+
+  const handleConfirmUndo = async () => {
+    if (!undoCandidate) return;
+    setUndoBusy(true);
+    try {
+      const result = await bulkDeleteImported(undoCandidate.wbsIds, undoCandidate.actionIds);
+      toast.success(
+        `Undo complete: ${result.wbsDeleted} WBS node(s) + ${result.actionsDeleted} action(s) deleted`,
+      );
+      if (undoCandidate.source === "batch") {
+        clearUndoBatch();
+        setUndoBatch(null);
+      }
+      setUndoDialogOpen(false);
+      setUndoCandidate(null);
+    } finally {
+      setUndoBusy(false);
+    }
+  };
+
+  const hasUndoAvailable = !!undoBatch;
 
   return (
     <div className="space-y-6">
@@ -384,6 +548,20 @@ export default function WbsPage() {
           <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
             <Upload className="h-4 w-4 mr-1.5" />
             Import CSV
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={openUndoDialog}
+            disabled={undoSearching}
+            title={
+              hasUndoAvailable
+                ? "Undo the most recent CSV import"
+                : `No tracked import — searches for items you created in the last ${FALLBACK_WINDOW_HOURS} hours`
+            }
+          >
+            <Undo2 className="h-4 w-4 mr-1.5" />
+            {undoSearching ? "Searching…" : hasUndoAvailable ? "Undo last import" : "Undo recent import"}
           </Button>
           <input
             ref={fileInputRef}
@@ -435,6 +613,66 @@ export default function WbsPage() {
         defaultParentId={defaultParent}
         defaultNodeType={defaultType}
       />
+
+      <Dialog
+        open={undoDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setUndoDialogOpen(false);
+            setUndoCandidate(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Undo import</DialogTitle>
+            <DialogDescription>
+              {undoCandidate?.label}
+            </DialogDescription>
+          </DialogHeader>
+          {undoCandidate && (
+            <div className="space-y-3 text-sm">
+              <div className="flex gap-2 flex-wrap">
+                <Badge variant="outline" className="bg-red-500/10 text-red-700 dark:text-red-300 border-red-500/30">
+                  {undoCandidate.wbsIds.length} WBS node(s) to delete
+                </Badge>
+                <Badge variant="outline" className="bg-red-500/10 text-red-700 dark:text-red-300 border-red-500/30">
+                  {undoCandidate.actionIds.length} action(s) to delete
+                </Badge>
+              </div>
+              {undoCandidate.source === "window" && (
+                <p className="text-xs text-amber-700 dark:text-amber-300">
+                  ⚠ This is the fallback path. It deletes everything <strong>you</strong> created in the last {FALLBACK_WINDOW_HOURS} hours — including any WBS nodes you added through the UI during that window. Deleting a WBS node also cascades to its descendant nodes. Review the counts above before confirming.
+                </p>
+              )}
+              {undoCandidate.source === "batch" && (
+                <p className="text-xs text-muted-foreground">
+                  Deletes exactly what the last CSV import created. Hard delete — there is no second-level undo.
+                </p>
+              )}
+              {undoCandidate.wbsIds.length === 0 && undoCandidate.actionIds.length === 0 && (
+                <p className="italic text-muted-foreground">Nothing to delete.</p>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setUndoDialogOpen(false); setUndoCandidate(null); }}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleConfirmUndo}
+              disabled={
+                undoBusy ||
+                !undoCandidate ||
+                (undoCandidate.wbsIds.length === 0 && undoCandidate.actionIds.length === 0)
+              }
+            >
+              {undoBusy ? "Deleting…" : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={importPreview !== null}

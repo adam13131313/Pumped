@@ -453,6 +453,8 @@ interface AppState {
   bulkDeleteInboxItems: (ids: string[]) => void;
   promoteInboxToActions: (ids: string[]) => void;
   bulkAddActions: (actions: Action[]) => void;
+  /** Hard-delete a batch of WBS nodes + actions by id. Used by the CSV import undo flow. */
+  bulkDeleteImported: (wbsIds: string[], actionIds: string[]) => Promise<{ wbsDeleted: number; actionsDeleted: number }>;
 
   // Routines + SOP
   addRoutine: (r: Routine) => void;
@@ -1174,6 +1176,48 @@ export const useAppStore = create<AppState>()((set, get) => ({
         notifySaveError("Actions could not be saved", error);
       }
     })();
+  },
+
+  bulkDeleteImported: async (wbsIds, actionIds) => {
+    // Delete actions first to avoid FK orphans, then WBS nodes.
+    // wbs_nodes parent_id cascades on delete, so listing every descendant we
+    // care about is unnecessary — the server takes care of subtree cleanup.
+    let actionsDeleted = 0;
+    let wbsDeleted = 0;
+
+    if (actionIds.length > 0) {
+      const { error, count } = await supabase
+        .from("actions")
+        .delete({ count: "exact" })
+        .in("id", actionIds);
+      if (error) {
+        notifySaveError("Could not delete imported actions", error);
+        return { wbsDeleted: 0, actionsDeleted: 0 };
+      }
+      actionsDeleted = count ?? actionIds.length;
+    }
+
+    if (wbsIds.length > 0) {
+      const { error, count } = await supabase
+        .from("wbs_nodes")
+        .delete({ count: "exact" })
+        .in("id", wbsIds);
+      if (error) {
+        notifySaveError("Could not delete imported WBS nodes", error);
+        return { wbsDeleted: 0, actionsDeleted };
+      }
+      wbsDeleted = count ?? wbsIds.length;
+    }
+
+    // Update local state. Filter on the union so a cascade-deleted child node
+    // not present in wbsIds still drops from the local store on next refetch
+    // — but for the typical batch case, the explicit list is exhaustive.
+    set((s) => ({
+      actions: s.actions.filter((a) => !actionIds.includes(a.id)),
+      wbsNodes: s.wbsNodes.filter((n) => !wbsIds.includes(n.id)),
+    }));
+
+    return { wbsDeleted, actionsDeleted };
   },
 
   // --------------------------------------------------------------------------

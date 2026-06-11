@@ -634,6 +634,8 @@ export interface WbsCsvApplyResult {
   wbsCreated: number;
   wbsUpdated: number;
   actionsCreated: number;
+  createdWbsIds: string[];
+  createdActionIds: string[];
   errors: ErrorGroup[];
 }
 
@@ -666,6 +668,7 @@ export function applyWbsCsv(
   // WBS creates in depth order.
   const newRows = [...preview.wbsToCreate].sort((a, b) => a.segments.length - b.segments.length);
   let wbsCreated = 0;
+  const createdWbsIds: string[] = [];
   for (const row of newRows) {
     let parentId: string | null = null;
     if (row.parentPath !== null) {
@@ -704,6 +707,7 @@ export function applyWbsCsv(
     deps.addWbsNode(node);
     byId.set(node.id, node);
     pathToNode.set(row.path, node);
+    createdWbsIds.push(node.id);
     wbsCreated++;
   }
 
@@ -750,6 +754,8 @@ export function applyWbsCsv(
     wbsCreated,
     wbsUpdated: preview.wbsToUpdate.length,
     actionsCreated: actionsToInsert.length,
+    createdWbsIds,
+    createdActionIds: actionsToInsert.map((a) => a.id),
     errors,
   };
 }

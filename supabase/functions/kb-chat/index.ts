@@ -100,7 +100,7 @@ Deno.serve(async (req) => {
     const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: { "Authorization": `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ model: "google/gemini-2.5-flash", messages }),
+      body: JSON.stringify({ model: "google/gemini-3-flash-preview", messages }),
     });
 
     if (!aiRes.ok) {

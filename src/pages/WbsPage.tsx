@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Card,
@@ -9,19 +9,38 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Briefcase,
   ChevronDown,
   ChevronRight,
+  Download,
+  FileDown,
   FolderTree,
   Layers,
   Package,
   Plus,
   Settings,
+  Upload,
 } from "lucide-react";
+import { toast } from "sonner";
 import { useAppStore } from "@/lib/store";
 import { allowedChildTypes } from "@/lib/schemas";
 import type { NodeType, WbsNode } from "@/lib/types";
 import { NodeDialog } from "@/components/NodeDialog";
+import { downloadWbsCsv } from "@/lib/exportWBS";
+import {
+  applyWbsCsv,
+  downloadCSVTemplate,
+  previewWbsCsv,
+  type WbsCsvPreview,
+} from "@/lib/csvImport";
 
 // Replaces ProjectsPage. A single recursive tree across all four node types:
 // Portfolio › Programme › Project › Work Package. Each card collapses, shows
@@ -149,10 +168,19 @@ function NodeCard({ node, childrenByParent, depth, onEdit, onAddChild }: NodeCar
 
 export default function WbsPage() {
   const wbsNodes = useAppStore((s) => s.wbsNodes);
+  const currentOrg = useAppStore((s) => s.currentOrg);
+  const profile = useAppStore((s) => s.profile);
+  const addWbsNode = useAppStore((s) => s.addWbsNode);
+  const updateWbsNode = useAppStore((s) => s.updateWbsNode);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editNode, setEditNode] = useState<WbsNode | null>(null);
   const [defaultParent, setDefaultParent] = useState<string | null>(null);
   const [defaultType, setDefaultType] = useState<NodeType | undefined>(undefined);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [importPreview, setImportPreview] = useState<WbsCsvPreview | null>(null);
+  const [importFilename, setImportFilename] = useState<string>("");
+  const [importing, setImporting] = useState(false);
 
   const { roots, childrenByParent } = useMemo(() => {
     const visible = wbsNodes.filter((n) => !n.archivedAt);
@@ -184,6 +212,57 @@ export default function WbsPage() {
     setDialogOpen(true);
   };
 
+  const handleExportCsv = () => {
+    if (wbsNodes.filter((n) => !n.archivedAt).length === 0) {
+      toast.info("Nothing to export — create at least one node first.");
+      return;
+    }
+    downloadWbsCsv(wbsNodes);
+    toast.success("Downloaded pumped-wbs.csv");
+  };
+
+  const handleImportFilePicked = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // reset so picking the same file again still fires
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const preview = previewWbsCsv(text, wbsNodes);
+      setImportFilename(file.name);
+      setImportPreview(preview);
+    } catch (err) {
+      toast.error("Could not read CSV", {
+        description: err instanceof Error ? err.message : "Unknown error",
+      });
+    }
+  };
+
+  const handleApplyImport = () => {
+    if (!importPreview || !currentOrg) return;
+    setImporting(true);
+    try {
+      const result = applyWbsCsv(importPreview, {
+        organisationId: currentOrg.id,
+        createdBy: profile?.id ?? null,
+        existingNodes: wbsNodes,
+        addWbsNode,
+        updateWbsNode,
+      });
+      const parts: string[] = [];
+      if (result.created) parts.push(`${result.created} created`);
+      if (result.updated) parts.push(`${result.updated} updated`);
+      if (result.errors.length) parts.push(`${result.errors.length} error(s)`);
+      toast.success(`Import applied: ${parts.join(", ") || "nothing to do"}`);
+      if (result.errors.length) {
+        console.warn("[WBS import] errors:", result.errors);
+      }
+      setImportPreview(null);
+      setImportFilename("");
+    } finally {
+      setImporting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-2">
@@ -194,6 +273,25 @@ export default function WbsPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" onClick={() => downloadCSVTemplate()}>
+            <FileDown className="h-4 w-4 mr-1.5" />
+            Template
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleExportCsv}>
+            <Download className="h-4 w-4 mr-1.5" />
+            Export CSV
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
+            <Upload className="h-4 w-4 mr-1.5" />
+            Import CSV
+          </Button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv,text/csv"
+            className="hidden"
+            onChange={handleImportFilePicked}
+          />
           <Button variant="outline" size="sm" onClick={() => openCreate(null, "portfolio")}>
             <Briefcase className="h-4 w-4 mr-1.5" />
             New Portfolio
@@ -237,6 +335,115 @@ export default function WbsPage() {
         defaultParentId={defaultParent}
         defaultNodeType={defaultType}
       />
+
+      <Dialog
+        open={importPreview !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setImportPreview(null);
+            setImportFilename("");
+          }
+        }}
+      >
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Import preview — {importFilename}</DialogTitle>
+            <DialogDescription>
+              Review what will change. Nothing is written until you confirm.
+            </DialogDescription>
+          </DialogHeader>
+          {importPreview && (
+            <div className="space-y-4 text-sm">
+              <div className="flex gap-3">
+                <Badge variant="outline" className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30">
+                  {importPreview.toCreate.length} to create
+                </Badge>
+                <Badge variant="outline" className="bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/30">
+                  {importPreview.toUpdate.length} to update
+                </Badge>
+                {importPreview.errors.length > 0 && (
+                  <Badge variant="outline" className="bg-red-500/10 text-red-700 dark:text-red-300 border-red-500/30">
+                    {importPreview.errors.length} errors
+                  </Badge>
+                )}
+              </div>
+
+              {importPreview.errors.length > 0 && (
+                <div>
+                  <div className="font-medium mb-1">Errors (these rows will be skipped)</div>
+                  <ul className="list-disc list-inside text-xs text-muted-foreground space-y-0.5 max-h-32 overflow-y-auto">
+                    {importPreview.errors.map((e, i) => (
+                      <li key={i}>{e}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {importPreview.toCreate.length > 0 && (
+                <div>
+                  <div className="font-medium mb-1">New nodes</div>
+                  <ul className="text-xs text-muted-foreground space-y-0.5 max-h-40 overflow-y-auto pl-2">
+                    {importPreview.toCreate.slice(0, 50).map((r) => (
+                      <li key={r.rowNumber}>
+                        <span className="font-mono">{r.nodeType}</span> &middot; {r.path}
+                      </li>
+                    ))}
+                    {importPreview.toCreate.length > 50 && (
+                      <li className="italic">…and {importPreview.toCreate.length - 50} more</li>
+                    )}
+                  </ul>
+                </div>
+              )}
+
+              {importPreview.toUpdate.length > 0 && (
+                <div>
+                  <div className="font-medium mb-1">Updates</div>
+                  <ul className="text-xs text-muted-foreground space-y-0.5 max-h-40 overflow-y-auto pl-2">
+                    {importPreview.toUpdate.slice(0, 50).map((u) => (
+                      <li key={u.row.rowNumber}>
+                        {u.row.path} &middot;{" "}
+                        <span className="text-foreground/70">
+                          {Object.keys(u.changes).join(", ")}
+                        </span>
+                      </li>
+                    ))}
+                    {importPreview.toUpdate.length > 50 && (
+                      <li className="italic">…and {importPreview.toUpdate.length - 50} more</li>
+                    )}
+                  </ul>
+                </div>
+              )}
+
+              {importPreview.toCreate.length === 0 &&
+                importPreview.toUpdate.length === 0 &&
+                importPreview.errors.length === 0 && (
+                  <div className="text-muted-foreground italic">No changes to apply.</div>
+                )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setImportPreview(null);
+                setImportFilename("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleApplyImport}
+              disabled={
+                importing ||
+                !importPreview ||
+                importPreview.toCreate.length + importPreview.toUpdate.length === 0
+              }
+            >
+              {importing ? "Applying…" : "Apply"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

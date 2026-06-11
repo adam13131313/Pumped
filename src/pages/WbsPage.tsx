@@ -17,6 +17,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Briefcase,
   ChevronDown,
   ChevronRight,
@@ -78,7 +84,7 @@ interface NodeCardProps {
   childrenByParent: Map<string | null, WbsNode[]>;
   depth: number;
   onEdit: (node: WbsNode) => void;
-  onAddChild: (parent: WbsNode) => void;
+  onAddChild: (parent: WbsNode, type: NodeType) => void;
 }
 
 function NodeCard({ node, childrenByParent, depth, onEdit, onAddChild }: NodeCardProps) {
@@ -134,10 +140,40 @@ function NodeCard({ node, childrenByParent, depth, onEdit, onAddChild }: NodeCar
           </div>
           <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
             {canHaveChildren && (
-              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => onAddChild(node)}>
-                <Plus className="h-3 w-3 mr-1" />
-                Add {TYPE_LABEL[childTypes[0]].toLowerCase()}
-              </Button>
+              childTypes.length === 1 ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => onAddChild(node, childTypes[0])}
+                >
+                  <Plus className="h-3 w-3 mr-1" />
+                  Add {TYPE_LABEL[childTypes[0]].toLowerCase()}
+                </Button>
+              ) : (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="sm" className="h-7 text-xs">
+                      <Plus className="h-3 w-3 mr-1" />
+                      Add child
+                      <ChevronDown className="h-3 w-3 ml-1 opacity-70" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    {childTypes.map((t) => {
+                      const ChildIcon = TYPE_ICON[t];
+                      return (
+                        <DropdownMenuItem key={t} onClick={() => onAddChild(node, t)}>
+                          <ChildIcon className="h-3.5 w-3.5 mr-2 text-primary" />
+                          {t === "portfolio" && node.nodeType === "portfolio"
+                            ? "Sub-portfolio"
+                            : TYPE_LABEL[t]}
+                        </DropdownMenuItem>
+                      );
+                    })}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )
             )}
             <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => onEdit(node)}>
               <Settings className="h-3.5 w-3.5" />
@@ -322,7 +358,7 @@ export default function WbsPage() {
               childrenByParent={childrenByParent}
               depth={0}
               onEdit={openEdit}
-              onAddChild={(parent) => openCreate(parent)}
+              onAddChild={(parent, type) => openCreate(parent, type)}
             />
           ))}
         </div>

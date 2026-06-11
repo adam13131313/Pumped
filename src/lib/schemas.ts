@@ -140,7 +140,9 @@ export function firstZodError(error: z.ZodError): string {
 // child types. Matches the foundation-migration trigger (`enforce_wbs_parent`).
 export function allowedChildTypes(parentType: NodeType | null): NodeType[] {
   if (parentType === null) return ["portfolio", "programme", "project", "work_package"];
-  if (parentType === "portfolio") return ["programme", "project", "work_package"];
+  // Portfolios may contain sub-portfolios for super-portfolio rollups, plus the
+  // usual lower types. Matches the relaxed enforce_wbs_parent trigger.
+  if (parentType === "portfolio") return ["portfolio", "programme", "project", "work_package"];
   if (parentType === "programme") return ["project", "work_package"];
   if (parentType === "project") return ["work_package"];
   return []; // work_package has no children

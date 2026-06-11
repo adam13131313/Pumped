@@ -45,6 +45,7 @@ import {
   applyWbsCsv,
   downloadCSVTemplate,
   previewWbsCsv,
+  type ErrorGroup,
   type WbsCsvPreview,
 } from "@/lib/csvImport";
 
@@ -78,6 +79,67 @@ const RAG_BADGE: Record<string, string> = {
   amber: "bg-amber-500/10 text-amber-600 border-amber-500/30",
   red: "bg-red-500/10 text-red-600 border-red-500/30",
 };
+
+// -----------------------------------------------------------------------------
+// Import-preview helpers
+// -----------------------------------------------------------------------------
+
+function totalCount(groups: ErrorGroup[]): number {
+  return groups.reduce((s, g) => s + g.count, 0);
+}
+
+function GroupedList({
+  title,
+  groups,
+  tone,
+}: {
+  title: string;
+  groups: ErrorGroup[];
+  tone: "error" | "warning";
+}) {
+  const colour = tone === "error" ? "text-red-700 dark:text-red-300" : "text-amber-700 dark:text-amber-300";
+  return (
+    <div>
+      <div className="font-medium mb-1">{title}</div>
+      <ul className="text-xs space-y-1 max-h-40 overflow-y-auto pl-2">
+        {groups.map((g, i) => (
+          <li key={i} className="leading-relaxed">
+            <span className={`font-medium ${colour}`}>{g.count}×</span>{" "}
+            <span className="text-foreground">{g.message}</span>
+            {g.rows.length > 0 && (
+              <div className="text-muted-foreground text-[10px] mt-0.5">
+                Rows: {g.rows.slice(0, 12).join(", ")}
+                {g.count > 12 && ` … (+${g.count - 12} more)`}
+              </div>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function PreviewList({
+  title,
+  items,
+  overflow,
+}: {
+  title: string;
+  items: { key: string; label: React.ReactNode }[];
+  overflow: number;
+}) {
+  return (
+    <div>
+      <div className="font-medium mb-1">{title}</div>
+      <ul className="text-xs text-muted-foreground space-y-0.5 max-h-40 overflow-y-auto pl-2">
+        {items.map((it) => (
+          <li key={it.key}>{it.label}</li>
+        ))}
+        {overflow > 0 && <li className="italic">…and {overflow} more</li>}
+      </ul>
+    </div>
+  );
+}
 
 interface NodeCardProps {
   node: WbsNode;
@@ -208,6 +270,7 @@ export default function WbsPage() {
   const profile = useAppStore((s) => s.profile);
   const addWbsNode = useAppStore((s) => s.addWbsNode);
   const updateWbsNode = useAppStore((s) => s.updateWbsNode);
+  const bulkAddActions = useAppStore((s) => s.bulkAddActions);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editNode, setEditNode] = useState<WbsNode | null>(null);
   const [defaultParent, setDefaultParent] = useState<string | null>(null);
@@ -283,11 +346,12 @@ export default function WbsPage() {
         existingNodes: wbsNodes,
         addWbsNode,
         updateWbsNode,
+        bulkAddActions,
       });
       const parts: string[] = [];
-      if (result.created) parts.push(`${result.created} created`);
-      if (result.updated) parts.push(`${result.updated} updated`);
-      if (result.errors.length) parts.push(`${result.errors.length} error(s)`);
+      if (result.wbsCreated) parts.push(`${result.wbsCreated} WBS node(s) created`);
+      if (result.wbsUpdated) parts.push(`${result.wbsUpdated} updated`);
+      if (result.actionsCreated) parts.push(`${result.actionsCreated} action(s) created`);
       toast.success(`Import applied: ${parts.join(", ") || "nothing to do"}`);
       if (result.errors.length) {
         console.warn("[WBS import] errors:", result.errors);
@@ -390,69 +454,89 @@ export default function WbsPage() {
           </DialogHeader>
           {importPreview && (
             <div className="space-y-4 text-sm">
-              <div className="flex gap-3">
+              <div className="flex gap-2 flex-wrap">
                 <Badge variant="outline" className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30">
-                  {importPreview.toCreate.length} to create
+                  {importPreview.wbsToCreate.length} WBS to create
                 </Badge>
                 <Badge variant="outline" className="bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/30">
-                  {importPreview.toUpdate.length} to update
+                  {importPreview.wbsToUpdate.length} WBS to update
                 </Badge>
-                {importPreview.errors.length > 0 && (
+                <Badge variant="outline" className="bg-violet-500/10 text-violet-700 dark:text-violet-300 border-violet-500/30">
+                  {importPreview.actionsToCreate.length} action(s) to create
+                </Badge>
+                {totalCount(importPreview.warnings) > 0 && (
+                  <Badge variant="outline" className="bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30">
+                    {totalCount(importPreview.warnings)} warning(s)
+                  </Badge>
+                )}
+                {totalCount(importPreview.errors) > 0 && (
                   <Badge variant="outline" className="bg-red-500/10 text-red-700 dark:text-red-300 border-red-500/30">
-                    {importPreview.errors.length} errors
+                    {totalCount(importPreview.errors)} error(s)
                   </Badge>
                 )}
               </div>
 
               {importPreview.errors.length > 0 && (
-                <div>
-                  <div className="font-medium mb-1">Errors (these rows will be skipped)</div>
-                  <ul className="list-disc list-inside text-xs text-muted-foreground space-y-0.5 max-h-32 overflow-y-auto">
-                    {importPreview.errors.map((e, i) => (
-                      <li key={i}>{e}</li>
-                    ))}
-                  </ul>
-                </div>
+                <GroupedList
+                  title="Errors (these rows will be skipped)"
+                  groups={importPreview.errors}
+                  tone="error"
+                />
               )}
 
-              {importPreview.toCreate.length > 0 && (
-                <div>
-                  <div className="font-medium mb-1">New nodes</div>
-                  <ul className="text-xs text-muted-foreground space-y-0.5 max-h-40 overflow-y-auto pl-2">
-                    {importPreview.toCreate.slice(0, 50).map((r) => (
-                      <li key={r.rowNumber}>
-                        <span className="font-mono">{r.nodeType}</span> &middot; {r.path}
-                      </li>
-                    ))}
-                    {importPreview.toCreate.length > 50 && (
-                      <li className="italic">…and {importPreview.toCreate.length - 50} more</li>
-                    )}
-                  </ul>
-                </div>
+              {importPreview.warnings.length > 0 && (
+                <GroupedList
+                  title="Warnings (silently handled)"
+                  groups={importPreview.warnings}
+                  tone="warning"
+                />
               )}
 
-              {importPreview.toUpdate.length > 0 && (
-                <div>
-                  <div className="font-medium mb-1">Updates</div>
-                  <ul className="text-xs text-muted-foreground space-y-0.5 max-h-40 overflow-y-auto pl-2">
-                    {importPreview.toUpdate.slice(0, 50).map((u) => (
-                      <li key={u.row.rowNumber}>
+              {importPreview.wbsToCreate.length > 0 && (
+                <PreviewList
+                  title="New WBS nodes"
+                  items={importPreview.wbsToCreate.slice(0, 30).map((r) => ({
+                    key: `c-${r.rowNumber}`,
+                    label: <><span className="font-mono">{r.nodeType}</span> &middot; {r.path}</>,
+                  }))}
+                  overflow={Math.max(0, importPreview.wbsToCreate.length - 30)}
+                />
+              )}
+
+              {importPreview.wbsToUpdate.length > 0 && (
+                <PreviewList
+                  title="WBS updates"
+                  items={importPreview.wbsToUpdate.slice(0, 30).map((u) => ({
+                    key: `u-${u.row.rowNumber}`,
+                    label: (
+                      <>
                         {u.row.path} &middot;{" "}
-                        <span className="text-foreground/70">
-                          {Object.keys(u.changes).join(", ")}
-                        </span>
-                      </li>
-                    ))}
-                    {importPreview.toUpdate.length > 50 && (
-                      <li className="italic">…and {importPreview.toUpdate.length - 50} more</li>
-                    )}
-                  </ul>
-                </div>
+                        <span className="text-foreground/70">{Object.keys(u.changes).join(", ")}</span>
+                      </>
+                    ),
+                  }))}
+                  overflow={Math.max(0, importPreview.wbsToUpdate.length - 30)}
+                />
               )}
 
-              {importPreview.toCreate.length === 0 &&
-                importPreview.toUpdate.length === 0 &&
-                importPreview.errors.length === 0 && (
+              {importPreview.actionsToCreate.length > 0 && (
+                <PreviewList
+                  title="New actions"
+                  items={importPreview.actionsToCreate.slice(0, 30).map((a) => ({
+                    key: `a-${a.rowNumber}`,
+                    label: (
+                      <>
+                        <span className="text-foreground/70">{a.parentPath} &raquo;</span> {a.task}
+                      </>
+                    ),
+                  }))}
+                  overflow={Math.max(0, importPreview.actionsToCreate.length - 30)}
+                />
+              )}
+
+              {importPreview.wbsToCreate.length === 0 &&
+                importPreview.wbsToUpdate.length === 0 &&
+                importPreview.actionsToCreate.length === 0 && (
                   <div className="text-muted-foreground italic">No changes to apply.</div>
                 )}
             </div>
@@ -472,10 +556,19 @@ export default function WbsPage() {
               disabled={
                 importing ||
                 !importPreview ||
-                importPreview.toCreate.length + importPreview.toUpdate.length === 0
+                importPreview.wbsToCreate.length +
+                  importPreview.wbsToUpdate.length +
+                  importPreview.actionsToCreate.length ===
+                  0
               }
             >
-              {importing ? "Applying…" : "Apply"}
+              {importing
+                ? "Applying…"
+                : `Apply (${
+                    (importPreview?.wbsToCreate.length ?? 0) +
+                    (importPreview?.wbsToUpdate.length ?? 0) +
+                    (importPreview?.actionsToCreate.length ?? 0)
+                  })`}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -1164,6 +1164,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
         task: a.task,
         priority: a.priority,
         status: a.status,
+        start_date: a.startDate,
         due_date: a.dueDate,
         notes: a.notes,
         labels: a.labels,

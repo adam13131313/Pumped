@@ -109,17 +109,34 @@ export function dataUrlToImageBlock(dataUrl: string, name?: string): ImageBlock 
   };
 }
 
-// Map Anthropic HTTP status → user-friendly response payload.
+// Map errors to user-facing response payload.
+//
+// IMPORTANT: customer-facing messages never name the provider, mention API
+// keys, billing, credits, or other implementation details. The point is to
+// tell the end user that an AI feature is briefly unavailable without
+// revealing that the operator forgot to top up their AI credits.
+//
+// Operator visibility comes from the console.error below, which lands in
+// Supabase Functions logs alongside the request id.
+const GENERIC_AI_ERROR_MESSAGE = "AI features are temporarily unavailable. Please try again shortly.";
+const RATE_LIMIT_MESSAGE = "Too many requests just now. Please try again in a moment.";
+
 export function explainAnthropicError(err: unknown): { status: number; payload: { error: string } } {
+  // Server-side log for operators — this is the place to surface the real cause.
   if (err instanceof AnthropicError) {
-    if (err.status === 429) return { status: 200, payload: { error: "Anthropic rate limit reached. Try again shortly." } };
-    if (err.status === 401) return { status: 200, payload: { error: "Anthropic API key is invalid or missing. Check Supabase secrets." } };
-    if (err.status === 402 || err.status === 403) return { status: 200, payload: { error: "Anthropic API access denied — check your plan / credits." } };
-    if (err.status >= 500) return { status: 200, payload: { error: "Anthropic API is unavailable. Try again shortly." } };
-    return { status: 200, payload: { error: `Anthropic API error: ${err.bodyText.slice(0, 200)}` } };
+    console.error(`[ai-error] upstream HTTP ${err.status}: ${err.bodyText.slice(0, 1000)}`);
+  } else if (err instanceof Error) {
+    console.error(`[ai-error] ${err.name}: ${err.message}`);
+  } else {
+    console.error(`[ai-error] non-Error thrown:`, err);
   }
-  if (err instanceof Error) {
-    return { status: 200, payload: { error: err.message } };
+
+  // Only the rate-limit case gets a distinct message so end users know to
+  // wait a few seconds rather than retrying repeatedly. Everything else
+  // (credit balance, invalid key, 5xx, config errors) collapses to one
+  // generic message.
+  if (err instanceof AnthropicError && err.status === 429) {
+    return { status: 200, payload: { error: RATE_LIMIT_MESSAGE } };
   }
-  return { status: 200, payload: { error: "Unknown error" } };
+  return { status: 200, payload: { error: GENERIC_AI_ERROR_MESSAGE } };
 }

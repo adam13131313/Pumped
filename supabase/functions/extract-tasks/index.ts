@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { ANTHROPIC_MODELS, callAnthropic, explainAnthropicError } from "../_shared/anthropic.ts";
 
 // v2 contract:
 // Request body  :: { text, sourceType?, existingNodes?: NodeOption[] }
@@ -23,14 +24,23 @@ interface NodeOption {
   path: string;
 }
 
+function extractJson(raw: string): unknown {
+  const cleaned = raw.replace(/^```(?:json)?\s*/m, "").replace(/\s*```\s*$/m, "").trim();
+  try {
+    return JSON.parse(cleaned);
+  } catch (_) {
+    const first = cleaned.indexOf("{");
+    const last = cleaned.lastIndexOf("}");
+    if (first === -1 || last === -1) throw new Error("Model response contained no JSON object");
+    return JSON.parse(cleaned.slice(first, last + 1));
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
     const { text, sourceType, existingNodes } = await req.json();
-
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
     if (!text || typeof text !== "string" || text.trim().length === 0) {
       return new Response(JSON.stringify({ error: "No text provided" }), {
@@ -81,46 +91,21 @@ ${nodeRule}
 - Return ONLY the JSON, no markdown fences.
 - Source type: ${sourceType || "unknown"}`;
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: text },
-        ],
-      }),
-    });
-
-    if (!response.ok) {
-      if (response.status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again in a moment." }), {
-          status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      if (response.status === 402) {
-        return new Response(JSON.stringify({ error: "AI usage limit reached. Please add credits." }), {
-          status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      const t = await response.text();
-      console.error("AI gateway error:", response.status, t);
-      throw new Error("AI gateway error");
+    try {
+      const raw = await callAnthropic({
+        model: ANTHROPIC_MODELS.sonnet,
+        systemPrompt,
+        messages: [{ role: "user", content: text }],
+        maxTokens: 4096,
+      });
+      const result = extractJson(raw);
+      return new Response(JSON.stringify(result), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    } catch (e) {
+      const { status, payload } = explainAnthropicError(e);
+      return new Response(JSON.stringify(payload), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
-
-    const data = await response.json();
-    let content = data.choices?.[0]?.message?.content ?? "";
-    content = content.replace(/^```(?:json)?\s*/, "").replace(/\s*```$/, "").trim();
-
-    const result = JSON.parse(content);
-
-    return new Response(JSON.stringify(result), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
   } catch (e) {
     console.error("extract-tasks error:", e);
     return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {

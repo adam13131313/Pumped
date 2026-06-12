@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { ANTHROPIC_MODELS, callAnthropic, explainAnthropicError } from "../_shared/anthropic.ts";
 
 // v2 contract:
 // Request body  :: { task, notes?, currentNodeId?, workPackages: WPOption[] }
@@ -22,8 +23,6 @@ serve(async (req) => {
 
   try {
     const { task, notes, currentNodeId, workPackages } = await req.json();
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
     if (!task || typeof task !== "string") {
       return new Response(JSON.stringify({ error: "Task is required" }), {
@@ -62,53 +61,31 @@ ${notes ? `Notes: "${notes}"\n` : ""}${currentNodeId ? `Currently linked node id
 Available Work Packages (with full breadcrumb path):
 ${wpList}`;
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-      }),
-    });
+    try {
+      const raw = await callAnthropic({
+        model: ANTHROPIC_MODELS.haiku,
+        systemPrompt,
+        messages: [{ role: "user", content: userPrompt }],
+        maxTokens: 512,
+      });
+      const cleaned = raw.replace(/^```(?:json)?\s*/, "").replace(/\s*```$/, "").trim();
+      const parsed = JSON.parse(cleaned);
 
-    if (!response.ok) {
-      if (response.status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limit exceeded. Try again in a moment." }), {
-          status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      if (response.status === 402) {
-        return new Response(JSON.stringify({ error: "AI usage limit reached. Please add credits." }), {
-          status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      const t = await response.text();
-      console.error("AI gateway error:", response.status, t);
-      throw new Error("AI gateway error");
+      const idx = typeof parsed.matchIndex === "number" ? parsed.matchIndex - 1 : -1;
+      const match = idx >= 0 && idx < wps.length ? wps[idx] : null;
+
+      return new Response(
+        JSON.stringify({
+          suggestion: match ? { nodeId: match.id } : null,
+          confidence: parsed.confidence ?? "low",
+          reason: parsed.reason ?? "",
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    } catch (e) {
+      const { status, payload } = explainAnthropicError(e);
+      return new Response(JSON.stringify(payload), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
-
-    const data = await response.json();
-    let content = data.choices?.[0]?.message?.content ?? "";
-    content = content.replace(/^```(?:json)?\s*/, "").replace(/\s*```$/, "").trim();
-    const parsed = JSON.parse(content);
-
-    const idx = typeof parsed.matchIndex === "number" ? parsed.matchIndex - 1 : -1;
-    const match = idx >= 0 && idx < wps.length ? wps[idx] : null;
-
-    return new Response(
-      JSON.stringify({
-        suggestion: match ? { nodeId: match.id } : null,
-        confidence: parsed.confidence ?? "low",
-        reason: parsed.reason ?? "",
-      }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
   } catch (e) {
     console.error("suggest-work-package error:", e);
     return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {

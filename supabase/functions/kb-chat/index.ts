@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { ANTHROPIC_MODELS, AnthropicMessage, callAnthropic, explainAnthropicError } from "../_shared/anthropic.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -28,6 +29,7 @@ Sub-portfolios are allowed (a portfolio can be nested under another portfolio fo
 - **Task attachments & comments**: Auto-link detection, file uploads up to 10MB (must save task first), threaded comments.
 - **Mobile**: Bottom nav, slide-out menu, voice capture.
 - **WBS CSV import/export**: Round-trips the full hierarchy via path-based parent inference. Smart routing — task/action/activity rows become Actions, sub-WPs collapse into actions under their parent WP. Live preview shows creates/updates/warnings/errors before applying.
+- **Offline awareness**: A banner and toast surface when the browser reports offline so users know edits won't reach the server while disconnected.
 - **Auth**: Email/password + Google OAuth.
 - **Integrations**: Webhook ingest sources let any external app POST tasks into the user's Rapid Capture inbox. Each source has a name, slug, and bearer token (shown once on creation, stored as SHA-256 hash, regenerable). Endpoint accepts JSON with source_id (required), task (required), priority (High/Medium/Low), due_date, project, notes, source_url. Re-sending the same source_id is idempotent (upsert). Three connection paths: (1) direct Webhook Sources for any custom/AI-built app; (2) Zapier & Make using a Webhooks → POST step (unlocks Gmail, Slack, Outlook, Notion, Trello, Sheets, 5,000+ triggers, no code); (3) Native one-click connectors (Gmail, Slack, Linear, Asana, Notion, Outlook) — coming soon. Built-in "Send test task" button verifies the full loop. Use cases: pull tasks from a CRM/recruiter/PM tool, trigger from email or chat, run scheduled syncs, deep-link back via source_url. Benefit: one inbox for every system, nothing slips through the cracks.
 - **Knowledgebase (this page)**: Feature docs + this AI assistant.
@@ -60,8 +62,6 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: "Invalid message" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // kb_chat_messages is org-scoped in v2 — resolve the user's active
-    // organisation via memberships.
     const { data: membership } = await supabase
       .from("memberships")
       .select("organisation_id")
@@ -90,73 +90,41 @@ Deno.serve(async (req) => {
       .order("created_at", { ascending: false })
       .limit(20);
 
-    const messages = [
-      { role: "system", content: FEATURE_KNOWLEDGE },
-      ...(history ?? []).reverse().map((m) => ({ role: m.role, content: m.content })),
-    ];
+    const chronological = (history ?? []).reverse();
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      return new Response(
-        JSON.stringify({ error: "LOVABLE_API_KEY is not set in Supabase secrets. Add it via Project Settings → Edge Functions → Secrets." }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+    // Anthropic Messages API requires the first message to be from the user.
+    // Drop any leading assistant messages just in case.
+    const trimmed = [...chronological];
+    while (trimmed.length > 0 && trimmed[0].role !== "user") trimmed.shift();
+
+    const messages: AnthropicMessage[] = trimmed
+      .filter((m) => m.role === "user" || m.role === "assistant")
+      .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
+
+    if (messages.length === 0) {
+      messages.push({ role: "user", content: message });
     }
 
-    // Try models in order. If a model id is no longer served by the gateway,
-    // fall through to the next. First success wins.
-    const MODELS = [
-      "google/gemini-3-flash-preview",
-      "google/gemini-2.5-flash",
-      "google/gemini-2.0-flash",
-      "google/gemini-flash-1.5",
-    ];
-
-    let aiRes: Response | null = null;
-    let lastErr = "";
-    for (const model of MODELS) {
-      aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: { "Authorization": `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ model, messages }),
+    try {
+      const reply = await callAnthropic({
+        model: ANTHROPIC_MODELS.haiku,
+        systemPrompt: FEATURE_KNOWLEDGE,
+        messages,
+        maxTokens: 1024,
       });
-      if (aiRes.ok) break;
-      lastErr = `${model}: HTTP ${aiRes.status} — ${(await aiRes.text()).slice(0, 500)}`;
-      console.error("AI error:", lastErr);
-      // Rate-limit / credit errors are not model-related — stop trying.
-      if (aiRes.status === 429 || aiRes.status === 402) break;
-      aiRes = null;
+
+      await supabase.from("kb_chat_messages").insert({
+        organisation_id: orgId,
+        user_id: user.id,
+        role: "assistant",
+        content: reply,
+      });
+
+      return new Response(JSON.stringify({ reply }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    } catch (e) {
+      const { status, payload } = explainAnthropicError(e);
+      return new Response(JSON.stringify(payload), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
-
-    if (!aiRes || !aiRes.ok) {
-      const status = aiRes?.status ?? 0;
-      if (status === 429) {
-        return new Response(JSON.stringify({ error: "Lovable AI rate limit reached. Try again shortly." }), {
-          status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      if (status === 402) {
-        return new Response(JSON.stringify({ error: "Lovable AI credits exhausted. Top up at lovable.dev." }), {
-          status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      return new Response(
-        JSON.stringify({ error: `All AI gateway models failed. Last error: ${lastErr || "unknown"}` }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
-
-    const aiData = await aiRes.json();
-    const reply = aiData.choices?.[0]?.message?.content ?? "Sorry, no response.";
-
-    await supabase.from("kb_chat_messages").insert({
-      organisation_id: orgId,
-      user_id: user.id,
-      role: "assistant",
-      content: reply,
-    });
-
-    return new Response(JSON.stringify({ reply }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
     console.error("kb-chat error:", e);
     return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });

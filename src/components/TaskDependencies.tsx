@@ -21,7 +21,51 @@ import {
 import { ReadinessBadge } from "@/components/ReadinessBadge";
 
 import { useAppStore, actionReadiness, wouldCreateCycle } from "@/lib/store";
-import type { Action, ActionDependency } from "@/lib/types";
+import type { Action, ActionDependency, WbsNode } from "@/lib/types";
+
+// Compute the set of WBS node ids the picker should consider "in scope" for
+// a given anchor action. Walks up from the anchor's WBS node to the nearest
+// project ancestor (falling back to programme / portfolio / wherever the
+// climb runs out) and returns that node plus every descendant. Used so the
+// picker doesn't surface every action in the org when you're trying to add
+// a blocker within one project.
+//
+// Returns null when no anchor node exists (e.g. the action is unassigned).
+// Callers treat null as "no scope filter possible — show all".
+function getScopeNodeIds(wbsNodes: WbsNode[], anchorNodeId: string | null): Set<string> | null {
+  if (!anchorNodeId) return null;
+  const byId = new Map(wbsNodes.map((n) => [n.id, n]));
+
+  let scopeRoot = byId.get(anchorNodeId);
+  if (!scopeRoot) return null;
+  // Climb until we land on a project (preferred) or run out of parents.
+  while (scopeRoot.nodeType !== "project" && scopeRoot.parentId) {
+    const parent = byId.get(scopeRoot.parentId);
+    if (!parent) break;
+    scopeRoot = parent;
+  }
+
+  const childrenByParent = new Map<string | null, WbsNode[]>();
+  for (const n of wbsNodes) {
+    const list = childrenByParent.get(n.parentId) ?? [];
+    list.push(n);
+    childrenByParent.set(n.parentId, list);
+  }
+
+  const result = new Set<string>([scopeRoot.id]);
+  const queue: string[] = [scopeRoot.id];
+  while (queue.length > 0) {
+    const id = queue.pop()!;
+    const children = childrenByParent.get(id) ?? [];
+    for (const c of children) {
+      if (!result.has(c.id)) {
+        result.add(c.id);
+        queue.push(c.id);
+      }
+    }
+  }
+  return result;
+}
 
 // First action-level substrate UI. Two lists:
 //   - "Blocked by"  — predecessors (deps where target = this action)
@@ -35,12 +79,16 @@ interface TaskDependenciesProps {
 export function TaskDependencies({ actionId }: TaskDependenciesProps) {
   const currentOrg = useAppStore((s) => s.currentOrg);
   const actions = useAppStore((s) => s.actions);
+  const wbsNodes = useAppStore((s) => s.wbsNodes);
   const deps = useAppStore((s) => s.actionDependencies);
   const addDep = useAppStore((s) => s.addActionDependency);
   const removeDep = useAppStore((s) => s.removeActionDependency);
 
   const [openBlocker, setOpenBlocker] = useState(false);
   const [openSuccessor, setOpenSuccessor] = useState(false);
+  // Default: scope candidates to the current project's subtree. Toggle to
+  // show every candidate org-wide when the user needs a cross-project link.
+  const [showAllScope, setShowAllScope] = useState(false);
 
   const incoming = useMemo(
     () => (actionId ? deps.filter((d) => d.targetActionId === actionId) : []),
@@ -51,19 +99,29 @@ export function TaskDependencies({ actionId }: TaskDependenciesProps) {
     [deps, actionId],
   );
 
+  const anchor = useMemo(
+    () => (actionId ? actions.find((a) => a.id === actionId) : undefined),
+    [actions, actionId],
+  );
+  const scopeNodeIds = useMemo(
+    () => (showAllScope ? null : getScopeNodeIds(wbsNodes, anchor?.wbsNodeId ?? null)),
+    [wbsNodes, anchor?.wbsNodeId, showAllScope],
+  );
+
   // For the blocker picker: any action except self, those already listed
-  // incoming, and those that would create a cycle.
+  // incoming, those that would create a cycle, and (when scope is active)
+  // only actions whose wbs_node sits inside the anchor's project subtree.
   const blockerCandidates = useMemo(() => {
     if (!actionId) return [];
     const existing = new Set(incoming.map((d) => d.sourceActionId));
     return actions.filter((a) => {
       if (a.id === actionId) return false;
       if (existing.has(a.id)) return false;
-      // Would adding (candidate -> actionId) create a cycle? Pre-screen.
       if (wouldCreateCycle(deps, a.id, actionId)) return false;
+      if (scopeNodeIds && (!a.wbsNodeId || !scopeNodeIds.has(a.wbsNodeId))) return false;
       return true;
     });
-  }, [actions, deps, incoming, actionId]);
+  }, [actions, deps, incoming, actionId, scopeNodeIds]);
 
   const successorCandidates = useMemo(() => {
     if (!actionId) return [];
@@ -72,9 +130,10 @@ export function TaskDependencies({ actionId }: TaskDependenciesProps) {
       if (a.id === actionId) return false;
       if (existing.has(a.id)) return false;
       if (wouldCreateCycle(deps, actionId, a.id)) return false;
+      if (scopeNodeIds && (!a.wbsNodeId || !scopeNodeIds.has(a.wbsNodeId))) return false;
       return true;
     });
-  }, [actions, deps, outgoing, actionId]);
+  }, [actions, deps, outgoing, actionId, scopeNodeIds]);
 
   // Hooks above this line. Bail-out below.
   if (!actionId || !currentOrg) {
@@ -151,8 +210,15 @@ export function TaskDependencies({ actionId }: TaskDependenciesProps) {
           <ActionSearch
             candidates={blockerCandidates}
             placeholder="Search actions to add as blocker…"
-            emptyHint="No candidate actions"
+            emptyHint={
+              scopeNodeIds
+                ? "No actions in this project. Toggle Show all to widen scope."
+                : "No candidate actions"
+            }
             onPick={(id) => handleAdd("blocker", id)}
+            showAllScope={showAllScope}
+            onToggleShowAll={() => setShowAllScope((v) => !v)}
+            scopeActive={scopeNodeIds !== null}
           />
         </PopoverContent>
       </Popover>
@@ -175,8 +241,15 @@ export function TaskDependencies({ actionId }: TaskDependenciesProps) {
           <ActionSearch
             candidates={successorCandidates}
             placeholder="Search actions to mark as blocked…"
-            emptyHint="No candidate actions"
+            emptyHint={
+              scopeNodeIds
+                ? "No actions in this project. Toggle Show all to widen scope."
+                : "No candidate actions"
+            }
             onPick={(id) => handleAdd("successor", id)}
+            showAllScope={showAllScope}
+            onToggleShowAll={() => setShowAllScope((v) => !v)}
+            scopeActive={scopeNodeIds !== null}
           />
         </PopoverContent>
       </Popover>
@@ -265,13 +338,27 @@ interface ActionSearchProps {
   placeholder: string;
   emptyHint: string;
   onPick: (actionId: string) => void;
+  showAllScope?: boolean;
+  onToggleShowAll?: () => void;
+  scopeActive?: boolean;
 }
 
-function ActionSearch({ candidates, placeholder, emptyHint, onPick }: ActionSearchProps) {
+function ActionSearch({
+  candidates,
+  placeholder,
+  emptyHint,
+  onPick,
+  showAllScope,
+  onToggleShowAll,
+  scopeActive,
+}: ActionSearchProps) {
   return (
     <Command>
       <CommandInput placeholder={placeholder} />
-      <CommandList>
+      {/* Explicit max-height + overflow so the mouse wheel scrolls the list.
+          shadcn's defaults are usually enough but a few real users have
+          reported the scroll getting swallowed inside Radix popovers. */}
+      <CommandList className="max-h-72 overflow-y-auto overscroll-contain">
         <CommandEmpty>{emptyHint}</CommandEmpty>
         <CommandGroup>
           {candidates.map((a) => (
@@ -285,6 +372,16 @@ function ActionSearch({ candidates, placeholder, emptyHint, onPick }: ActionSear
           ))}
         </CommandGroup>
       </CommandList>
+      {scopeActive && onToggleShowAll && (
+        <div className="border-t px-2 py-1.5 text-xs flex items-center justify-between bg-muted/30">
+          <span className="text-muted-foreground">
+            {showAllScope ? "All actions" : "This project only"}
+          </span>
+          <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={onToggleShowAll}>
+            {showAllScope ? "Limit to project" : "Show all"}
+          </Button>
+        </div>
+      )}
     </Command>
   );
 }

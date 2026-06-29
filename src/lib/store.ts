@@ -67,6 +67,36 @@ function buildDbUpdate<T extends object>(
 
 type SbResult = { error: { message?: string } | null };
 
+// Re-points polymorphic FK rows (task_links, attachments, comments) from one
+// owner to another within a single org. Used by delegate / take-back so the
+// user's notes/links/attachments survive the move between actions and
+// waiting_items (whose FKs cascade on delete). Each polymorphic table has
+// an `exactly_one_parent` CHECK so we set the old column to NULL and the new
+// column to the new id atomically per row.
+type PolyCol = "action_id" | "waiting_item_id" | "wbs_node_id";
+
+async function repointPolymorphicRows(
+  orgId: string,
+  from: { col: PolyCol; id: string },
+  to: { col: PolyCol; id: string },
+): Promise<void> {
+  const tables = ["task_links", "attachments", "comments"] as const;
+  await Promise.all(
+    tables.map((table) =>
+      supabase
+        .from(table)
+        .update({ [from.col]: null, [to.col]: to.id })
+        .eq("organisation_id", orgId)
+        .eq(from.col, from.id)
+        .then(({ error }) => {
+          if (error) {
+            console.warn(`[repoint ${table}] ${from.col}=${from.id} → ${to.col}=${to.id}: ${error.message}`);
+          }
+        }),
+    ),
+  );
+}
+
 function runWrite(
   label: string,
   query: PromiseLike<SbResult>,
@@ -923,14 +953,13 @@ export const useAppStore = create<AppState>()((set, get) => ({
       actions: s.actions.filter((a) => a.id !== actionId),
       waitingItems: [...s.waitingItems, newWaiting],
     });
-    runWrite(
-      "Delegation (action delete) could not be saved",
-      supabase.from("actions").delete().eq("id", actionId),
-      () => set((state) => ({ actions: [...state.actions, action] })),
-    );
-    runWrite(
-      "Delegation (waiting insert) could not be saved",
-      supabase.from("waiting_items").insert({
+
+    // Serialise the DB work so the polymorphic re-point happens BEFORE the
+    // ON-DELETE-CASCADE on actions wipes out task_links / attachments /
+    // comments tied to the old action_id. The previous parallel runWrite
+    // pattern lost those rows whenever the delete fired first.
+    void (async () => {
+      const { error: insErr } = await supabase.from("waiting_items").insert({
         id: newWaiting.id,
         organisation_id: newWaiting.organisationId,
         wbs_node_id: newWaiting.wbsNodeId,
@@ -942,9 +971,27 @@ export const useAppStore = create<AppState>()((set, get) => ({
         status: newWaiting.status,
         notes: newWaiting.notes,
         created_by: newWaiting.createdBy,
-      }),
-      () => set((state) => ({ waitingItems: state.waitingItems.filter((w) => w.id !== newWaiting.id) })),
-    );
+      });
+      if (insErr) {
+        set((state) => ({
+          actions: [...state.actions, action],
+          waitingItems: state.waitingItems.filter((w) => w.id !== newWaiting.id),
+        }));
+        notifySaveError("Delegation could not be saved", insErr);
+        return;
+      }
+
+      await repointPolymorphicRows(
+        org.id,
+        { col: "action_id", id: actionId },
+        { col: "waiting_item_id", id: newWaiting.id },
+      );
+
+      const { error: delErr } = await supabase.from("actions").delete().eq("id", actionId);
+      if (delErr) {
+        notifySaveError("Delegation cleanup failed — the old action is still present", delErr);
+      }
+    })();
   },
 
   takeBackWaiting: (id) => {
@@ -975,13 +1022,14 @@ export const useAppStore = create<AppState>()((set, get) => ({
       waitingItems: s.waitingItems.filter((w) => w.id !== id),
       actions: [...s.actions, newAction],
     });
-    runWrite(
-      "Take-back (waiting delete) could not be saved",
-      supabase.from("waiting_items").delete().eq("id", id),
-      () => set((state) => ({ waitingItems: [...state.waitingItems, item] })),
-    );
+
+    // Insert action → re-point polymorphic rows (task_links / attachments /
+    // comments) from waiting_item_id to the new action_id → THEN delete the
+    // waiting item. Order matters because waiting_items has ON DELETE CASCADE
+    // on those FKs; the old order lost every link / attachment / comment the
+    // user had added while the row was a waiting item.
     void (async () => {
-      const { error } = await supabase.from("actions").insert({
+      const { error: insErr } = await supabase.from("actions").insert({
         id: newAction.id,
         organisation_id: newAction.organisationId,
         wbs_node_id: newAction.wbsNodeId,
@@ -990,13 +1038,29 @@ export const useAppStore = create<AppState>()((set, get) => ({
         task: newAction.task,
         priority: newAction.priority,
         status: newAction.status,
+        start_date: newAction.startDate,
         due_date: newAction.dueDate,
         notes: newAction.notes,
         labels: newAction.labels,
       });
-      if (error) {
-        set((state) => ({ actions: state.actions.filter((a) => a.id !== newAction.id) }));
-        notifySaveError("Take-back (action insert) could not be saved", error);
+      if (insErr) {
+        set((state) => ({
+          actions: state.actions.filter((a) => a.id !== newAction.id),
+          waitingItems: [...state.waitingItems, item],
+        }));
+        notifySaveError("Take-back could not be saved", insErr);
+        return;
+      }
+
+      await repointPolymorphicRows(
+        org.id,
+        { col: "waiting_item_id", id },
+        { col: "action_id", id: newAction.id },
+      );
+
+      const { error: delErr } = await supabase.from("waiting_items").delete().eq("id", id);
+      if (delErr) {
+        notifySaveError("Take-back cleanup failed — the old waiting item is still present", delErr);
       }
     })();
   },

@@ -118,6 +118,7 @@ export type Database = {
           completed_at: string | null
           created_at: string
           created_by: string | null
+          deleted_at: string | null
           due_date: string | null
           id: string
           labels: string[]
@@ -137,6 +138,7 @@ export type Database = {
           completed_at?: string | null
           created_at?: string
           created_by?: string | null
+          deleted_at?: string | null
           due_date?: string | null
           id?: string
           labels?: string[]
@@ -156,6 +158,7 @@ export type Database = {
           completed_at?: string | null
           created_at?: string
           created_by?: string | null
+          deleted_at?: string | null
           due_date?: string | null
           id?: string
           labels?: string[]
@@ -254,6 +257,50 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "wbs_nodes"
             referencedColumns: ["organisation_id", "id"]
+          },
+        ]
+      }
+      audit_log: {
+        Row: {
+          actor_user_id: string | null
+          created_at: string
+          diff: Json | null
+          entity_id: string
+          entity_kind: Database["public"]["Enums"]["audit_entity_kind"]
+          id: string
+          op: Database["public"]["Enums"]["audit_op"]
+          organisation_id: string
+          source: string | null
+        }
+        Insert: {
+          actor_user_id?: string | null
+          created_at?: string
+          diff?: Json | null
+          entity_id: string
+          entity_kind: Database["public"]["Enums"]["audit_entity_kind"]
+          id?: string
+          op: Database["public"]["Enums"]["audit_op"]
+          organisation_id: string
+          source?: string | null
+        }
+        Update: {
+          actor_user_id?: string | null
+          created_at?: string
+          diff?: Json | null
+          entity_id?: string
+          entity_kind?: Database["public"]["Enums"]["audit_entity_kind"]
+          id?: string
+          op?: Database["public"]["Enums"]["audit_op"]
+          organisation_id?: string
+          source?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_log_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -590,6 +637,7 @@ export type Database = {
         Row: {
           created_at: string
           created_by: string | null
+          deleted_at: string | null
           due_date: string | null
           external_id: string | null
           external_url: string | null
@@ -607,6 +655,7 @@ export type Database = {
         Insert: {
           created_at?: string
           created_by?: string | null
+          deleted_at?: string | null
           due_date?: string | null
           external_id?: string | null
           external_url?: string | null
@@ -624,6 +673,7 @@ export type Database = {
         Update: {
           created_at?: string
           created_by?: string | null
+          deleted_at?: string | null
           due_date?: string | null
           external_id?: string | null
           external_url?: string | null
@@ -1186,6 +1236,7 @@ export type Database = {
           asked_on: string | null
           created_at: string
           created_by: string | null
+          deleted_at: string | null
           description: string
           due_by: string | null
           from_user_id: string | null
@@ -1201,6 +1252,7 @@ export type Database = {
           asked_on?: string | null
           created_at?: string
           created_by?: string | null
+          deleted_at?: string | null
           description: string
           due_by?: string | null
           from_user_id?: string | null
@@ -1216,6 +1268,7 @@ export type Database = {
           asked_on?: string | null
           created_at?: string
           created_by?: string | null
+          deleted_at?: string | null
           description?: string
           due_by?: string | null
           from_user_id?: string | null
@@ -1302,6 +1355,7 @@ export type Database = {
           blockers: string | null
           created_at: string
           created_by: string | null
+          deleted_at: string | null
           description: string
           due_date: string | null
           id: string
@@ -1321,6 +1375,7 @@ export type Database = {
           blockers?: string | null
           created_at?: string
           created_by?: string | null
+          deleted_at?: string | null
           description?: string
           due_date?: string | null
           id?: string
@@ -1340,6 +1395,7 @@ export type Database = {
           blockers?: string | null
           created_at?: string
           created_by?: string | null
+          deleted_at?: string | null
           description?: string
           due_date?: string | null
           id?: string
@@ -1463,6 +1519,14 @@ export type Database = {
         | "blocked"
         | "cancelled"
         | "deferred"
+      audit_entity_kind:
+        | "action"
+        | "waiting_item"
+        | "wbs_node"
+        | "inbox_item"
+        | "membership"
+        | "organisation"
+      audit_op: "create" | "update" | "delete"
       dependency_type: "fs" | "ff" | "ss" | "sf"
       domain_entity_kind: "action" | "waiting_item" | "wbs_node"
       inbox_event_type: "created" | "promoted" | "deleted"
@@ -1610,6 +1674,15 @@ export const Constants = {
         "cancelled",
         "deferred",
       ],
+      audit_entity_kind: [
+        "action",
+        "waiting_item",
+        "wbs_node",
+        "inbox_item",
+        "membership",
+        "organisation",
+      ],
+      audit_op: ["create", "update", "delete"],
       dependency_type: ["fs", "ff", "ss", "sf"],
       domain_entity_kind: ["action", "waiting_item", "wbs_node"],
       inbox_event_type: ["created", "promoted", "deleted"],
@@ -1624,5 +1697,5 @@ export const Constants = {
     },
   },
 } as const
-A new version of Supabase CLI is available: v2.101.0 (currently installed v)
+A new version of Supabase CLI is available: v2.108.0 (currently installed v2.101.0)
 We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli

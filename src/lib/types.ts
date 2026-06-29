@@ -81,6 +81,7 @@ export interface WbsNode {
   description: string;
   position: number;
   archivedAt: string | null;
+  deletedAt: string | null;
 
   // Project-only — populated when nodeType === 'project'
   projectStatus: ProjectStatus | null;
@@ -149,6 +150,7 @@ export interface Action {
 
   notStartedSince: string | null;
   archivedAt: string | null;
+  deletedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -168,6 +170,7 @@ export interface WaitingItem {
   dueBy: string | null;
   status: WaitingStatus;
   notes: string;
+  deletedAt: string | null;
 
   createdBy: string | null;
   createdAt: string;
@@ -189,6 +192,7 @@ export interface InboxItem {
   externalUrl: string | null;
 
   promotedAt: string | null;
+  deletedAt: string | null;
   createdBy: string | null;
   createdAt: string;
   updatedAt: string;

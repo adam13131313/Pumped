@@ -67,6 +67,32 @@ function buildDbUpdate<T extends object>(
 
 type SbResult = { error: { message?: string } | null };
 
+// Collect every descendant of a WBS node (children, grandchildren, …),
+// EXCLUDING the root id itself. Caller decides whether to add the root.
+// Used by soft-delete cascade.
+function collectDescendants(nodes: WbsNode[], rootId: string): Set<string> {
+  const childrenByParent = new Map<string | null, string[]>();
+  for (const n of nodes) {
+    const list = childrenByParent.get(n.parentId) ?? [];
+    list.push(n.id);
+    childrenByParent.set(n.parentId, list);
+  }
+  const result = new Set<string>();
+  const queue = [rootId];
+  while (queue.length > 0) {
+    const id = queue.pop()!;
+    const kids = childrenByParent.get(id);
+    if (!kids) continue;
+    for (const k of kids) {
+      if (!result.has(k)) {
+        result.add(k);
+        queue.push(k);
+      }
+    }
+  }
+  return result;
+}
+
 // Re-points polymorphic FK rows (task_links, attachments, comments) from one
 // owner to another within a single org. Used by delegate / take-back so the
 // user's notes/links/attachments survive the move between actions and
@@ -127,6 +153,7 @@ const wbsNodeFields: FieldMap<WbsNode> = {
   description: "description",
   position: "position",
   archivedAt: "archived_at",
+  deletedAt: "deleted_at",
   projectStatus: "project_status",
   leadUserId: "lead_user_id",
   startDate: "start_date",
@@ -147,6 +174,7 @@ const actionFields: FieldMap<Action> = {
   notes: "notes",
   labels: "labels",
   archivedAt: "archived_at",
+  deletedAt: "deleted_at",
 };
 
 const waitingFields: FieldMap<WaitingItem> = {
@@ -158,6 +186,7 @@ const waitingFields: FieldMap<WaitingItem> = {
   dueBy: "due_by",
   status: "status",
   notes: "notes",
+  deletedAt: "deleted_at",
 };
 
 const inboxFields: FieldMap<InboxItem> = {
@@ -169,6 +198,7 @@ const inboxFields: FieldMap<InboxItem> = {
   notes: "notes",
   externalId: "external_id",
   externalUrl: "external_url",
+  deletedAt: "deleted_at",
 };
 
 const routineFields: FieldMap<Routine> = {
@@ -246,6 +276,7 @@ const mapWbsNode = (r: Rows["wbs_nodes"]["Row"]): WbsNode => ({
   description: r.description,
   position: r.position,
   archivedAt: r.archived_at,
+  deletedAt: r.deleted_at,
   projectStatus: r.project_status,
   leadUserId: r.lead_user_id,
   startDate: r.start_date,
@@ -293,6 +324,7 @@ const mapAction = (r: Rows["actions"]["Row"]): Action => ({
   labels: r.labels ?? [],
   notStartedSince: r.not_started_since,
   archivedAt: r.archived_at,
+  deletedAt: r.deleted_at,
   createdAt: r.created_at,
   updatedAt: r.updated_at,
 });
@@ -308,6 +340,7 @@ const mapWaiting = (r: Rows["waiting_items"]["Row"]): WaitingItem => ({
   dueBy: r.due_by,
   status: r.status,
   notes: r.notes,
+  deletedAt: r.deleted_at,
   createdBy: r.created_by,
   createdAt: r.created_at,
   updatedAt: r.updated_at,
@@ -326,6 +359,7 @@ const mapInbox = (r: Rows["inbox_items"]["Row"]): InboxItem => ({
   externalId: r.external_id,
   externalUrl: r.external_url,
   promotedAt: r.promoted_at,
+  deletedAt: r.deleted_at,
   createdBy: r.created_by,
   createdAt: r.created_at,
   updatedAt: r.updated_at,
@@ -444,6 +478,7 @@ interface AppState {
   addWbsNode: (node: WbsNode) => void;
   updateWbsNode: (id: string, updates: Partial<WbsNode>) => void;
   deleteWbsNode: (id: string) => void;
+  restoreWbsNode: (id: string) => void;
 
   // Actions
   addAction: (action: Action) => void;
@@ -454,6 +489,7 @@ interface AppState {
   completeAction: (id: string) => void;
   cancelAction: (id: string) => void;
   deleteAction: (id: string) => void;
+  restoreAction: (id: string) => void;
   bulkUpdateActions: (ids: string[], updates: Partial<Action>) => void;
   // Bulk terminal-status helpers. Fan-in aware: completing A+B together
   // unblocks C even though completing A alone wouldn't have.
@@ -471,6 +507,7 @@ interface AppState {
   addWaitingItem: (item: WaitingItem) => void;
   updateWaitingItem: (id: string, updates: Partial<WaitingItem>) => void;
   deleteWaitingItem: (id: string) => void;
+  restoreWaitingItem: (id: string) => void;
   delegateAction: (actionId: string, params: { fromUserId?: string | null; fromWhomText?: string | null }) => void;
   takeBackWaiting: (id: string) => void;
 
@@ -480,6 +517,7 @@ interface AppState {
   updateInboxItem: (id: string, updates: Partial<InboxItem>) => void;
   bulkUpdateInboxItems: (ids: string[], updates: Partial<InboxItem>) => void;
   deleteInboxItem: (id: string) => void;
+  restoreInboxItem: (id: string) => void;
   bulkDeleteInboxItems: (ids: string[]) => void;
   promoteInboxToActions: (ids: string[]) => void;
   bulkAddActions: (actions: Action[]) => void;
@@ -628,17 +666,21 @@ export const useAppStore = create<AppState>()((set, get) => ({
       { data: sourceRows },
       { data: gatheredRow },
     ] = await Promise.all([
-      supabase.from("wbs_nodes").select("*").eq("organisation_id", orgId).is("archived_at", null),
+      supabase.from("wbs_nodes")
+        .select("*").eq("organisation_id", orgId)
+        .is("archived_at", null).is("deleted_at", null),
       supabase.from("wbs_node_dependencies").select("*").eq("organisation_id", orgId),
       supabase.from("actions")
-        .select("*").eq("organisation_id", orgId).is("archived_at", null)
+        .select("*").eq("organisation_id", orgId)
+        .is("archived_at", null).is("deleted_at", null)
         .order("created_at", { ascending: false }).limit(ROW_LIMIT),
       supabase.from("action_dependencies").select("*").eq("organisation_id", orgId),
       supabase.from("waiting_items")
-        .select("*").eq("organisation_id", orgId)
+        .select("*").eq("organisation_id", orgId).is("deleted_at", null)
         .order("created_at", { ascending: false }).limit(ROW_LIMIT),
       supabase.from("inbox_items")
-        .select("*").eq("organisation_id", orgId).is("promoted_to_action_id", null)
+        .select("*").eq("organisation_id", orgId)
+        .is("promoted_to_action_id", null).is("deleted_at", null)
         .order("created_at", { ascending: false }).limit(ROW_LIMIT),
       supabase.from("routines").select("*").eq("organisation_id", orgId).eq("owner_user_id", uid),
       supabase.from("routine_completions").select("*").eq("organisation_id", orgId).eq("user_id", uid),
@@ -738,14 +780,75 @@ export const useAppStore = create<AppState>()((set, get) => ({
     );
   },
   deleteWbsNode: (id) => {
-    const before = get().wbsNodes.find((n) => n.id === id);
-    set((s) => ({ wbsNodes: s.wbsNodes.filter((n) => n.id !== id) }));
-    // FK ON DELETE CASCADE handles dependent rows on the server. Local
-    // reconciliation: refetch on rollback, or trust the next loadAllData.
+    // Soft delete: stamp deleted_at on this node + every descendant so the
+    // whole subtree disappears together. Polymorphic children (task_links,
+    // attachments, comments) stay intact and resurface on restore.
+    const s = get();
+    const target = s.wbsNodes.find((n) => n.id === id);
+    if (!target) return;
+
+    const descendantIds = collectDescendants(s.wbsNodes, id);
+    descendantIds.add(id);
+
+    const now = new Date().toISOString();
+    const beforeSnapshot = s.wbsNodes
+      .filter((n) => descendantIds.has(n.id))
+      .map((n) => ({ id: n.id, deletedAt: n.deletedAt }));
+
+    set((state) => ({
+      wbsNodes: state.wbsNodes.map((n) =>
+        descendantIds.has(n.id) ? { ...n, deletedAt: now } : n,
+      ),
+    }));
+
     runWrite(
       "WBS node could not be deleted",
-      supabase.from("wbs_nodes").delete().eq("id", id),
-      before ? () => set((s) => ({ wbsNodes: [...s.wbsNodes, before] })) : undefined,
+      supabase.from("wbs_nodes").update({ deleted_at: now }).in("id", [...descendantIds]),
+      () => set((state) => ({
+        wbsNodes: state.wbsNodes.map((n) => {
+          const prev = beforeSnapshot.find((b) => b.id === n.id);
+          return prev ? { ...n, deletedAt: prev.deletedAt } : n;
+        }),
+      })),
+    );
+    const subtreeSize = descendantIds.size;
+    toast.success(
+      subtreeSize > 1 ? `Deleted "${target.name}" and ${subtreeSize - 1} descendant(s)` : `Deleted "${target.name}"`,
+      {
+        duration: 7000,
+        action: {
+          label: "Undo",
+          onClick: () => {
+            // Restore the whole subtree by clearing deleted_at on every id
+            // we just stamped.
+            const ids = [...descendantIds];
+            set((state) => ({
+              wbsNodes: state.wbsNodes.map((n) =>
+                ids.includes(n.id) ? { ...n, deletedAt: null } : n,
+              ),
+            }));
+            runWrite(
+              "WBS subtree could not be restored",
+              supabase.from("wbs_nodes").update({ deleted_at: null }).in("id", ids),
+            );
+          },
+        },
+      },
+    );
+  },
+
+  restoreWbsNode: (id) => {
+    const node = get().wbsNodes.find((n) => n.id === id);
+    if (!node) return;
+    set((s) => ({
+      wbsNodes: s.wbsNodes.map((n) => (n.id === id ? { ...n, deletedAt: null } : n)),
+    }));
+    runWrite(
+      "WBS node could not be restored",
+      supabase.from("wbs_nodes").update({ deleted_at: null }).eq("id", id),
+      () => set((s) => ({
+        wbsNodes: s.wbsNodes.map((n) => (n.id === id ? { ...n, deletedAt: node.deletedAt } : n)),
+      })),
     );
   },
 
@@ -796,11 +899,27 @@ export const useAppStore = create<AppState>()((set, get) => ({
 
   deleteAction: (id) => {
     const before = get().actions.find((a) => a.id === id);
+    if (!before) return;
+    const now = new Date().toISOString();
     set((s) => ({ actions: s.actions.filter((a) => a.id !== id) }));
     runWrite(
       "Action could not be deleted",
-      supabase.from("actions").delete().eq("id", id),
-      before ? () => set((s) => ({ actions: [...s.actions, before] })) : undefined,
+      supabase.from("actions").update({ deleted_at: now }).eq("id", id),
+      () => set((s) => ({ actions: [...s.actions, before] })),
+    );
+    toast.success("Action deleted", {
+      duration: 7000,
+      action: { label: "Undo", onClick: () => get().restoreAction(id) },
+    });
+  },
+
+  restoreAction: (id) => {
+    set((s) => ({
+      actions: s.actions.map((a) => (a.id === id ? { ...a, deletedAt: null } : a)),
+    }));
+    runWrite(
+      "Action could not be restored",
+      supabase.from("actions").update({ deleted_at: null }).eq("id", id),
     );
   },
   bulkUpdateActions: (ids, updates) => {
@@ -822,10 +941,11 @@ export const useAppStore = create<AppState>()((set, get) => ({
 
   bulkDeleteActions: (ids) => {
     const before = get().actions.filter((a) => ids.includes(a.id));
+    const now = new Date().toISOString();
     set((s) => ({ actions: s.actions.filter((a) => !ids.includes(a.id)) }));
     runWrite(
       "Bulk action delete could not be saved",
-      supabase.from("actions").delete().in("id", ids),
+      supabase.from("actions").update({ deleted_at: now }).in("id", ids),
       before.length > 0 ? () => set((s) => ({ actions: [...s.actions, ...before] })) : undefined,
     );
   },
@@ -921,11 +1041,27 @@ export const useAppStore = create<AppState>()((set, get) => ({
   },
   deleteWaitingItem: (id) => {
     const before = get().waitingItems.find((w) => w.id === id);
+    if (!before) return;
+    const now = new Date().toISOString();
     set((s) => ({ waitingItems: s.waitingItems.filter((w) => w.id !== id) }));
     runWrite(
       "Waiting item could not be deleted",
-      supabase.from("waiting_items").delete().eq("id", id),
-      before ? () => set((s) => ({ waitingItems: [...s.waitingItems, before] })) : undefined,
+      supabase.from("waiting_items").update({ deleted_at: now }).eq("id", id),
+      () => set((s) => ({ waitingItems: [...s.waitingItems, before] })),
+    );
+    toast.success("Waiting item deleted", {
+      duration: 7000,
+      action: { label: "Undo", onClick: () => get().restoreWaitingItem(id) },
+    });
+  },
+
+  restoreWaitingItem: (id) => {
+    set((s) => ({
+      waitingItems: s.waitingItems.map((w) => (w.id === id ? { ...w, deletedAt: null } : w)),
+    }));
+    runWrite(
+      "Waiting item could not be restored",
+      supabase.from("waiting_items").update({ deleted_at: null }).eq("id", id),
     );
   },
 
@@ -1130,21 +1266,40 @@ export const useAppStore = create<AppState>()((set, get) => ({
   },
   deleteInboxItem: (id) => {
     const before = get().inboxItems.find((i) => i.id === id);
+    if (!before) return;
+    const now = new Date().toISOString();
     set((s) => ({ inboxItems: s.inboxItems.filter((i) => i.id !== id) }));
-    // The DB BEFORE DELETE trigger writes a 'deleted' inbox_item_event with
-    // the snapshot — no app-side event-log call needed any more.
+    // The pre-existing inbox_item_events BEFORE-DELETE trigger doesn't fire
+    // on soft delete (no DELETE statement). If we want a "deleted" event
+    // logged, the audit_log from Phase 1.1 already captures the UPDATE.
     runWrite(
       "Inbox item could not be deleted",
-      supabase.from("inbox_items").delete().eq("id", id),
-      before ? () => set((s) => ({ inboxItems: [...s.inboxItems, before] })) : undefined,
+      supabase.from("inbox_items").update({ deleted_at: now }).eq("id", id),
+      () => set((s) => ({ inboxItems: [...s.inboxItems, before] })),
+    );
+    toast.success("Inbox item deleted", {
+      duration: 7000,
+      action: { label: "Undo", onClick: () => get().restoreInboxItem(id) },
+    });
+  },
+
+  restoreInboxItem: (id) => {
+    set((s) => ({
+      inboxItems: s.inboxItems.map((i) => (i.id === id ? { ...i, deletedAt: null } : i)),
+    }));
+    runWrite(
+      "Inbox item could not be restored",
+      supabase.from("inbox_items").update({ deleted_at: null }).eq("id", id),
     );
   },
+
   bulkDeleteInboxItems: (ids) => {
     const before = get().inboxItems.filter((i) => ids.includes(i.id));
+    const now = new Date().toISOString();
     set((s) => ({ inboxItems: s.inboxItems.filter((i) => !ids.includes(i.id)) }));
     runWrite(
       "Bulk inbox delete could not be saved",
-      supabase.from("inbox_items").delete().in("id", ids),
+      supabase.from("inbox_items").update({ deleted_at: now }).in("id", ids),
       before.length > 0 ? () => set((s) => ({ inboxItems: [...s.inboxItems, ...before] })) : undefined,
     );
   },

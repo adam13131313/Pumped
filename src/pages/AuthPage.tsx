@@ -14,6 +14,7 @@ export default function AuthPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [signupSentTo, setSignupSentTo] = useState<string | null>(null);
 
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,18 +43,59 @@ export default function AuthPage() {
       const { error } = await supabase.auth.signUp({
         email,
         password,
-        options: { emailRedirectTo: window.location.origin },
+        options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
       });
       if (error) {
         toast.error("Sign up failed", { description: error.message });
       } else {
-        toast.success("Check your email", {
-          description: "We've sent you a confirmation link to verify your account.",
-        });
+        setSignupSentTo(email);
       }
     }
     setLoading(false);
   };
+
+  if (signupSentTo) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background px-4">
+        <div className="w-full max-w-md space-y-6">
+          <div className="text-center space-y-3">
+            <Link to="/landing" aria-label="Back to home" className="inline-block">
+              <img src="/logo-navbar-dark.png" alt="Pumped" className="mx-auto h-10 w-auto object-contain" />
+            </Link>
+          </div>
+          <Card className="border-border shadow-lg">
+            <CardHeader>
+              <CardTitle className="text-lg">Check your inbox</CardTitle>
+              <CardDescription>
+                We sent a confirmation link to <strong>{signupSentTo}</strong>.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm text-muted-foreground">
+              <p>
+                Click the link in the email to finish signing up. You'll be brought back here and
+                signed in automatically.
+              </p>
+              <p className="text-xs">
+                Don't see it? Check your spam folder, or wait a minute and refresh your inbox.
+              </p>
+            </CardContent>
+            <CardFooter className="flex flex-col gap-2">
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => {
+                  setSignupSentTo(null);
+                  setIsLogin(true);
+                }}
+              >
+                Back to sign in
+              </Button>
+            </CardFooter>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   if (isForgot) {
     return (

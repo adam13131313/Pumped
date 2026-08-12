@@ -20,6 +20,7 @@ import SettingsPage from "@/pages/SettingsPage";
 import IntegrationsPage from "@/pages/IntegrationsPage";
 
 import AuthPage from "@/pages/AuthPage";
+import AuthCallback from "@/pages/AuthCallback";
 import ResetPasswordPage from "@/pages/ResetPasswordPage";
 import Landing from "@/pages/Landing";
 import NotFound from "./pages/NotFound";
@@ -106,6 +107,7 @@ const App = () => (
             <Routes>
               <Route path="/landing" element={<Landing />} />
               <Route path="/auth" element={<AuthRoute />} />
+              <Route path="/auth/callback" element={<AuthCallback />} />
               <Route path="/reset-password" element={<ResetPasswordPage />} />
               <Route path="/*" element={<ProtectedRoutes />} />
             </Routes>

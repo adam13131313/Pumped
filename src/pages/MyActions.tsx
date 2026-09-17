@@ -12,12 +12,13 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { LayoutList, Columns3, Plus, Pencil, Target, Trash2, X, CheckSquare, Filter, Sparkles, Check, Loader2 } from "lucide-react";
+import { LayoutList, Columns3, Plus, Pencil, Target, Trash2, X, CheckSquare, Filter, Sparkles, Check, Loader2, CalendarDays } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { nodePath } from "@/components/NodePicker";
+import { NodePicker, nodePath } from "@/components/NodePicker";
 
 // Kanban only renders the active-flow statuses (not_started → … → complete).
 // Cards in `deferred` or `cancelled` are filtered out of kanban view by
@@ -139,6 +140,26 @@ export default function MyActions() {
   const handleBulkPriorityChange = (priority: ActionPriority) => {
     bulkUpdateActions([...selected], { priority });
     toast.success(`${selected.size} task(s) updated to "${PRIORITY_LABEL[priority]}" priority`);
+    clearSelection();
+  };
+
+  const [bulkDueDate, setBulkDueDate] = useState("");
+  const [dueDatePopoverOpen, setDueDatePopoverOpen] = useState(false);
+
+  const handleBulkDueDate = (dueDate: string | null) => {
+    const count = selected.size;
+    bulkUpdateActions([...selected], { dueDate });
+    toast.success(dueDate ? `${count} task(s) due ${dueDate}` : `Due date cleared on ${count} task(s)`);
+    setBulkDueDate("");
+    setDueDatePopoverOpen(false);
+    clearSelection();
+  };
+
+  const handleBulkNodeChange = (nodeId: string | null) => {
+    if (!nodeId) return;
+    const count = selected.size;
+    bulkUpdateActions([...selected], { wbsNodeId: nodeId });
+    toast.success(`${count} task(s) linked to ${nodePath(wbsNodes, nodeId).map((n) => n.name).join(" › ") || "node"}`);
     clearSelection();
   };
 
@@ -347,7 +368,7 @@ export default function MyActions() {
       </div>
 
       {selected.size > 0 && (
-        <div className="flex items-center gap-3 rounded-lg border bg-accent/50 p-3">
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-accent/50 p-3">
           <div className="flex items-center gap-2">
             <CheckSquare className="h-4 w-4 text-primary" />
             <span className="text-sm font-medium">{selected.size} selected</span>
@@ -373,6 +394,36 @@ export default function MyActions() {
               ))}
             </SelectContent>
           </Select>
+          <Popover open={dueDatePopoverOpen} onOpenChange={setDueDatePopoverOpen}>
+            <PopoverTrigger asChild>
+              <Button size="sm" variant="outline" className="h-8 text-xs">
+                <CalendarDays className="mr-1 h-3.5 w-3.5" /> Set due date
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-3 space-y-2" align="start">
+              <Input
+                type="date"
+                value={bulkDueDate}
+                onChange={(e) => setBulkDueDate(e.target.value)}
+                className="h-8 w-44"
+              />
+              <div className="flex gap-2">
+                <Button size="sm" className="h-7 text-xs" disabled={!bulkDueDate} onClick={() => handleBulkDueDate(bulkDueDate)}>
+                  Apply
+                </Button>
+                <Button size="sm" variant="ghost" className="h-7 text-xs text-muted-foreground" onClick={() => handleBulkDueDate(null)}>
+                  Clear due date
+                </Button>
+              </div>
+            </PopoverContent>
+          </Popover>
+          <div className="w-[190px]">
+            <NodePicker
+              value={null}
+              onChange={handleBulkNodeChange}
+              placeholder="Link to WBS…"
+            />
+          </div>
           <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => {
             const ids = [...selected];
             ids.forEach((id) => addToday(id));

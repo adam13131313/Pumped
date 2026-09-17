@@ -114,6 +114,7 @@ ${nodeRule}
 
 Rules for proposedNodes:
 - Only propose new nodes when the text instructs it or clearly names a container that does not exist yet. If existing nodes fit, use them — do not duplicate. Default: propose nothing ("proposedNodes": []).
+- NEVER propose a node whose name matches an existing node of the same type in the same place in the hierarchy — reference the existing node instead: its id as "parentId" for proposed children, or as the task's "wbsNodeId". E.g. if the text says "put these in project X with work package Y" and project X already exists, propose ONLY work package Y with parentId = X's id.
 - WBS hierarchy: a portfolio may contain sub-portfolios, programmes, or projects. A programme may contain projects. A project contains work packages. Work packages hold the tasks.
 - A parent is OPTIONAL at every level: a project (or programme, or portfolio) can stand alone with both parentId and parentKey null. If the text does not name a parent, leave the top proposed node at root — do NOT invent a wrapper.
 - Each proposed node sets AT MOST ONE of parentId (existing node) / parentKey (proposed node). A work_package's parent must be a project.

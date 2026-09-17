@@ -1,5 +1,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
+// v2: calls the Gemini API directly (GEMINI_API_KEY secret). v1 went through
+// the Lovable AI gateway, which this project no longer uses; the model
+// (gemini-2.5-flash) is unchanged. User-facing errors stay generic — provider
+// details are logged server-side only.
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -22,12 +27,20 @@ function uint8ToBase64(bytes: Uint8Array): string {
 const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
 const ALLOWED_MIME_PREFIXES = ["audio/"];
 
+const GEMINI_MODEL = "gemini-2.5-flash";
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
+    if (!GEMINI_API_KEY) {
+      console.error("transcribe-audio: GEMINI_API_KEY secret is not set");
+      return new Response(
+        JSON.stringify({ error: "Voice transcription isn't configured yet." }),
+        { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
 
     const formData = await req.formData();
     const audioFile = formData.get("audio") as File;
@@ -52,57 +65,65 @@ serve(async (req) => {
     const arrayBuffer = await audioFile.arrayBuffer();
     const base64 = uint8ToBase64(new Uint8Array(arrayBuffer));
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          {
-            role: "user",
-            content: [
-              { type: "text", text: "Transcribe this audio recording accurately. Return ONLY the transcription text, nothing else. If the audio is unclear, do your best to transcribe what you can hear." },
-              {
-                type: "input_audio",
-                input_audio: {
-                  data: base64,
-                  format: mimeType.includes("wav") ? "wav" : mimeType.includes("mp3") ? "mp3" : "wav",
+    // MediaRecorder emits e.g. "audio/webm;codecs=opus" — Gemini wants the bare type.
+    const bareMime = mimeType.split(";")[0].trim();
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
+      {
+        method: "POST",
+        headers: {
+          "x-goog-api-key": GEMINI_API_KEY,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [
+                {
+                  text:
+                    "Transcribe this audio recording accurately. Return ONLY the transcription text, nothing else. If the audio is unclear, do your best to transcribe what you can hear.",
                 },
-              },
-            ],
-          },
-        ],
-      }),
-    });
+                { inline_data: { mime_type: bareMime, data: base64 } },
+              ],
+            },
+          ],
+        }),
+      },
+    );
 
     if (!response.ok) {
+      const t = await response.text();
+      console.error("transcribe-audio provider error:", response.status, t);
       if (response.status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again." }), {
+        return new Response(JSON.stringify({ error: "Transcription is busy right now. Please try again in a moment." }), {
           status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      if (response.status === 402) {
-        return new Response(JSON.stringify({ error: "AI usage limit reached." }), {
-          status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      const t = await response.text();
-      console.error("Transcription error:", response.status, t);
-      throw new Error("Transcription failed");
+      return new Response(JSON.stringify({ error: "Transcription failed. Please try again." }), {
+        status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const data = await response.json();
-    const transcript = data.choices?.[0]?.message?.content ?? "";
+    const transcript: string = (data.candidates?.[0]?.content?.parts ?? [])
+      .map((p: { text?: string }) => p.text ?? "")
+      .join("")
+      .trim();
+
+    if (!transcript) {
+      console.error("transcribe-audio: empty transcript in provider response", JSON.stringify(data).slice(0, 500));
+      return new Response(JSON.stringify({ error: "Could not hear anything in that recording. Please try again." }), {
+        status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     return new Response(JSON.stringify({ transcript }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
     console.error("transcribe-audio error:", e);
-    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {
+    return new Response(JSON.stringify({ error: "Transcription failed. Please try again." }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }

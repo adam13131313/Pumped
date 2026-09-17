@@ -134,13 +134,17 @@ export default function InboxPage() {
   };
 
   // Validates model-proposed nodes against the same hierarchy rules the DB
-  // trigger enforces, and re-keys them so batches from successive extractions
-  // can't collide. Returns the sanitized drafts plus the original-key → new-key
-  // map needed to rewrite task references.
-  const normalizeProposedNodes = (raw: unknown[]): { nodes: ProposedNodeDraft[]; keyMap: Map<string, string> } => {
-    const keyMap = new Map<string, string>();
+  // trigger enforces, re-keys them so batches from successive extractions
+  // can't collide, and DEDUPES against the existing tree: a proposal whose
+  // name, type, and parent match an existing node maps onto that node instead
+  // of creating a duplicate. Processes parents before children so a child can
+  // dedupe under a parent that itself resolved to an existing node.
+  const normalizeProposedNodes = (raw: unknown[]): {
+    nodes: ProposedNodeDraft[];
+    keyMap: Map<string, string>;        // orig key → new client key (genuinely new)
+    existingIdByKey: Map<string, string>; // orig key → existing node id (deduped)
+  } => {
     const byOrigKey = new Map<string, { nodeType: NodeType; parentId: string | null; parentKey: string | null; name: string }>();
-
     for (const entry of raw || []) {
       const r = (entry ?? {}) as Record<string, unknown>;
       const origKey = typeof r.key === "string" ? r.key : "";
@@ -151,55 +155,90 @@ export default function InboxPage() {
         name,
         nodeType,
         parentId: typeof r.parentId === "string" ? r.parentId : null,
-        parentKey: typeof r.parentKey === "string" ? r.parentKey : null,
+        parentKey: typeof r.parentKey === "string" && r.parentKey !== origKey ? r.parentKey : null,
       });
-      keyMap.set(origKey, crypto.randomUUID());
     }
 
-    const existingById = new Map(wbsNodes.filter((n) => !n.archivedAt && !n.deletedAt).map((n) => [n.id, n]));
+    const existingActive = wbsNodes.filter((n) => !n.archivedAt && !n.deletedAt);
+    const existingById = new Map(existingActive.map((n) => [n.id, n]));
 
+    const keyMap = new Map<string, string>();
+    const existingIdByKey = new Map<string, string>();
     const nodes: ProposedNodeDraft[] = [];
-    for (const [origKey, d] of byOrigKey) {
-      let parentId: string | null = null;
-      let parentKey: string | null = null;
-      let parentType: NodeType | null = null;
+    const pending = new Map(byOrigKey);
 
-      if (d.parentKey && byOrigKey.has(d.parentKey) && d.parentKey !== origKey) {
-        parentKey = keyMap.get(d.parentKey)!;
-        parentType = byOrigKey.get(d.parentKey)!.nodeType;
-      } else if (d.parentId && existingById.has(d.parentId)) {
-        parentId = d.parentId;
-        parentType = existingById.get(d.parentId)!.nodeType;
-      }
-      // Illegal parentage → detach to root rather than dropping the node.
-      if (parentType && !isValidParent(parentType, d.nodeType)) {
-        parentId = null;
-        parentKey = null;
-      }
-      nodes.push({ key: keyMap.get(origKey)!, name: d.name, nodeType: d.nodeType, parentId, parentKey });
-    }
+    while (pending.size > 0) {
+      let processedAny = false;
+      for (const [origKey, d] of [...pending]) {
+        let parentId: string | null = null;
+        let parentKey: string | null = null;
+        let parentType: NodeType | null = null;
 
-    // Break any parentKey cycles the model produced: walk up; on revisit, detach.
-    const byKey = new Map(nodes.map((n) => [n.key, n]));
-    for (const n of nodes) {
-      const seen = new Set<string>([n.key]);
-      let cur = n;
-      while (cur.parentKey) {
-        if (seen.has(cur.parentKey)) { n.parentKey = null; break; }
-        seen.add(cur.parentKey);
-        cur = byKey.get(cur.parentKey)!;
+        if (d.parentKey && byOrigKey.has(d.parentKey)) {
+          if (existingIdByKey.has(d.parentKey)) {
+            parentId = existingIdByKey.get(d.parentKey)!;
+            parentType = existingById.get(parentId)?.nodeType ?? null;
+          } else if (keyMap.has(d.parentKey)) {
+            parentKey = keyMap.get(d.parentKey)!;
+            parentType = byOrigKey.get(d.parentKey)!.nodeType;
+          } else {
+            continue; // parent proposal not processed yet
+          }
+        } else if (d.parentId && existingById.has(d.parentId)) {
+          parentId = d.parentId;
+          parentType = existingById.get(d.parentId)!.nodeType;
+        }
+        // Illegal parentage → detach to root rather than dropping the node.
+        if (parentType && !isValidParent(parentType, d.nodeType)) {
+          parentId = null;
+          parentKey = null;
+        }
+
+        // Dedupe (only meaningful when the parent is an existing node or root —
+        // a genuinely-new parent can't already have children).
+        if (!parentKey) {
+          const match = existingActive.find((n) =>
+            n.nodeType === d.nodeType &&
+            (n.parentId ?? null) === (parentId ?? null) &&
+            n.name.trim().toLowerCase() === d.name.toLowerCase(),
+          );
+          if (match) {
+            existingIdByKey.set(origKey, match.id);
+            pending.delete(origKey);
+            processedAny = true;
+            continue;
+          }
+        }
+
+        const newKey = crypto.randomUUID();
+        keyMap.set(origKey, newKey);
+        nodes.push({ key: newKey, name: d.name, nodeType: d.nodeType, parentId, parentKey });
+        pending.delete(origKey);
+        processedAny = true;
+      }
+      // Cycle or dangling parentKey: detach the stuck remainder to root and retry.
+      if (!processedAny) {
+        for (const d of pending.values()) d.parentKey = null;
       }
     }
-    return { nodes, keyMap };
+    return { nodes, keyMap, existingIdByKey };
   };
 
-  const normalizeProposed = (raw: unknown[], nodeKeyMap: Map<string, string>): ProposedDraft[] =>
+  const normalizeProposed = (
+    raw: unknown[],
+    nodeKeyMap: Map<string, string>,
+    existingIdByKey: Map<string, string>,
+  ): ProposedDraft[] =>
     (raw || []).map((t) => {
       const r = (t ?? {}) as Record<string, unknown>;
-      const wbsNodeId = typeof r.wbsNodeId === "string" ? r.wbsNodeId : null;
-      const wbsNodeKey = !wbsNodeId && typeof r.wbsNodeKey === "string"
-        ? nodeKeyMap.get(r.wbsNodeKey) ?? null
-        : null;
+      let wbsNodeId = typeof r.wbsNodeId === "string" ? r.wbsNodeId : null;
+      let wbsNodeKey: string | null = null;
+      const rawKey = typeof r.wbsNodeKey === "string" ? r.wbsNodeKey : null;
+      if (!wbsNodeId && rawKey) {
+        // A deduped proposal resolves straight to the existing node's id.
+        wbsNodeId = existingIdByKey.get(rawKey) ?? null;
+        if (!wbsNodeId) wbsNodeKey = nodeKeyMap.get(rawKey) ?? null;
+      }
       return {
         task: String(r.task ?? ""),
         priority: priorityFromAny(r.priority),
@@ -229,9 +268,9 @@ export default function InboxPage() {
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-      const { nodes, keyMap } = normalizeProposedNodes(Array.isArray(data.proposedNodes) ? data.proposedNodes : []);
+      const { nodes, keyMap, existingIdByKey } = normalizeProposedNodes(Array.isArray(data.proposedNodes) ? data.proposedNodes : []);
       setProposedNodes((prev) => [...prev, ...nodes]);
-      setProposedTasks((prev) => [...prev, ...normalizeProposed(data.tasks, keyMap)]);
+      setProposedTasks((prev) => [...prev, ...normalizeProposed(data.tasks, keyMap, existingIdByKey)]);
       setSummary(data.summary || "");
       setShowPreview(true);
     } catch (e) {
@@ -326,9 +365,11 @@ export default function InboxPage() {
           body: formData,
         },
       );
-      if (!resp.ok) throw new Error("Transcription failed");
-      const data = await resp.json();
-      if (data.error) throw new Error(data.error);
+      // Read the body before checking status — the function returns a clean,
+      // user-facing message in `error` even on non-2xx responses.
+      const data = await resp.json().catch(() => null);
+      if (data?.error) throw new Error(data.error);
+      if (!resp.ok || !data) throw new Error("Transcription failed");
       const transcript = data.transcript;
       setTextInput(transcript);
       toast.success("Audio transcribed!");

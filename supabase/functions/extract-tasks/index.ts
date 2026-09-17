@@ -119,6 +119,7 @@ Rules for proposedNodes:
 - Each proposed node sets AT MOST ONE of parentId (existing node) / parentKey (proposed node). A work_package's parent must be a project.
 - Keys must be unique strings like "new-1", "new-2". Tasks reference proposed nodes via "wbsNodeKey" and must set at most one of wbsNodeId / wbsNodeKey.
 - Attach tasks to the most specific fitting node (usually a work package).
+- If the instructions name a single destination work package and do not explicitly divide the tasks between containers, attach ALL extracted tasks to that work package — never spread them across parent levels on your own judgement.
 
 - Return ONLY the JSON, no markdown fences.
 - Source type: ${sourceType || "unknown"}`;

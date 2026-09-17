@@ -65,6 +65,27 @@ const nodeTypeFromAny = (raw: unknown): NodeType | null => {
   return s === "portfolio" || s === "programme" || s === "project" || s === "work_package" ? s : null;
 };
 
+// Minimal typing for the Web Speech API — not present in lib.dom for this TS
+// target. Chrome/Edge expose webkitSpeechRecognition; Safari 14.5+ both.
+interface SpeechRecognitionEventLike {
+  resultIndex: number;
+  results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }>;
+}
+interface SpeechRecognitionLike {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  onresult: ((e: SpeechRecognitionEventLike) => void) | null;
+  onerror: ((e: { error?: string }) => void) | null;
+  onend: (() => void) | null;
+  start(): void;
+  stop(): void;
+}
+const getSpeechRecognitionCtor = (): (new () => SpeechRecognitionLike) | null => {
+  const w = window as unknown as Record<string, unknown>;
+  return (w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null) as (new () => SpeechRecognitionLike) | null;
+};
+
 const priorityFromAny = (raw: unknown): ActionPriority => {
   const s = String(raw ?? "").toLowerCase();
   return s === "high" || s === "low" ? s : "medium";
@@ -108,6 +129,8 @@ export default function InboxPage() {
   const [isTranscribing, setIsTranscribing] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const finalTranscriptRef = useRef("");
 
   const dragCounterRef = useRef(0);
 
@@ -318,6 +341,48 @@ export default function InboxPage() {
   };
 
   const startRecording = async () => {
+    // Preferred path: the browser's own speech recognition — live transcript,
+    // no server round-trip, no AI-provider account needed. The MediaRecorder +
+    // transcribe-audio path below stays as the fallback for browsers without
+    // Web Speech support (e.g. Firefox).
+    const SpeechRecognitionCtor = getSpeechRecognitionCtor();
+    if (SpeechRecognitionCtor) {
+      try {
+        const rec = new SpeechRecognitionCtor();
+        rec.lang = navigator.language || "en-GB";
+        rec.continuous = true;
+        rec.interimResults = true;
+        finalTranscriptRef.current = textInput.trim() ? textInput.trimEnd() + " " : "";
+        rec.onresult = (e) => {
+          let interim = "";
+          for (let i = e.resultIndex; i < e.results.length; i++) {
+            const r = e.results[i];
+            if (r.isFinal) finalTranscriptRef.current += r[0].transcript + " ";
+            else interim += r[0].transcript;
+          }
+          setTextInput((finalTranscriptRef.current + interim).trim());
+        };
+        rec.onerror = (e) => {
+          if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+            toast.error("Microphone access denied. Check browser permissions.");
+          } else if (e.error && e.error !== "no-speech" && e.error !== "aborted") {
+            toast.error("Voice capture hit a problem. Please try again.");
+          }
+        };
+        rec.onend = () => {
+          recognitionRef.current = null;
+          setIsRecording(false);
+          setTextInput(finalTranscriptRef.current.trim());
+        };
+        rec.start();
+        recognitionRef.current = rec;
+        setIsRecording(true);
+      } catch {
+        toast.error("Could not start voice capture");
+      }
+      return;
+    }
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, sampleRate: 44100 },
@@ -346,6 +411,10 @@ export default function InboxPage() {
   };
 
   const stopRecording = () => {
+    if (recognitionRef.current) {
+      recognitionRef.current.stop(); // onend finalises the transcript + state
+      return;
+    }
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
       mediaRecorderRef.current.stop();
     }
@@ -664,13 +733,15 @@ export default function InboxPage() {
                       <div className="h-2 w-2 rounded-full bg-destructive" /> Recording…
                     </div>
                   )}
-                  {textInput && !isRecording && !isTranscribing && (
+                  {textInput && !isTranscribing && (
                     <div className="space-y-2">
-                      <p className="text-sm font-medium">Transcript:</p>
-                      <Textarea value={textInput} onChange={(e) => setTextInput(e.target.value)} rows={4} />
-                      <Button onClick={() => extractTasks(textInput, "voice memo")} disabled={isExtracting}>
-                        {isExtracting ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Extracting…</> : <><Sparkles className="h-4 w-4 mr-2" />Extract Tasks</>}
-                      </Button>
+                      <p className="text-sm font-medium">{isRecording ? "Transcript (live):" : "Transcript:"}</p>
+                      <Textarea value={textInput} onChange={(e) => setTextInput(e.target.value)} rows={4} readOnly={isRecording} />
+                      {!isRecording && (
+                        <Button onClick={() => extractTasks(textInput, "voice memo")} disabled={isExtracting}>
+                          {isExtracting ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Extracting…</> : <><Sparkles className="h-4 w-4 mr-2" />Extract Tasks</>}
+                        </Button>
+                      )}
                     </div>
                   )}
                 </TabsContent>

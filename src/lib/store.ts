@@ -476,6 +476,15 @@ interface AppState {
 
   // WBS
   addWbsNode: (node: WbsNode) => void;
+  /**
+   * Insert a batch of WBS nodes in one atomic statement. Nodes MUST be ordered
+   * parents-before-children — the DB parent trigger resolves same-statement
+   * rows in order (verified against enforce_wbs_parent). Awaited so callers
+   * that create dependent rows (actions, inbox items) can sequence after it;
+   * fire-and-forget addWbsNode races the child past the parent. Returns false
+   * after rolling back local state on failure.
+   */
+  bulkAddWbsNodes: (nodes: WbsNode[]) => Promise<boolean>;
   updateWbsNode: (id: string, updates: Partial<WbsNode>) => void;
   deleteWbsNode: (id: string) => void;
   restoreWbsNode: (id: string) => void;
@@ -771,6 +780,35 @@ export const useAppStore = create<AppState>()((set, get) => ({
       }),
       () => set((s) => ({ wbsNodes: s.wbsNodes.filter((n) => n.id !== node.id) })),
     );
+  },
+  bulkAddWbsNodes: async (nodes) => {
+    if (nodes.length === 0) return true;
+    set((s) => ({ wbsNodes: [...s.wbsNodes, ...nodes] }));
+    const ids = new Set(nodes.map((n) => n.id));
+    try {
+      const { error } = await supabase.from("wbs_nodes").insert(nodes.map((node) => ({
+        id: node.id,
+        organisation_id: node.organisationId,
+        parent_id: node.parentId,
+        node_type: node.nodeType,
+        name: node.name,
+        description: node.description,
+        position: node.position,
+        project_status: node.projectStatus,
+        lead_user_id: node.leadUserId,
+        start_date: node.startDate,
+        due_date: node.dueDate,
+        rag_status: node.ragStatus,
+        blockers: node.blockers,
+        created_by: node.createdBy,
+      })));
+      if (error) throw error;
+      return true;
+    } catch (error) {
+      set((s) => ({ wbsNodes: s.wbsNodes.filter((n) => !ids.has(n.id)) }));
+      notifySaveError("WBS nodes could not be saved", error);
+      return false;
+    }
   },
   updateWbsNode: (id, updates) => {
     set((s) => ({ wbsNodes: s.wbsNodes.map((n) => (n.id === id ? { ...n, ...updates } : n)) }));

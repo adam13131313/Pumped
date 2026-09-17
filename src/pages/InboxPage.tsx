@@ -82,7 +82,7 @@ export default function InboxPage() {
   const bulkDeleteInboxItems = useAppStore((s) => s.bulkDeleteInboxItems);
   const promoteInboxToActions = useAppStore((s) => s.promoteInboxToActions);
   const bulkAddActions = useAppStore((s) => s.bulkAddActions);
-  const addWbsNode = useAppStore((s) => s.addWbsNode);
+  const bulkAddWbsNodes = useAppStore((s) => s.bulkAddWbsNodes);
   const wbsNodes = useAppStore((s) => s.wbsNodes);
   const currentOrg = useAppStore((s) => s.currentOrg);
   const currentMembership = useAppStore((s) => s.currentMembership);
@@ -95,6 +95,7 @@ export default function InboxPage() {
   const [proposedNodes, setProposedNodes] = useState<ProposedNodeDraft[]>([]);
   const [summary, setSummary] = useState("");
   const [showPreview, setShowPreview] = useState(false);
+  const [isAccepting, setIsAccepting] = useState(false);
   const [sourceLabel, setSourceLabel] = useState("notes");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [isDragging, setIsDragging] = useState(false);
@@ -365,13 +366,16 @@ export default function InboxPage() {
     return parts.join(" › ");
   };
 
-  // Creates the approved proposed nodes (parents before children) via the
-  // store's optimistic mutator and returns proposed-key → real node id.
-  const materializeProposedNodes = (): Map<string, string> => {
+  // Creates the approved proposed nodes in one atomic, awaited insert
+  // (parents ordered before children — the DB parent trigger requires it).
+  // Returns proposed-key → real node id, or null if the save failed, in which
+  // case the caller must not create rows that reference the nodes.
+  const materializeProposedNodes = async (): Promise<Map<string, string> | null> => {
     const created = new Map<string, string>();
     if (proposedNodes.length === 0 || !currentOrg) return created;
     const now = new Date().toISOString();
     const remaining = [...proposedNodes];
+    const ordered: WbsNode[] = [];
     while (remaining.length > 0) {
       const readyIdx = remaining.findIndex((n) => !n.parentKey || created.has(n.parentKey));
       // Orphaned parentKey (shouldn't happen post-normalization) → root.
@@ -379,7 +383,7 @@ export default function InboxPage() {
       remaining.splice(readyIdx === -1 ? 0 : readyIdx, 1);
       const id = crypto.randomUUID();
       created.set(node.key, id);
-      const wbsNode: WbsNode = {
+      ordered.push({
         id,
         organisationId: currentOrg.id,
         parentId: node.parentKey ? created.get(node.parentKey)! : node.parentId,
@@ -398,10 +402,10 @@ export default function InboxPage() {
         createdBy: currentMembership?.userId ?? null,
         createdAt: now,
         updatedAt: now,
-      };
-      addWbsNode(wbsNode);
+      });
     }
-    return created;
+    const ok = await bulkAddWbsNodes(ordered);
+    return ok ? created : null;
   };
 
   // Removing a proposed node cascades to its proposed descendants; tasks
@@ -426,12 +430,17 @@ export default function InboxPage() {
     setProposedNodes((prev) => prev.map((n) => (n.key === key ? { ...n, name } : n)));
   };
 
-  const acceptProposed = () => {
+  const acceptProposed = async () => {
     if (!currentOrg) {
       toast.error("No active organisation");
       return;
     }
-    const createdNodes = materializeProposedNodes();
+    if (isAccepting) return;
+    setIsAccepting(true);
+    const createdNodes = await materializeProposedNodes();
+    setIsAccepting(false);
+    // Node save failed (already toasted) — keep the preview so the user can retry.
+    if (createdNodes === null) return;
     const now = new Date().toISOString();
     const items: InboxItem[] = proposedTasks.map((t) => ({
       id: crypto.randomUUID(),
@@ -459,12 +468,17 @@ export default function InboxPage() {
     });
   };
 
-  const acceptAsActions = () => {
+  const acceptAsActions = async () => {
     if (!currentOrg) {
       toast.error("No active organisation");
       return;
     }
-    const createdNodes = materializeProposedNodes();
+    if (isAccepting) return;
+    setIsAccepting(true);
+    const createdNodes = await materializeProposedNodes();
+    setIsAccepting(false);
+    // Node save failed (already toasted) — keep the preview so the user can retry.
+    if (createdNodes === null) return;
     const now = new Date().toISOString();
     const newActions: Action[] = proposedTasks.map((t) => ({
       id: crypto.randomUUID(),
@@ -662,11 +676,11 @@ export default function InboxPage() {
               <CardTitle className="text-lg">Proposed Tasks ({proposedTasks.length})</CardTitle>
               <div className="flex gap-2 flex-wrap">
                 <Button size="sm" variant="ghost" onClick={cancelPreview}><X className="h-4 w-4 mr-1" />Cancel</Button>
-                <Button size="sm" variant="outline" onClick={acceptProposed} disabled={proposedTasks.length === 0}>
-                  <Check className="h-4 w-4 mr-1" />Add to Inbox
+                <Button size="sm" variant="outline" onClick={acceptProposed} disabled={proposedTasks.length === 0 || isAccepting}>
+                  {isAccepting ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Check className="h-4 w-4 mr-1" />}Add to Inbox
                 </Button>
-                <Button size="sm" onClick={acceptAsActions} disabled={proposedTasks.length === 0}>
-                  <ArrowRight className="h-4 w-4 mr-1" />Add as Actions
+                <Button size="sm" onClick={acceptAsActions} disabled={proposedTasks.length === 0 || isAccepting}>
+                  {isAccepting ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <ArrowRight className="h-4 w-4 mr-1" />}Add as Actions
                 </Button>
               </div>
             </div>

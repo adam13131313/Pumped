@@ -2,7 +2,7 @@ import { useState, useRef, useCallback, useEffect, DragEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useAppStore } from "@/lib/store";
 import { useFilteredData } from "@/hooks/useFilteredData";
-import type { ActionPriority, ActionStatus, InboxItem, Action } from "@/lib/types";
+import type { ActionPriority, ActionStatus, InboxItem, Action, NodeType, WbsNode } from "@/lib/types";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -22,6 +22,9 @@ import { NodePicker, nodePath } from "@/components/NodePicker";
 // v2 InboxPage. Replaces v1's project/workPackage string fields with
 // wbsNodeId UUID via NodePicker. CSV/XLSX upload is deferred (csvImport stub
 // throws until phase 4.5 lands the new mapper).
+// v3: the extractor can also honour structure instructions embedded in the
+// captured text — it proposes new WBS nodes (previewed, created on approval)
+// and assigns tasks to them via wbsNodeKey.
 
 const PRIORITY_LABEL: Record<ActionPriority, string> = { high: "High", medium: "Medium", low: "Low" };
 const PRIORITIES: ActionPriority[] = ["high", "medium", "low"];
@@ -33,9 +36,34 @@ interface ProposedDraft {
   startDate: string;
   dueDate: string;
   wbsNodeId: string | null;
+  wbsNodeKey: string | null; // reference into proposedNodes, mutually exclusive with wbsNodeId
   notes: string;
   labels: string[];
 }
+
+// A WBS node the extractor proposes to create (from instructions embedded in
+// the captured text). Nothing is written until the user approves the preview.
+interface ProposedNodeDraft {
+  key: string; // client-unique (re-keyed per extraction batch)
+  name: string;
+  nodeType: NodeType;
+  parentId: string | null; // existing node
+  parentKey: string | null; // another proposed node
+}
+
+// Mirrors the DB's enforce_wbs_parent trigger: parent must outrank child,
+// except portfolio → portfolio (sub-portfolios). Any type may sit at root.
+const NODE_LEVEL: Record<NodeType, number> = { portfolio: 4, programme: 3, project: 2, work_package: 1 };
+const NODE_TYPE_SHORT: Record<NodeType, string> = {
+  portfolio: "Portfolio", programme: "Programme", project: "Project", work_package: "Work Package",
+};
+const isValidParent = (parent: NodeType, child: NodeType) =>
+  (parent === "portfolio" && child === "portfolio") || NODE_LEVEL[parent] > NODE_LEVEL[child];
+
+const nodeTypeFromAny = (raw: unknown): NodeType | null => {
+  const s = String(raw ?? "").toLowerCase().replace(/\s+/g, "_");
+  return s === "portfolio" || s === "programme" || s === "project" || s === "work_package" ? s : null;
+};
 
 const priorityFromAny = (raw: unknown): ActionPriority => {
   const s = String(raw ?? "").toLowerCase();
@@ -54,6 +82,7 @@ export default function InboxPage() {
   const bulkDeleteInboxItems = useAppStore((s) => s.bulkDeleteInboxItems);
   const promoteInboxToActions = useAppStore((s) => s.promoteInboxToActions);
   const bulkAddActions = useAppStore((s) => s.bulkAddActions);
+  const addWbsNode = useAppStore((s) => s.addWbsNode);
   const wbsNodes = useAppStore((s) => s.wbsNodes);
   const currentOrg = useAppStore((s) => s.currentOrg);
   const currentMembership = useAppStore((s) => s.currentMembership);
@@ -63,6 +92,7 @@ export default function InboxPage() {
   const [textInput, setTextInput] = useState("");
   const [isExtracting, setIsExtracting] = useState(false);
   const [proposedTasks, setProposedTasks] = useState<ProposedDraft[]>([]);
+  const [proposedNodes, setProposedNodes] = useState<ProposedNodeDraft[]>([]);
   const [summary, setSummary] = useState("");
   const [showPreview, setShowPreview] = useState(false);
   const [sourceLabel, setSourceLabel] = useState("notes");
@@ -102,16 +132,81 @@ export default function InboxPage() {
     return path.map((n) => n.name).join(" › ");
   };
 
-  const normalizeProposed = (raw: unknown[]): ProposedDraft[] =>
+  // Validates model-proposed nodes against the same hierarchy rules the DB
+  // trigger enforces, and re-keys them so batches from successive extractions
+  // can't collide. Returns the sanitized drafts plus the original-key → new-key
+  // map needed to rewrite task references.
+  const normalizeProposedNodes = (raw: unknown[]): { nodes: ProposedNodeDraft[]; keyMap: Map<string, string> } => {
+    const keyMap = new Map<string, string>();
+    const byOrigKey = new Map<string, { nodeType: NodeType; parentId: string | null; parentKey: string | null; name: string }>();
+
+    for (const entry of raw || []) {
+      const r = (entry ?? {}) as Record<string, unknown>;
+      const origKey = typeof r.key === "string" ? r.key : "";
+      const name = String(r.name ?? "").trim();
+      const nodeType = nodeTypeFromAny(r.nodeType);
+      if (!origKey || !name || !nodeType || byOrigKey.has(origKey)) continue;
+      byOrigKey.set(origKey, {
+        name,
+        nodeType,
+        parentId: typeof r.parentId === "string" ? r.parentId : null,
+        parentKey: typeof r.parentKey === "string" ? r.parentKey : null,
+      });
+      keyMap.set(origKey, crypto.randomUUID());
+    }
+
+    const existingById = new Map(wbsNodes.filter((n) => !n.archivedAt && !n.deletedAt).map((n) => [n.id, n]));
+
+    const nodes: ProposedNodeDraft[] = [];
+    for (const [origKey, d] of byOrigKey) {
+      let parentId: string | null = null;
+      let parentKey: string | null = null;
+      let parentType: NodeType | null = null;
+
+      if (d.parentKey && byOrigKey.has(d.parentKey) && d.parentKey !== origKey) {
+        parentKey = keyMap.get(d.parentKey)!;
+        parentType = byOrigKey.get(d.parentKey)!.nodeType;
+      } else if (d.parentId && existingById.has(d.parentId)) {
+        parentId = d.parentId;
+        parentType = existingById.get(d.parentId)!.nodeType;
+      }
+      // Illegal parentage → detach to root rather than dropping the node.
+      if (parentType && !isValidParent(parentType, d.nodeType)) {
+        parentId = null;
+        parentKey = null;
+      }
+      nodes.push({ key: keyMap.get(origKey)!, name: d.name, nodeType: d.nodeType, parentId, parentKey });
+    }
+
+    // Break any parentKey cycles the model produced: walk up; on revisit, detach.
+    const byKey = new Map(nodes.map((n) => [n.key, n]));
+    for (const n of nodes) {
+      const seen = new Set<string>([n.key]);
+      let cur = n;
+      while (cur.parentKey) {
+        if (seen.has(cur.parentKey)) { n.parentKey = null; break; }
+        seen.add(cur.parentKey);
+        cur = byKey.get(cur.parentKey)!;
+      }
+    }
+    return { nodes, keyMap };
+  };
+
+  const normalizeProposed = (raw: unknown[], nodeKeyMap: Map<string, string>): ProposedDraft[] =>
     (raw || []).map((t) => {
       const r = (t ?? {}) as Record<string, unknown>;
+      const wbsNodeId = typeof r.wbsNodeId === "string" ? r.wbsNodeId : null;
+      const wbsNodeKey = !wbsNodeId && typeof r.wbsNodeKey === "string"
+        ? nodeKeyMap.get(r.wbsNodeKey) ?? null
+        : null;
       return {
         task: String(r.task ?? ""),
         priority: priorityFromAny(r.priority),
         status: statusFromAny(r.status),
         startDate: String(r.startDate ?? ""),
         dueDate: String(r.dueDate ?? ""),
-        wbsNodeId: typeof r.wbsNodeId === "string" ? r.wbsNodeId : null,
+        wbsNodeId,
+        wbsNodeKey,
         notes: String(r.notes ?? ""),
         labels: Array.isArray(r.labels) ? (r.labels as string[]) : [],
       };
@@ -133,7 +228,9 @@ export default function InboxPage() {
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-      setProposedTasks((prev) => [...prev, ...normalizeProposed(data.tasks)]);
+      const { nodes, keyMap } = normalizeProposedNodes(Array.isArray(data.proposedNodes) ? data.proposedNodes : []);
+      setProposedNodes((prev) => [...prev, ...nodes]);
+      setProposedTasks((prev) => [...prev, ...normalizeProposed(data.tasks, keyMap)]);
       setSummary(data.summary || "");
       setShowPreview(true);
     } catch (e) {
@@ -245,8 +342,88 @@ export default function InboxPage() {
   const resetPreviewState = () => {
     setShowPreview(false);
     setProposedTasks([]);
+    setProposedNodes([]);
     setSummary("");
     setTextInput("");
+  };
+
+  // Human-readable path for a proposed node: walks proposed parents, then the
+  // existing tree. e.g. "UK Life › UK finances".
+  const proposedNodePath = (key: string): string => {
+    const byKey = new Map(proposedNodes.map((n) => [n.key, n]));
+    const parts: string[] = [];
+    let cur = byKey.get(key);
+    while (cur) {
+      parts.unshift(cur.name || "(unnamed)");
+      if (cur.parentId) {
+        const prefix = nodeNameById(cur.parentId);
+        if (prefix) parts.unshift(prefix);
+        break;
+      }
+      cur = cur.parentKey ? byKey.get(cur.parentKey) : undefined;
+    }
+    return parts.join(" › ");
+  };
+
+  // Creates the approved proposed nodes (parents before children) via the
+  // store's optimistic mutator and returns proposed-key → real node id.
+  const materializeProposedNodes = (): Map<string, string> => {
+    const created = new Map<string, string>();
+    if (proposedNodes.length === 0 || !currentOrg) return created;
+    const now = new Date().toISOString();
+    const remaining = [...proposedNodes];
+    while (remaining.length > 0) {
+      const readyIdx = remaining.findIndex((n) => !n.parentKey || created.has(n.parentKey));
+      // Orphaned parentKey (shouldn't happen post-normalization) → root.
+      const node = readyIdx === -1 ? { ...remaining[0], parentKey: null } : remaining[readyIdx];
+      remaining.splice(readyIdx === -1 ? 0 : readyIdx, 1);
+      const id = crypto.randomUUID();
+      created.set(node.key, id);
+      const wbsNode: WbsNode = {
+        id,
+        organisationId: currentOrg.id,
+        parentId: node.parentKey ? created.get(node.parentKey)! : node.parentId,
+        nodeType: node.nodeType,
+        name: node.name.trim() || "Untitled",
+        description: "",
+        position: 0,
+        archivedAt: null,
+        deletedAt: null,
+        projectStatus: node.nodeType === "project" ? "active" : null,
+        leadUserId: null,
+        startDate: null,
+        dueDate: null,
+        ragStatus: null,
+        blockers: null,
+        createdBy: currentMembership?.userId ?? null,
+        createdAt: now,
+        updatedAt: now,
+      };
+      addWbsNode(wbsNode);
+    }
+    return created;
+  };
+
+  // Removing a proposed node cascades to its proposed descendants; tasks
+  // pointing at anything removed fall back to unassigned.
+  const removeProposedNode = (key: string) => {
+    const removed = new Set<string>([key]);
+    let grew = true;
+    while (grew) {
+      grew = false;
+      for (const n of proposedNodes) {
+        if (n.parentKey && removed.has(n.parentKey) && !removed.has(n.key)) {
+          removed.add(n.key);
+          grew = true;
+        }
+      }
+    }
+    setProposedNodes((prev) => prev.filter((n) => !removed.has(n.key)));
+    setProposedTasks((prev) => prev.map((t) => (t.wbsNodeKey && removed.has(t.wbsNodeKey) ? { ...t, wbsNodeKey: null } : t)));
+  };
+
+  const renameProposedNode = (key: string, name: string) => {
+    setProposedNodes((prev) => prev.map((n) => (n.key === key ? { ...n, name } : n)));
   };
 
   const acceptProposed = () => {
@@ -254,12 +431,13 @@ export default function InboxPage() {
       toast.error("No active organisation");
       return;
     }
+    const createdNodes = materializeProposedNodes();
     const now = new Date().toISOString();
     const items: InboxItem[] = proposedTasks.map((t) => ({
       id: crypto.randomUUID(),
       organisationId: currentOrg.id,
       sourceId: null,
-      wbsNodeId: t.wbsNodeId,
+      wbsNodeId: t.wbsNodeId ?? (t.wbsNodeKey ? createdNodes.get(t.wbsNodeKey) ?? null : null),
       promotedToActionId: null,
       task: t.task,
       priority: t.priority,
@@ -269,12 +447,16 @@ export default function InboxPage() {
       externalUrl: null,
       promotedAt: null,
       createdBy: currentMembership?.userId ?? null,
+      deletedAt: null,
       createdAt: now,
       updatedAt: now,
     }));
     addInboxItems(items);
+    const nodeCount = createdNodes.size;
     resetPreviewState();
-    toast.success(`${items.length} tasks added to inbox`, { description: `via ${sourceLabel}` });
+    toast.success(`${items.length} tasks added to inbox`, {
+      description: nodeCount > 0 ? `via ${sourceLabel} · ${nodeCount} WBS node${nodeCount === 1 ? "" : "s"} created` : `via ${sourceLabel}`,
+    });
   };
 
   const acceptAsActions = () => {
@@ -282,11 +464,12 @@ export default function InboxPage() {
       toast.error("No active organisation");
       return;
     }
+    const createdNodes = materializeProposedNodes();
     const now = new Date().toISOString();
     const newActions: Action[] = proposedTasks.map((t) => ({
       id: crypto.randomUUID(),
       organisationId: currentOrg.id,
-      wbsNodeId: t.wbsNodeId,
+      wbsNodeId: t.wbsNodeId ?? (t.wbsNodeKey ? createdNodes.get(t.wbsNodeKey) ?? null : null),
       assignedTo: currentMembership?.userId ?? null,
       createdBy: currentMembership?.userId ?? null,
       task: t.task,
@@ -299,12 +482,16 @@ export default function InboxPage() {
       labels: t.labels,
       notStartedSince: null,
       archivedAt: null,
+      deletedAt: null,
       createdAt: now,
       updatedAt: now,
     }));
     bulkAddActions(newActions);
+    const nodeCount = createdNodes.size;
     resetPreviewState();
-    toast.success(`${newActions.length} tasks added to My Actions`);
+    toast.success(`${newActions.length} tasks added to My Actions`, {
+      description: nodeCount > 0 ? `${nodeCount} WBS node${nodeCount === 1 ? "" : "s"} created` : undefined,
+    });
   };
 
   const cancelPreview = () => resetPreviewState();
@@ -394,7 +581,7 @@ export default function InboxPage() {
               <div className="flex-1 order-1">
                 <TabsContent value="text" className="space-y-3 mt-0">
                   <Textarea
-                    placeholder="Paste meeting notes, email thread, or any text…"
+                    placeholder="Paste meeting notes, email thread, or any text… You can include instructions, e.g. 'these belong in a new project X with work package Y'."
                     value={textInput}
                     onChange={(e) => setTextInput(e.target.value)}
                     rows={6}
@@ -486,6 +673,36 @@ export default function InboxPage() {
             {summary && <p className="text-sm text-muted-foreground mt-1">{summary}</p>}
           </CardHeader>
           <CardContent className="space-y-2">
+            {proposedNodes.length > 0 && (
+              <div className="rounded-lg border border-primary/40 bg-primary/5 p-3 space-y-2">
+                <p className="text-sm font-medium flex items-center gap-2">
+                  <Sparkles className="h-3.5 w-3.5" /> New WBS structure to create on approval
+                </p>
+                {proposedNodes.map((n) => {
+                  const parentLabel = n.parentKey
+                    ? proposedNodePath(n.parentKey)
+                    : n.parentId
+                      ? nodeNameById(n.parentId)
+                      : "";
+                  return (
+                    <div key={n.key} className="flex items-center gap-2 flex-wrap">
+                      <Badge variant="outline" className="text-xs shrink-0">{NODE_TYPE_SHORT[n.nodeType]}</Badge>
+                      <Input
+                        value={n.name}
+                        onChange={(e) => renameProposedNode(n.key, e.target.value)}
+                        className="h-8 w-56"
+                      />
+                      <span className="text-xs text-muted-foreground">
+                        {parentLabel ? <>under {parentLabel}{n.parentKey ? " (new)" : ""}</> : "top level"}
+                      </span>
+                      <Button size="icon" variant="ghost" className="h-7 w-7 ml-auto" onClick={() => removeProposedNode(n.key)}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
             {proposedTasks.map((t, i) => (
               <div key={i} className="flex items-start gap-3 rounded-lg border p-3">
                 <div className="flex-1 space-y-2">
@@ -498,15 +715,29 @@ export default function InboxPage() {
                       </SelectContent>
                     </Select>
                     <Input type="date" value={t.dueDate} onChange={(e) => updateProposed(i, { dueDate: e.target.value })} className="w-40 h-8" />
-                    <div className="w-56">
-                      <NodePicker
-                        value={t.wbsNodeId}
-                        onChange={(id) => updateProposed(i, { wbsNodeId: id })}
-                        includeNone
-                        noneLabel="(unassigned)"
-                        placeholder="Link to WBS…"
-                      />
-                    </div>
+                    {t.wbsNodeKey ? (
+                      <Badge variant="secondary" className="h-8 gap-1.5 font-normal">
+                        New: {proposedNodePath(t.wbsNodeKey)}
+                        <button
+                          type="button"
+                          className="ml-0.5 hover:text-destructive"
+                          onClick={() => updateProposed(i, { wbsNodeKey: null })}
+                          aria-label="Detach from new node"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    ) : (
+                      <div className="w-56">
+                        <NodePicker
+                          value={t.wbsNodeId}
+                          onChange={(id) => updateProposed(i, { wbsNodeId: id })}
+                          includeNone
+                          noneLabel="(unassigned)"
+                          placeholder="Link to WBS…"
+                        />
+                      </div>
+                    )}
                   </div>
                   {t.notes && <p className="text-xs text-muted-foreground">{t.notes}</p>}
                 </div>

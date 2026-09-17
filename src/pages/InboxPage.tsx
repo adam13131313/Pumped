@@ -618,6 +618,23 @@ export default function InboxPage() {
     });
   };
 
+  // Approval for a structure-only extraction (nodes proposed, no tasks) —
+  // the inbox/actions destination question doesn't arise.
+  const acceptStructureOnly = async () => {
+    if (!currentOrg) {
+      toast.error("No active organisation");
+      return;
+    }
+    if (isAccepting) return;
+    setIsAccepting(true);
+    const createdNodes = await materializeProposedNodes();
+    setIsAccepting(false);
+    if (createdNodes === null) return; // save failed (toasted); keep preview for retry
+    const count = createdNodes.size;
+    resetPreviewState();
+    toast.success(`${count} WBS node${count === 1 ? "" : "s"} created`);
+  };
+
   const cancelPreview = () => resetPreviewState();
 
   const removeProposed = (idx: number) => {
@@ -785,34 +802,55 @@ export default function InboxPage() {
         <Card className="border-primary/50">
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle className="text-lg">Proposed Tasks ({proposedTasks.length})</CardTitle>
+              <CardTitle className="text-lg">
+                {proposedTasks.length > 0 ? `Proposed Tasks (${proposedTasks.length})` : "Proposed Structure"}
+              </CardTitle>
               <div className="flex gap-2 flex-wrap">
                 <Button size="sm" variant="ghost" onClick={cancelPreview}><X className="h-4 w-4 mr-1" />Cancel</Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={acceptProposed}
-                  disabled={proposedTasks.length === 0 || isAccepting}
-                  title="Park these in your Inbox to review, refine, and promote later"
-                >
-                  {isAccepting ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Check className="h-4 w-4 mr-1" />}Save to Inbox
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={acceptAsActions}
-                  disabled={proposedTasks.length === 0 || isAccepting}
-                  title="Put these straight onto your My Actions list, ready to work on"
-                >
-                  {isAccepting ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <ArrowRight className="h-4 w-4 mr-1" />}Add to My Actions
-                </Button>
+                {proposedTasks.length === 0 && proposedNodes.length > 0 ? (
+                  <Button
+                    size="sm"
+                    onClick={acceptStructureOnly}
+                    disabled={isAccepting}
+                    title="Create the new WBS structure below"
+                  >
+                    {isAccepting ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Check className="h-4 w-4 mr-1" />}Create Structure
+                  </Button>
+                ) : (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={acceptProposed}
+                      disabled={proposedTasks.length === 0 || isAccepting}
+                      title="Park these in your Inbox to review, refine, and promote later"
+                    >
+                      {isAccepting ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Check className="h-4 w-4 mr-1" />}Save to Inbox
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={acceptAsActions}
+                      disabled={proposedTasks.length === 0 || isAccepting}
+                      title="Put these straight onto your My Actions list, ready to work on"
+                    >
+                      {isAccepting ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <ArrowRight className="h-4 w-4 mr-1" />}Add to My Actions
+                    </Button>
+                  </>
+                )}
               </div>
             </div>
             {summary && <p className="text-sm text-muted-foreground mt-1">{summary}</p>}
             <p className="text-xs text-muted-foreground mt-2">
-              <strong className="text-foreground">Save to Inbox</strong> parks these to triage later ·{" "}
-              <strong className="text-foreground">Add to My Actions</strong> puts them straight onto your task list
-              {proposedNodes.length > 0 && (
-                <> · either way, the new WBS structure below is created</>
+              {proposedTasks.length === 0 && proposedNodes.length > 0 ? (
+                <>No tasks were found in the capture — <strong className="text-foreground">Create Structure</strong> builds the new WBS elements below.</>
+              ) : (
+                <>
+                  <strong className="text-foreground">Save to Inbox</strong> parks these to triage later ·{" "}
+                  <strong className="text-foreground">Add to My Actions</strong> puts them straight onto your task list
+                  {proposedNodes.length > 0 && (
+                    <> · either way, the new WBS structure below is created</>
+                  )}
+                </>
               )}
             </p>
           </CardHeader>

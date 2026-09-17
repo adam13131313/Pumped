@@ -42,6 +42,8 @@ export default function MyActions() {
   const { actions: allActions } = useFilteredData();
   const addAction = useAppStore((s) => s.addAction);
   const updateAction = useAppStore((s) => s.updateAction);
+  const completeAction = useAppStore((s) => s.completeAction);
+  const cancelAction = useAppStore((s) => s.cancelAction);
   const deleteAction = useAppStore((s) => s.deleteAction);
   const delegateAction = useAppStore((s) => s.delegateAction);
   const bulkUpdateActions = useAppStore((s) => s.bulkUpdateActions);
@@ -238,7 +240,22 @@ export default function MyActions() {
   }, [getOrderedActions]);
 
   const handleStatusChange = useCallback((id: string, newStatus: ActionStatus, dropIndex?: number) => {
-    updateAction(id, { status: newStatus });
+    // Mirror StatusPicker's routing: terminal transitions go through the
+    // dedicated mutators (they stamp completedAt locally AND fire the
+    // successor-unblocked synthesis toast). A plain updateAction({status})
+    // left local completedAt null on complete — the DB trigger stamped it
+    // server-side, and the next full-object save from the edit dialog then
+    // sent completed_at NULL back, violating complete_has_timestamp.
+    const current = allActions.find((a) => a.id === id);
+    if (newStatus === "complete") {
+      completeAction(id);
+    } else if (newStatus === "cancelled") {
+      cancelAction(id);
+    } else {
+      const patch: Partial<Action> = { status: newStatus };
+      if (current?.status === "complete") patch.completedAt = null;
+      updateAction(id, patch);
+    }
     if (dropIndex !== undefined) {
       setColumnOrder((prev) => {
         const existing = prev[newStatus] || [];
@@ -253,7 +270,7 @@ export default function MyActions() {
         return updated;
       });
     }
-  }, [updateAction]);
+  }, [updateAction, completeAction, cancelAction, allActions]);
 
   return (
     <div className="space-y-3 sm:space-y-4">

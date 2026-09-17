@@ -151,11 +151,17 @@ export function ActionDialog({
       status: d.status ?? "not_started",
       startDate: d.startDate ? d.startDate : null,
       dueDate: d.dueDate ? d.dueDate : null,
-      completedAt: action?.completedAt ?? null,
+      // Derive from status rather than trusting local state: the DB CHECK
+      // complete_has_timestamp requires completed_at whenever status is
+      // 'complete', and a stale local null here bounced whole-object saves.
+      completedAt: (d.status ?? "not_started") === "complete"
+        ? action?.completedAt ?? now
+        : null,
       notes: d.notes ?? "",
       labels: d.labels ?? [],
       notStartedSince: action?.notStartedSince ?? null,
       archivedAt: action?.archivedAt ?? null,
+      deletedAt: action?.deletedAt ?? null,
       createdAt: action?.createdAt ?? now,
       updatedAt: now,
     });

@@ -676,15 +676,33 @@ export default function InboxPage() {
               <CardTitle className="text-lg">Proposed Tasks ({proposedTasks.length})</CardTitle>
               <div className="flex gap-2 flex-wrap">
                 <Button size="sm" variant="ghost" onClick={cancelPreview}><X className="h-4 w-4 mr-1" />Cancel</Button>
-                <Button size="sm" variant="outline" onClick={acceptProposed} disabled={proposedTasks.length === 0 || isAccepting}>
-                  {isAccepting ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Check className="h-4 w-4 mr-1" />}Add to Inbox
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={acceptProposed}
+                  disabled={proposedTasks.length === 0 || isAccepting}
+                  title="Park these in your Inbox to review, refine, and promote later"
+                >
+                  {isAccepting ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Check className="h-4 w-4 mr-1" />}Save to Inbox
                 </Button>
-                <Button size="sm" onClick={acceptAsActions} disabled={proposedTasks.length === 0 || isAccepting}>
-                  {isAccepting ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <ArrowRight className="h-4 w-4 mr-1" />}Add as Actions
+                <Button
+                  size="sm"
+                  onClick={acceptAsActions}
+                  disabled={proposedTasks.length === 0 || isAccepting}
+                  title="Put these straight onto your My Actions list, ready to work on"
+                >
+                  {isAccepting ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <ArrowRight className="h-4 w-4 mr-1" />}Add to My Actions
                 </Button>
               </div>
             </div>
             {summary && <p className="text-sm text-muted-foreground mt-1">{summary}</p>}
+            <p className="text-xs text-muted-foreground mt-2">
+              <strong className="text-foreground">Save to Inbox</strong> parks these to triage later ·{" "}
+              <strong className="text-foreground">Add to My Actions</strong> puts them straight onto your task list
+              {proposedNodes.length > 0 && (
+                <> · either way, the new WBS structure below is created</>
+              )}
+            </p>
           </CardHeader>
           <CardContent className="space-y-2">
             {proposedNodes.length > 0 && (
